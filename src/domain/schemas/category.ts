@@ -5,6 +5,7 @@ export const entryTypeSchema = z.enum(["PAYABLE", "RECEIVABLE"]);
 export const dreGroupSchema = z.enum([
   "RECEITA_BRUTA",
   "DEDUCOES_RECEITA",
+  "CUSTO_MERCADORIA_VENDIDA",
   "CUSTO_VARIAVEL",
   "DESPESA_PESSOAL",
   "DESPESA_ADMINISTRATIVA",

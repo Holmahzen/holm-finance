@@ -1,6 +1,7 @@
 export type DreGroup =
   | "RECEITA_BRUTA"
   | "DEDUCOES_RECEITA"
+  | "CUSTO_MERCADORIA_VENDIDA"
   | "CUSTO_VARIAVEL"
   | "DESPESA_PESSOAL"
   | "DESPESA_ADMINISTRATIVA"
@@ -25,6 +26,7 @@ export type DreLine = { categoryId: string; name: string; total: number };
 export const DRE_GROUP_ENTRY_TYPE: Record<DreGroup, "PAYABLE" | "RECEIVABLE"> = {
   RECEITA_BRUTA: "RECEIVABLE",
   DEDUCOES_RECEITA: "PAYABLE",
+  CUSTO_MERCADORIA_VENDIDA: "PAYABLE",
   CUSTO_VARIAVEL: "PAYABLE",
   DESPESA_PESSOAL: "PAYABLE",
   DESPESA_ADMINISTRATIVA: "PAYABLE",
@@ -44,7 +46,11 @@ export type DreReport = {
   receitaBruta: DreSection;
   deducoes: DreSection;
   receitaLiquida: number;
+  /** CMV: custo direto do que foi vendido (tecido, costura, embalagem etc.). */
+  cmv: DreSection;
+  /** Outras despesas variáveis de venda (comissão de marketplace, frete, etc.) — não é custo do produto em si. */
   custoVariavel: DreSection;
+  custosVariaveisTotal: number;
   margemContribuicao: number;
   pessoal: DreSection;
   administrativa: DreSection;
@@ -70,7 +76,7 @@ function sumLines(lines: DreLine[] | undefined): number {
  * Monta a DRE completa (11 seções) a partir dos lançamentos já agrupados por
  * categoria/grupo. Segue exatamente a estrutura pedida:
  * Receita Líquida = Receita Bruta - Deduções
- * Margem de Contribuição = Receita Líquida - Custos Variáveis
+ * Margem de Contribuição = Receita Líquida - CMV - Outras Despesas Variáveis
  * Resultado Operacional = Margem de Contribuição - Despesas Fixas (pessoal+admin+comercial+produtiva)
  * Resultado Financeiro = Receitas financeiras - Despesas financeiras
  * Resultado antes do imposto = Resultado Operacional + Resultado Financeiro
@@ -87,8 +93,10 @@ export function computeDre(byGroup: DreGroupTotals): DreReport {
   const deducoes = section("DEDUCOES_RECEITA");
   const receitaLiquida = receitaBruta.total - deducoes.total;
 
+  const cmv = section("CUSTO_MERCADORIA_VENDIDA");
   const custoVariavel = section("CUSTO_VARIAVEL");
-  const margemContribuicao = receitaLiquida - custoVariavel.total;
+  const custosVariaveisTotal = cmv.total + custoVariavel.total;
+  const margemContribuicao = receitaLiquida - custosVariaveisTotal;
 
   const pessoal = section("DESPESA_PESSOAL");
   const administrativa = section("DESPESA_ADMINISTRATIVA");
@@ -113,7 +121,9 @@ export function computeDre(byGroup: DreGroupTotals): DreReport {
     receitaBruta,
     deducoes,
     receitaLiquida,
+    cmv,
     custoVariavel,
+    custosVariaveisTotal,
     margemContribuicao,
     pessoal,
     administrativa,

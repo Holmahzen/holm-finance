@@ -17,7 +17,9 @@ type Dre = {
   receitaBruta: DreSection;
   deducoes: DreSection;
   receitaLiquida: number;
+  cmv: DreSection;
   custoVariavel: DreSection;
+  custosVariaveisTotal: number;
   margemContribuicao: number;
   pessoal: DreSection;
   administrativa: DreSection;
@@ -143,7 +145,7 @@ const COMPARISON_ROWS: { number: string; label: string; key: keyof Dre; emphasis
   { number: "1", label: "Receita Bruta", key: "receitaBruta" },
   { number: "2", label: "Deduções da Receita", key: "deducoes" },
   { number: "3", label: "Receita Líquida", key: "receitaLiquida" },
-  { number: "4", label: "Custos Variáveis", key: "custoVariavel" },
+  { number: "4", label: "Custos Variáveis (CMV + Outros)", key: "custosVariaveisTotal" },
   { number: "5", label: "Margem de Contribuição", key: "margemContribuicao" },
   { number: "6", label: "Despesas Operacionais Fixas", key: "despesasFixasTotal" },
   { number: "7", label: "Resultado Operacional", key: "resultadoOperacional" },
@@ -324,13 +326,21 @@ export default function DrePage() {
                     : ""
                 }faltam chegar a ${dre.cogsMinCoveragePercent}% pra a DRE trocar automaticamente pelo custo das peças vendidas. Cadastre o custo por peça em Produtos (com o SKU vendido).`}
           </p>
-          <LineSection
-            number="4"
-            title="Custos Variáveis / CPV / CMV"
-            section={dre.custoVariavel}
-            tone="negative"
-            showZero={showZero}
-          />
+          <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
+            <div className="flex items-center justify-between border-b border-border/50 pb-2">
+              <h2 className="font-serif text-base text-foreground">4. Custos Variáveis</h2>
+              <span className="font-serif text-lg text-red-400">
+                {formatBRL(dre.custosVariaveisTotal)}
+              </span>
+            </div>
+            <SubSection number="4.1" title="CMV — Custo da Mercadoria Vendida" section={dre.cmv} showZero={showZero} />
+            <SubSection
+              number="4.2"
+              title="Outras despesas variáveis de venda"
+              section={dre.custoVariavel}
+              showZero={showZero}
+            />
+          </div>
           <TotalRow number="5" label="Margem de Contribuição" value={dre.margemContribuicao} />
 
           <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">

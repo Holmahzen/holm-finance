@@ -10,6 +10,8 @@ describe("computeDre", () => {
     const result = computeDre({});
     expect(result.receitaBruta.total).toBe(0);
     expect(result.receitaLiquida).toBe(0);
+    expect(result.cmv.total).toBe(0);
+    expect(result.custosVariaveisTotal).toBe(0);
     expect(result.margemContribuicao).toBe(0);
     expect(result.resultadoOperacional).toBe(0);
     expect(result.lucroLiquido).toBe(0);
@@ -19,7 +21,8 @@ describe("computeDre", () => {
     const byGroup: DreGroupTotals = {
       RECEITA_BRUTA: [line("c1", "Vendas ML", 10000), line("c2", "Vendas Shopee", 2000)],
       DEDUCOES_RECEITA: [line("c3", "DAS", 500)],
-      CUSTO_VARIAVEL: [line("c4", "Tecido", 3000), line("c5", "Flex", 700)],
+      CUSTO_MERCADORIA_VENDIDA: [line("c4", "Tecido", 3000)],
+      CUSTO_VARIAVEL: [line("c5", "Flex", 700)],
       DESPESA_PESSOAL: [line("c6", "Salários", 2000)],
       DESPESA_ADMINISTRATIVA: [line("c7", "Aluguel", 1000)],
       DESPESA_COMERCIAL: [line("c8", "Publicidade", 300)],
@@ -38,7 +41,9 @@ describe("computeDre", () => {
     expect(result.receitaLiquida).toBe(11500); // 12000 - 500
 
     // 4-5
-    expect(result.custoVariavel.total).toBe(3700);
+    expect(result.cmv.total).toBe(3000);
+    expect(result.custoVariavel.total).toBe(700);
+    expect(result.custosVariaveisTotal).toBe(3700); // 3000 + 700
     expect(result.margemContribuicao).toBe(7800); // 11500 - 3700
 
     // 6-7
@@ -57,7 +62,7 @@ describe("computeDre", () => {
   it("handles a loss (prejuízo) correctly", () => {
     const byGroup: DreGroupTotals = {
       RECEITA_BRUTA: [line("c1", "Vendas", 1000)],
-      CUSTO_VARIAVEL: [line("c2", "Tecido", 2000)],
+      CUSTO_MERCADORIA_VENDIDA: [line("c2", "Tecido", 2000)],
     };
     const result = computeDre(byGroup);
     expect(result.margemContribuicao).toBe(-1000);
@@ -66,12 +71,16 @@ describe("computeDre", () => {
 
   it("preserves individual line items within each section", () => {
     const byGroup: DreGroupTotals = {
-      CUSTO_VARIAVEL: [line("c1", "Tecido", 100), line("c2", "Costura", 200)],
+      CUSTO_MERCADORIA_VENDIDA: [line("c1", "Tecido", 100), line("c2", "Costura", 200)],
+      CUSTO_VARIAVEL: [line("c3", "Comissão do Mercado Livre", 50)],
     };
     const result = computeDre(byGroup);
-    expect(result.custoVariavel.lines).toEqual([
+    expect(result.cmv.lines).toEqual([
       { categoryId: "c1", name: "Tecido", total: 100 },
       { categoryId: "c2", name: "Costura", total: 200 },
+    ]);
+    expect(result.custoVariavel.lines).toEqual([
+      { categoryId: "c3", name: "Comissão do Mercado Livre", total: 50 },
     ]);
   });
 });

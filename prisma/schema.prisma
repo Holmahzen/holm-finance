@@ -93,6 +93,7 @@ enum MatchStatus {
 enum DreGroup {
   RECEITA_BRUTA
   DEDUCOES_RECEITA
+  CUSTO_MERCADORIA_VENDIDA
   CUSTO_VARIAVEL
   DESPESA_PESSOAL
   DESPESA_ADMINISTRATIVA
@@ -255,12 +256,22 @@ model MarketplaceSale {
   @@map("marketplace_sales")
 }
 
+enum FixedCostFrequency {
+  MONTHLY
+  BIWEEKLY
+  WEEKLY
+}
+
 model FixedCost {
-  id             String        @id @default(cuid())
-  type           EntryType     @default(PAYABLE)
+  id             String             @id @default(cuid())
+  type           EntryType          @default(PAYABLE)
   description    String
-  amount         Decimal       @db.Decimal(14, 2)
-  dueDay         Int
+  amount         Decimal            @db.Decimal(14, 2)
+  frequency      FixedCostFrequency @default(MONTHLY)
+  // MONTHLY: dia do mês. BIWEEKLY: dueDay = 1º dia, secondDueDay = 2º dia. WEEKLY: weekday (0=domingo..6=sábado), dueDay/secondDueDay não usados.
+  dueDay         Int?
+  secondDueDay   Int?
+  weekday        Int?
   categoryId     String?
   category       Category?     @relation(fields: [categoryId], references: [id])
   counterpartyId String?

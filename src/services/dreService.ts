@@ -48,8 +48,8 @@ export const dreService = {
         Costura: cogs.costura,
         Aviamentos: cogs.aviamentos,
       };
-      const custoVariavel = byGroup.CUSTO_VARIAVEL ?? [];
-      for (const line of custoVariavel) {
+      const cmvLines = byGroup.CUSTO_MERCADORIA_VENDIDA ?? [];
+      for (const line of cmvLines) {
         if ((COGS_LINE_NAMES as readonly string[]).includes(line.name)) {
           line.total = cogsValueByName[line.name as CogsLineName];
           line.name = `${line.name} (peças vendidas)`;
