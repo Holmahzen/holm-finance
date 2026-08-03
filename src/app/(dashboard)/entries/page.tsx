@@ -71,6 +71,7 @@ export default function EntriesPage() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [statusFilter, setStatusFilter] = useState<PaymentStatus | null>(null);
+  const [search, setSearch] = useState("");
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [type, setType] = useState<"PAYABLE" | "RECEIVABLE">("PAYABLE");
@@ -283,9 +284,18 @@ export default function EntriesPage() {
     total += Number(entry.amount);
   }
 
-  const visibleEntries = statusFilter
-    ? entries.filter((entry) => getPaymentStatus(entry) === statusFilter)
-    : entries;
+  const searchTerm = search.trim().toLowerCase();
+  const visibleEntries = entries.filter((entry) => {
+    if (statusFilter && getPaymentStatus(entry) !== statusFilter) return false;
+    if (searchTerm) {
+      const haystack = [entry.description, entry.category?.name, entry.counterparty?.name]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (!haystack.includes(searchTerm)) return false;
+    }
+    return true;
+  });
   const visibleTotal = visibleEntries.reduce((sum, entry) => sum + Number(entry.amount), 0);
 
   return (
@@ -365,12 +375,37 @@ export default function EntriesPage() {
         ))}
       </div>
 
-      {statusFilter && (
-        <div className="flex items-center gap-2 text-sm text-muted">
-          Filtrando por <span className="font-medium text-foreground">{paymentStatusMeta[statusFilter].label}</span>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-medium text-muted">Pesquisar</label>
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Descrição, categoria ou contraparte..."
+          className="w-full max-w-sm rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
+        />
+      </div>
+
+      {(statusFilter || searchTerm) && (
+        <div className="flex flex-wrap items-center gap-2 text-sm text-muted">
+          {statusFilter && (
+            <>
+              Filtrando por{" "}
+              <span className="font-medium text-foreground">{paymentStatusMeta[statusFilter].label}</span>
+            </>
+          )}
+          {statusFilter && searchTerm && <span>·</span>}
+          {searchTerm && (
+            <>
+              Pesquisando por <span className="font-medium text-foreground">&quot;{search.trim()}&quot;</span>
+            </>
+          )}
           <button
             type="button"
-            onClick={() => setStatusFilter(null)}
+            onClick={() => {
+              setStatusFilter(null);
+              setSearch("");
+            }}
             className="text-gold hover:underline"
           >
             limpar filtro
