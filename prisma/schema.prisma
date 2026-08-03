@@ -1,0 +1,333 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Product {
+  id                 String   @id @default(cuid())
+  name               String
+  sku                String?  @unique
+  salePrice          Decimal  @db.Decimal(14, 2)
+  tecidoCost         Decimal  @default(0) @db.Decimal(14, 2)
+  costuraCost        Decimal  @default(0) @db.Decimal(14, 2)
+  aviamentosCost     Decimal  @default(0) @db.Decimal(14, 2)
+  marketplaceFee     Decimal  @default(0) @db.Decimal(14, 2)
+  shippingCost       Decimal  @default(0) @db.Decimal(14, 2)
+  packagingCost      Decimal  @default(0) @db.Decimal(14, 2)
+  avgMonthlyQuantity Int      @default(0)
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("products")
+}
+
+model BreakEvenSettings {
+  id                   String   @id @default(cuid())
+  marginAlertThreshold Decimal  @default(0) @db.Decimal(5, 2)
+  updatedAt            DateTime @updatedAt
+
+  @@map("break_even_settings")
+}
+
+model MercadoLivreReceivable {
+  id         String   @id @default(cuid())
+  today      Decimal  @default(0) @db.Decimal(14, 2)
+  tomorrow   Decimal  @default(0) @db.Decimal(14, 2)
+  within7d   Decimal  @default(0) @db.Decimal(14, 2)
+  after7d    Decimal  @default(0) @db.Decimal(14, 2)
+  updatedAt  DateTime @updatedAt
+
+  @@map("mercado_livre_receivables")
+}
+
+enum AccountType {
+  BANK
+  CASH
+}
+
+enum EntryType {
+  PAYABLE
+  RECEIVABLE
+}
+
+enum EntryStatus {
+  PENDING
+  PAID
+  CANCELED
+}
+
+enum CounterpartyType {
+  PESSOA_FISICA
+  PESSOA_JURIDICA
+  OUTRO
+}
+
+enum OfxTrnType {
+  DEBIT
+  CREDIT
+}
+
+enum ImportSource {
+  OFX
+  XLSX
+}
+
+enum ParsedMemoKind {
+  PIX_DEBIT
+  PIX_CREDIT
+  CARD_PURCHASE
+  OTHER
+}
+
+enum MatchStatus {
+  SUGGESTED
+  CONFIRMED
+  REJECTED
+}
+
+enum DreGroup {
+  RECEITA_BRUTA
+  DEDUCOES_RECEITA
+  CUSTO_VARIAVEL
+  DESPESA_PESSOAL
+  DESPESA_ADMINISTRATIVA
+  DESPESA_COMERCIAL
+  DESPESA_PRODUTIVA
+  RESULTADO_FINANCEIRO_RECEITA
+  RESULTADO_FINANCEIRO_DESPESA
+  NAO_OPERACIONAL_RECEITA
+  NAO_OPERACIONAL_DESPESA
+}
+
+model FinancialAccount {
+  id                 String      @id @default(cuid())
+  name               String
+  type               AccountType
+  bankId             String?
+  acctId             String?
+  acctType           String?
+  currency           String      @default("BRL")
+  openingBalance     Decimal     @default(0) @db.Decimal(14, 2)
+  openingBalanceDate DateTime    @default(now())
+  isActive           Boolean     @default(true)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  entries              Entry[]
+  importBatches        ImportBatch[]
+  importedTransactions ImportedTransaction[]
+
+  @@map("financial_accounts")
+}
+
+model Category {
+  id       String     @id @default(cuid())
+  name     String
+  type     EntryType?
+  parentId String?
+  parent   Category?  @relation("CategoryToCategory", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryToCategory")
+  isActive Boolean    @default(true)
+  dreGroup DreGroup?
+
+  entries        Entry[]
+  counterparties Counterparty[]
+  fixedCosts     FixedCost[]
+  categoryRules  CategoryRule[]
+  loans          Loan[]
+
+  @@map("categories")
+}
+
+model Loan {
+  id                 String   @id @default(cuid())
+  description        String
+  principal          Decimal  @db.Decimal(14, 2)
+  monthlyRatePercent Decimal  @db.Decimal(6, 4)
+  installments       Int
+  matchText          String
+  categoryId         String
+  category           Category @relation(fields: [categoryId], references: [id])
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("loans")
+}
+
+model CategoryRule {
+  id         String   @id @default(cuid())
+  keyword    String
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@map("category_rules")
+}
+
+model Counterparty {
+  id                String           @id @default(cuid())
+  name              String
+  document          String?          @unique
+  type              CounterpartyType @default(OUTRO)
+  aliases           String[]         @default([])
+  defaultCategoryId String?
+  defaultCategory   Category?        @relation(fields: [defaultCategoryId], references: [id])
+  isOwnEntity       Boolean          @default(false)
+  isActive          Boolean          @default(true)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  entries    Entry[]
+  fixedCosts FixedCost[]
+
+  @@map("counterparties")
+}
+
+model Entry {
+  id                 String            @id @default(cuid())
+  type               EntryType
+  description        String
+  amount             Decimal           @db.Decimal(14, 2)
+  dueDate            DateTime
+  plannedPaymentDate DateTime?
+  competenceDate     DateTime?
+  status             EntryStatus       @default(PENDING)
+  paidAt             DateTime?
+  paidAmount         Decimal?          @db.Decimal(14, 2)
+  bankAccountId      String?
+  bankAccount        FinancialAccount? @relation(fields: [bankAccountId], references: [id])
+  categoryId         String?
+  category           Category?         @relation(fields: [categoryId], references: [id])
+  counterpartyId     String?
+  counterparty       Counterparty?     @relation(fields: [counterpartyId], references: [id])
+  fixedCostId        String?
+  fixedCost          FixedCost?        @relation(fields: [fixedCostId], references: [id])
+  notes              String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  reconciliationMatch ReconciliationMatch?
+
+  @@index([status, dueDate])
+  @@map("entries")
+}
+
+model SalesImportBatch {
+  id             String   @id @default(cuid())
+  fileName       String
+  fileHash       String   @unique
+  rowCount       Int
+  importedCount  Int
+  duplicateCount Int
+  importedAt     DateTime @default(now())
+
+  sales MarketplaceSale[]
+
+  @@map("sales_import_batches")
+}
+
+model MarketplaceSale {
+  id               String            @id @default(cuid())
+  orderId          String            @unique
+  saleDate         DateTime
+  sku              String
+  productName      String
+  channel          String            @default("Mercado Livre")
+  shippingModality String?
+  quantity         Int
+  grossRevenue     Decimal           @db.Decimal(14, 2)
+  netRevenue       Decimal           @db.Decimal(14, 2)
+  customerName     String?
+  status           String
+  importBatchId    String?
+  importBatch      SalesImportBatch? @relation(fields: [importBatchId], references: [id])
+  createdAt        DateTime          @default(now())
+
+  @@index([saleDate])
+  @@map("marketplace_sales")
+}
+
+model FixedCost {
+  id             String        @id @default(cuid())
+  type           EntryType     @default(PAYABLE)
+  description    String
+  amount         Decimal       @db.Decimal(14, 2)
+  dueDay         Int
+  categoryId     String?
+  category       Category?     @relation(fields: [categoryId], references: [id])
+  counterpartyId String?
+  counterparty   Counterparty? @relation(fields: [counterpartyId], references: [id])
+  isActive       Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  generatedEntries Entry[]
+
+  @@map("fixed_costs")
+}
+
+model ImportBatch {
+  id                String           @id @default(cuid())
+  bankAccountId     String
+  bankAccount       FinancialAccount @relation(fields: [bankAccountId], references: [id])
+  source            ImportSource     @default(OFX)
+  fileName          String
+  fileHash          String
+  startDate         DateTime
+  endDate           DateTime
+  ledgerBalance     Decimal?         @db.Decimal(14, 2)
+  ledgerBalanceDate DateTime?
+  transactionCount  Int
+  importedAt        DateTime         @default(now())
+
+  transactions ImportedTransaction[]
+
+  @@unique([bankAccountId, fileHash])
+  @@map("import_batches")
+}
+
+model ImportedTransaction {
+  id                     String           @id @default(cuid())
+  bankAccountId          String
+  bankAccount            FinancialAccount @relation(fields: [bankAccountId], references: [id])
+  importBatchId          String
+  importBatch            ImportBatch      @relation(fields: [importBatchId], references: [id])
+  fitId                  String
+  trnType                OfxTrnType
+  postedAt               DateTime
+  amount                 Decimal          @db.Decimal(14, 2)
+  memo                   String
+  parsedKind             ParsedMemoKind   @default(OTHER)
+  parsedDocument         String?
+  parsedCounterpartyName String?
+  parsedCity             String?
+  isSelfTransfer         Boolean          @default(false)
+  createdAt              DateTime         @default(now())
+
+  reconciliationMatch ReconciliationMatch?
+
+  @@unique([bankAccountId, fitId])
+  @@map("imported_transactions")
+}
+
+model ReconciliationMatch {
+  id                    String               @id @default(cuid())
+  importedTransactionId String               @unique
+  importedTransaction   ImportedTransaction  @relation(fields: [importedTransactionId], references: [id])
+  entryId               String?              @unique
+  entry                 Entry?               @relation(fields: [entryId], references: [id])
+  status                MatchStatus          @default(SUGGESTED)
+  matchScore            Float
+  matchReasons          String[]             @default([])
+  confirmedAt           DateTime?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  @@map("reconciliation_matches")
+}
