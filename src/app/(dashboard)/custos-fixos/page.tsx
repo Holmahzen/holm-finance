@@ -6,18 +6,35 @@ import { formatBRL } from "@/lib/format";
 type Option = { id: string; name: string };
 type CategoryOption = Option & { parentId: string | null };
 
+type FixedCostFrequency = "MONTHLY" | "BIWEEKLY" | "WEEKLY";
+
 type FixedCost = {
   id: string;
   type: "PAYABLE" | "RECEIVABLE";
   description: string;
   amount: string;
-  dueDay: number;
+  frequency: FixedCostFrequency;
+  dueDay: number | null;
+  secondDueDay: number | null;
+  weekday: number | null;
   isActive: boolean;
   categoryId: string | null;
   counterpartyId: string | null;
   category: { name: string } | null;
   counterparty: { name: string } | null;
 };
+
+const WEEKDAY_LABELS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+
+function scheduleLabel(fc: FixedCost): string {
+  if (fc.frequency === "BIWEEKLY") {
+    return `Dias ${fc.dueDay ?? "?"} e ${fc.secondDueDay ?? "?"} (quinzenal)`;
+  }
+  if (fc.frequency === "WEEKLY") {
+    return `Toda ${WEEKDAY_LABELS[fc.weekday ?? 0]} (semanal)`;
+  }
+  return `Dia ${fc.dueDay ?? "?"}`;
+}
 
 type GenerateResult = {
   total: number;
@@ -39,7 +56,10 @@ export default function FixedCostsPage() {
   const [type, setType] = useState<"PAYABLE" | "RECEIVABLE">("PAYABLE");
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
+  const [frequency, setFrequency] = useState<FixedCostFrequency>("MONTHLY");
   const [dueDay, setDueDay] = useState("5");
+  const [secondDueDay, setSecondDueDay] = useState("20");
+  const [weekday, setWeekday] = useState("5");
   const [categoryId, setCategoryId] = useState("");
   const [counterpartyId, setCounterpartyId] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -75,7 +95,10 @@ export default function FixedCostsPage() {
     setType("PAYABLE");
     setDescription("");
     setAmount("");
+    setFrequency("MONTHLY");
     setDueDay("5");
+    setSecondDueDay("20");
+    setWeekday("5");
     setCategoryId("");
     setCounterpartyId("");
     setError(null);
@@ -86,7 +109,10 @@ export default function FixedCostsPage() {
     setType(fc.type);
     setDescription(fc.description);
     setAmount(fc.amount);
-    setDueDay(String(fc.dueDay));
+    setFrequency(fc.frequency);
+    setDueDay(fc.dueDay !== null ? String(fc.dueDay) : "5");
+    setSecondDueDay(fc.secondDueDay !== null ? String(fc.secondDueDay) : "20");
+    setWeekday(fc.weekday !== null ? String(fc.weekday) : "5");
     setCategoryId(fc.categoryId ?? "");
     setCounterpartyId(fc.counterpartyId ?? "");
     setError(null);
@@ -100,7 +126,10 @@ export default function FixedCostsPage() {
       type,
       description,
       amount,
-      dueDay,
+      frequency,
+      dueDay: frequency === "MONTHLY" || frequency === "BIWEEKLY" ? dueDay : undefined,
+      secondDueDay: frequency === "BIWEEKLY" ? secondDueDay : undefined,
+      weekday: frequency === "WEEKLY" ? weekday : undefined,
       categoryId: categoryId || undefined,
       counterpartyId: counterpartyId || undefined,
     };
@@ -207,17 +236,75 @@ export default function FixedCostsPage() {
           />
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-muted">Dia do vencimento</label>
-          <input
-            required
-            type="number"
-            min={1}
-            max={31}
-            value={dueDay}
-            onChange={(e) => setDueDay(e.target.value)}
-            className="w-20 rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
-          />
+          <label className="text-xs font-medium text-muted">Frequência</label>
+          <select
+            value={frequency}
+            onChange={(e) => setFrequency(e.target.value as FixedCostFrequency)}
+            className="rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
+          >
+            <option value="MONTHLY">Mensal</option>
+            <option value="BIWEEKLY">Quinzenal</option>
+            <option value="WEEKLY">Semanal</option>
+          </select>
         </div>
+        {frequency === "MONTHLY" && (
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted">Dia do vencimento</label>
+            <input
+              required
+              type="number"
+              min={1}
+              max={31}
+              value={dueDay}
+              onChange={(e) => setDueDay(e.target.value)}
+              className="w-20 rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
+            />
+          </div>
+        )}
+        {frequency === "BIWEEKLY" && (
+          <>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted">1º dia</label>
+              <input
+                required
+                type="number"
+                min={1}
+                max={31}
+                value={dueDay}
+                onChange={(e) => setDueDay(e.target.value)}
+                className="w-20 rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted">2º dia</label>
+              <input
+                required
+                type="number"
+                min={1}
+                max={31}
+                value={secondDueDay}
+                onChange={(e) => setSecondDueDay(e.target.value)}
+                className="w-20 rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
+              />
+            </div>
+          </>
+        )}
+        {frequency === "WEEKLY" && (
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted">Dia da semana</label>
+            <select
+              value={weekday}
+              onChange={(e) => setWeekday(e.target.value)}
+              className="rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
+            >
+              {WEEKDAY_LABELS.map((label, idx) => (
+                <option key={idx} value={idx}>
+                  {label.charAt(0).toUpperCase() + label.slice(1)}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-muted">Categoria</label>
           <select
@@ -288,7 +375,7 @@ export default function FixedCostsPage() {
               <th className="py-2 font-medium">Descrição</th>
               <th className="py-2 font-medium">Tipo</th>
               <th className="py-2 font-medium">Valor</th>
-              <th className="py-2 font-medium">Dia</th>
+              <th className="py-2 font-medium">Vencimento</th>
               <th className="py-2 font-medium">Categoria</th>
               <th className="py-2 font-medium">Contraparte</th>
               <th className="py-2 font-medium">Status</th>
@@ -301,7 +388,7 @@ export default function FixedCostsPage() {
                 <td className="py-2">{fc.description}</td>
                 <td className="py-2">{fc.type === "PAYABLE" ? "A pagar" : "A receber"}</td>
                 <td className="py-2">{formatBRL(fc.amount)}</td>
-                <td className="py-2">Dia {fc.dueDay}</td>
+                <td className="py-2">{scheduleLabel(fc)}</td>
                 <td className="py-2">{fc.category?.name ?? "—"}</td>
                 <td className="py-2">{fc.counterparty?.name ?? "—"}</td>
                 <td className="py-2">

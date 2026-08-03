@@ -1,0 +1,49 @@
+export type FixedCostFrequency = "MONTHLY" | "BIWEEKLY" | "WEEKLY";
+
+export type FixedCostSchedule = {
+  frequency: FixedCostFrequency;
+  dueDay: number | null;
+  secondDueDay: number | null;
+  /** 0 = domingo .. 6 = sábado (mesma convenção do Date.getDay()). */
+  weekday: number | null;
+};
+
+/**
+ * Datas de vencimento de um custo fixo num mês específico, de acordo com a
+ * frequência: mensal (1 dia), quinzenal (2 dias) ou semanal (toda ocorrência
+ * do dia da semana no mês — 4 ou 5 vezes, dependendo do mês). Dias que
+ * passam do fim do mês (ex.: dia 31 em fevereiro) são ajustados pro último
+ * dia real do mês, igual já acontecia com o custo fixo mensal.
+ */
+export function computeFixedCostDueDates(
+  schedule: FixedCostSchedule,
+  year: number,
+  month: number,
+): Date[] {
+  const lastDayOfMonth = new Date(year, month, 0).getDate();
+
+  switch (schedule.frequency) {
+    case "MONTHLY": {
+      if (schedule.dueDay === null) return [];
+      const day = Math.min(schedule.dueDay, lastDayOfMonth);
+      return [new Date(year, month - 1, day)];
+    }
+    case "BIWEEKLY": {
+      if (schedule.dueDay === null || schedule.secondDueDay === null) return [];
+      const day1 = Math.min(schedule.dueDay, lastDayOfMonth);
+      const day2 = Math.min(schedule.secondDueDay, lastDayOfMonth);
+      return [new Date(year, month - 1, day1), new Date(year, month - 1, day2)].sort(
+        (a, b) => a.getTime() - b.getTime(),
+      );
+    }
+    case "WEEKLY": {
+      if (schedule.weekday === null) return [];
+      const dates: Date[] = [];
+      for (let day = 1; day <= lastDayOfMonth; day++) {
+        const date = new Date(year, month - 1, day);
+        if (date.getDay() === schedule.weekday) dates.push(date);
+      }
+      return dates;
+    }
+  }
+}
