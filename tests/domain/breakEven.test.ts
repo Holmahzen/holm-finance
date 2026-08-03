@@ -22,6 +22,7 @@ describe("computeProductMargin", () => {
     expect(result.variableCost).toBe(60);
     expect(result.marginValue).toBe(40);
     expect(result.marginPercent).toBe(0.4);
+    expect(result.markupPercent).toBeCloseTo(40 / 60); // 0.6667
   });
 
   it("returns zero margin percent when sale price is zero", () => {
@@ -36,6 +37,21 @@ describe("computeProductMargin", () => {
       avgMonthlyQuantity: 5,
     });
     expect(result.marginPercent).toBe(0);
+    expect(result.markupPercent).toBeCloseTo(-10 / 10); // custo 10, sem preço pra cobrir
+  });
+
+  it("returns zero markup percent when variable cost is zero", () => {
+    const result = computeProductMargin({
+      salePrice: 100,
+      tecidoCost: 0,
+      costuraCost: 0,
+      aviamentosCost: 0,
+      marketplaceFee: 0,
+      shippingCost: 0,
+      packagingCost: 0,
+      avgMonthlyQuantity: 5,
+    });
+    expect(result.markupPercent).toBe(0);
   });
 
   it("supports negative margin (cost exceeds price)", () => {
@@ -51,6 +67,7 @@ describe("computeProductMargin", () => {
     });
     expect(result.marginValue).toBeCloseTo(-12);
     expect(result.marginPercent).toBeLessThan(0);
+    expect(result.markupPercent).toBeLessThan(0);
   });
 });
 
@@ -65,6 +82,7 @@ describe("computeSalesBasedMargin", () => {
     expect(result.marginValue).toBeCloseTo(50); // 80 - 30
     expect(result.marginPercent).toBeCloseTo(0.5); // 50/100
     expect(result.variableCost).toBeCloseTo(50); // 100 - 50
+    expect(result.markupPercent).toBeCloseTo(1); // 50/50
   });
 
   it("falls back to the marketplace's net margin when there's no registered production cost", () => {
@@ -98,16 +116,19 @@ describe("computeSalesBasedMargin", () => {
 describe("computeBreakEven", () => {
   it("computes weighted break-even revenue and units from product mix", () => {
     const products = [
-      { salePrice: 100, tecidoCost: 30, costuraCost: 0, aviamentosCost: 0, marketplaceFee: 15, shippingCost: 10, packagingCost: 5, avgMonthlyQuantity: 20, variableCost: 60, marginValue: 40, marginPercent: 0.4 },
-      { salePrice: 50, tecidoCost: 20, costuraCost: 0, aviamentosCost: 0, marketplaceFee: 8, shippingCost: 5, packagingCost: 2, avgMonthlyQuantity: 40, variableCost: 35, marginValue: 15, marginPercent: 0.3 },
+      { salePrice: 100, tecidoCost: 30, costuraCost: 0, aviamentosCost: 0, marketplaceFee: 15, shippingCost: 10, packagingCost: 5, avgMonthlyQuantity: 20, variableCost: 60, marginValue: 40, marginPercent: 0.4, markupPercent: 40 / 60 },
+      { salePrice: 50, tecidoCost: 20, costuraCost: 0, aviamentosCost: 0, marketplaceFee: 8, shippingCost: 5, packagingCost: 2, avgMonthlyQuantity: 40, variableCost: 35, marginValue: 15, marginPercent: 0.3, markupPercent: 15 / 35 },
     ];
     // totalRevenue = 100*20 + 50*40 = 2000 + 2000 = 4000
     // totalContribution = 40*20 + 15*40 = 800 + 600 = 1400
+    // totalVariableCost = 60*20 + 35*40 = 1200 + 1400 = 2600
     // weightedMarginPercent = 1400/4000 = 0.35
+    // weightedMarkupPercent = 1400/2600 = 0.538461...
     const result = computeBreakEven(products, 3500);
     expect(result.totalRevenue).toBe(4000);
     expect(result.totalContribution).toBe(1400);
     expect(result.weightedMarginPercent).toBeCloseTo(0.35);
+    expect(result.weightedMarkupPercent).toBeCloseTo(1400 / 2600);
     expect(result.breakEvenRevenue).toBeCloseTo(10000); // 3500 / 0.35
     expect(result.totalQty).toBe(60);
     expect(result.weightedAvgUnitMargin).toBeCloseTo(1400 / 60);
@@ -116,10 +137,11 @@ describe("computeBreakEven", () => {
 
   it("returns null break-even figures when margin is zero or negative", () => {
     const products = [
-      { salePrice: 50, tecidoCost: 40, costuraCost: 0, aviamentosCost: 0, marketplaceFee: 15, shippingCost: 5, packagingCost: 2, avgMonthlyQuantity: 10, variableCost: 62, marginValue: -12, marginPercent: -0.24 },
+      { salePrice: 50, tecidoCost: 40, costuraCost: 0, aviamentosCost: 0, marketplaceFee: 15, shippingCost: 5, packagingCost: 2, avgMonthlyQuantity: 10, variableCost: 62, marginValue: -12, marginPercent: -0.24, markupPercent: -12 / 62 },
     ];
     const result = computeBreakEven(products, 1000);
     expect(result.weightedMarginPercent).toBeLessThan(0);
+    expect(result.weightedMarkupPercent).toBeLessThan(0);
     expect(result.breakEvenRevenue).toBeNull();
     expect(result.breakEvenUnits).toBeNull();
   });
@@ -127,6 +149,7 @@ describe("computeBreakEven", () => {
   it("returns nulls when there is no revenue at all", () => {
     const result = computeBreakEven([], 1000);
     expect(result.weightedMarginPercent).toBeNull();
+    expect(result.weightedMarkupPercent).toBeNull();
     expect(result.breakEvenRevenue).toBeNull();
     expect(result.weightedAvgUnitMargin).toBeNull();
     expect(result.breakEvenUnits).toBeNull();

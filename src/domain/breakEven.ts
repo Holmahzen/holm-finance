@@ -16,7 +16,10 @@ export type ProductInput = {
 export type ProductMargin = {
   variableCost: number;
   marginValue: number;
+  /** Margem sobre o preço: (preço - custo) / preço. */
   marginPercent: number;
+  /** Markup sobre o custo: (preço - custo) / custo — "multiplico o custo por quanto pra chegar no preço". */
+  markupPercent: number;
 };
 
 export function computeProductMargin(product: ProductInput): ProductMargin {
@@ -30,8 +33,9 @@ export function computeProductMargin(product: ProductInput): ProductMargin {
     Number(product.packagingCost);
   const marginValue = salePrice - variableCost;
   const marginPercent = salePrice > 0 ? marginValue / salePrice : 0;
+  const markupPercent = variableCost > 0 ? marginValue / variableCost : 0;
 
-  return { variableCost, marginValue, marginPercent };
+  return { variableCost, marginValue, marginPercent, markupPercent };
 }
 
 export type SkuSalesInput = {
@@ -65,8 +69,9 @@ export function computeSalesBasedMargin(
     sale.quantity > 0 ? sale.netRevenue / sale.quantity - productionCostPerUnit : 0;
   const marginPercent = salePrice > 0 ? marginValue / salePrice : 0;
   const variableCost = salePrice - marginValue;
+  const markupPercent = variableCost > 0 ? marginValue / variableCost : 0;
 
-  return { variableCost, marginValue, marginPercent };
+  return { variableCost, marginValue, marginPercent, markupPercent };
 }
 
 export type BreakEvenResult = {
@@ -74,6 +79,8 @@ export type BreakEvenResult = {
   totalContribution: number;
   totalQty: number;
   weightedMarginPercent: number | null;
+  /** Markup médio ponderado: contribuição total / custo variável total. */
+  weightedMarkupPercent: number | null;
   breakEvenRevenue: number | null;
   weightedAvgUnitMargin: number | null;
   breakEvenUnits: number | null;
@@ -115,15 +122,18 @@ export function computeBreakEven(
   let totalRevenue = 0;
   let totalContribution = 0;
   let totalQty = 0;
+  let totalVariableCost = 0;
 
   for (const p of products) {
     const qty = p.avgMonthlyQuantity;
     totalRevenue += Number(p.salePrice) * qty;
     totalContribution += p.marginValue * qty;
+    totalVariableCost += p.variableCost * qty;
     totalQty += qty;
   }
 
   const weightedMarginPercent = totalRevenue > 0 ? totalContribution / totalRevenue : null;
+  const weightedMarkupPercent = totalVariableCost > 0 ? totalContribution / totalVariableCost : null;
   const weightedAvgUnitMargin = totalQty > 0 ? totalContribution / totalQty : null;
   const { breakEvenRevenue, breakEvenUnits } = computeBreakEvenTargets(
     fixedCostsTotal,
@@ -136,6 +146,7 @@ export function computeBreakEven(
     totalContribution,
     totalQty,
     weightedMarginPercent,
+    weightedMarkupPercent,
     breakEvenRevenue,
     weightedAvgUnitMargin,
     breakEvenUnits,

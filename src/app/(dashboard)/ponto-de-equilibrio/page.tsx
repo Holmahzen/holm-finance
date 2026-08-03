@@ -12,6 +12,7 @@ type ProductRanked = {
   avgMonthlyQuantity: number;
   marginValue: number;
   marginPercent: number;
+  markupPercent: number;
 };
 
 type Insight =
@@ -46,6 +47,7 @@ type BreakEvenReport = {
   actualRevenueThisMonth: number;
   breakEven: {
     weightedMarginPercent: number | null;
+    weightedMarkupPercent: number | null;
     weightedAvgUnitMargin: number | null;
     breakEvenRevenue: number | null;
     breakEvenUnits: number | null;
@@ -271,6 +273,7 @@ function ProgressMeter({
 
 function ManagementSummary({ report, monthLabel }: { report: BreakEvenReport; monthLabel: string }) {
   const margin = report.breakEven.weightedMarginPercent;
+  const markup = report.breakEven.weightedMarkupPercent;
   const target = report.breakEven.breakEvenRevenue;
   const units = report.breakEven.breakEvenUnits;
 
@@ -297,8 +300,15 @@ function ManagementSummary({ report, monthLabel }: { report: BreakEvenReport; mo
       <h2 className="mb-1 font-serif text-lg text-foreground">Resumo gerencial</h2>
       <p className="text-sm leading-relaxed text-foreground">
         Em {monthLabel}, sua margem de contribuição média ponderada está em{" "}
-        <span className="font-medium text-gold">{(margin * 100).toFixed(1)}%</span>. Com custos
-        fixos de <span className="font-medium">{formatBRL(report.fixedCostsTotal)}</span>, você
+        <span className="font-medium text-gold">{(margin * 100).toFixed(1)}%</span>
+        {markup !== null && (
+          <>
+            {" "}
+            (markup médio de <span className="font-medium text-gold">{(markup * 100).toFixed(1)}%</span>)
+          </>
+        )}
+        . Com custos fixos de{" "}
+        <span className="font-medium">{formatBRL(report.fixedCostsTotal)}</span>, você
         precisa faturar <span className="font-medium text-gold">{formatBRL(target)}</span>
         {units !== null && (
           <>
@@ -395,7 +405,8 @@ export default function BreakEvenPage() {
                       {p.sku && <span className="ml-1 text-xs text-muted">({p.sku})</span>}
                     </td>
                     <td className={`py-1.5 ${p.marginValue >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                      {formatBRL(p.marginValue)} ({(p.marginPercent * 100).toFixed(1)}%)
+                      {formatBRL(p.marginValue)} ({(p.marginPercent * 100).toFixed(1)}% margem
+                      · {(p.markupPercent * 100).toFixed(1)}% markup)
                     </td>
                     <td className="py-1.5">{p.avgMonthlyQuantity}</td>
                     <td className="py-1.5">{formatBRL(p.marginValue * p.avgMonthlyQuantity)}</td>
@@ -477,7 +488,7 @@ export default function BreakEvenPage() {
 
           <IntelligencePanel insights={report.insights} />
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
             <StatCard
               label="Ponto de equilíbrio (R$)"
               value={
@@ -499,6 +510,14 @@ export default function BreakEvenPage() {
               value={
                 report.breakEven.weightedMarginPercent !== null
                   ? `${(report.breakEven.weightedMarginPercent * 100).toFixed(1)}%`
+                  : "—"
+              }
+            />
+            <StatCard
+              label="Markup médio"
+              value={
+                report.breakEven.weightedMarkupPercent !== null
+                  ? `${(report.breakEven.weightedMarkupPercent * 100).toFixed(1)}%`
                   : "—"
               }
             />

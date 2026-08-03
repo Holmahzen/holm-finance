@@ -638,7 +638,8 @@ export default function ProductsPage() {
                   <td className="py-2">{formatBRL(p.costuraCost)}</td>
                   <td className="py-2">{formatBRL(p.aviamentosCost)}</td>
                   <td className={`py-2 ${margin.marginValue >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                    {formatBRL(margin.marginValue)} ({(margin.marginPercent * 100).toFixed(1)}%)
+                    {formatBRL(margin.marginValue)} ({(margin.marginPercent * 100).toFixed(1)}% margem
+                    · {(margin.markupPercent * 100).toFixed(1)}% markup)
                   </td>
                   <td className="py-2">{p.avgMonthlyQuantity}</td>
                   <td className="py-2">
