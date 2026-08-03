@@ -11,6 +11,7 @@ type Entry = {
   amount: string;
   dueDate: string;
   plannedPaymentDate: string | null;
+  competenceDate: string | null;
   paidAt: string | null;
   status: "PENDING" | "PAID" | "CANCELED";
   category: { id: string; name: string } | null;
@@ -79,6 +80,7 @@ export default function EntriesPage() {
   const [amount, setAmount] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [plannedPaymentDate, setPlannedPaymentDate] = useState("");
+  const [competenceDate, setCompetenceDate] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [counterpartyId, setCounterpartyId] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -125,6 +127,7 @@ export default function EntriesPage() {
     setAmount("");
     setDueDate("");
     setPlannedPaymentDate("");
+    setCompetenceDate("");
     setCategoryId("");
     setCounterpartyId("");
     setFormError(null);
@@ -137,6 +140,7 @@ export default function EntriesPage() {
     setAmount(entry.amount);
     setDueDate(entry.dueDate.slice(0, 10));
     setPlannedPaymentDate(entry.plannedPaymentDate ? entry.plannedPaymentDate.slice(0, 10) : "");
+    setCompetenceDate(entry.competenceDate ? entry.competenceDate.slice(0, 10) : "");
     setCategoryId(entry.category?.id ?? "");
     setCounterpartyId(entry.counterparty?.id ?? "");
     setFormError(null);
@@ -152,6 +156,7 @@ export default function EntriesPage() {
       amount,
       dueDate,
       plannedPaymentDate: plannedPaymentDate || undefined,
+      competenceDate: competenceDate || undefined,
       categoryId: categoryId || undefined,
       counterpartyId: counterpartyId || undefined,
     };
@@ -521,6 +526,17 @@ export default function EntriesPage() {
           />
         </div>
         <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-muted" title="Data em que a despesa/receita aconteceu de fato — usada na DRE no lugar da data de pagamento quando preenchida. Útil pra lançar cada compra de uma fatura de cartão na competência certa.">
+            Data de competência (opcional)
+          </label>
+          <input
+            type="date"
+            value={competenceDate}
+            onChange={(e) => setCompetenceDate(e.target.value)}
+            className="rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-muted">Categoria</label>
           <select
             value={categoryId}
@@ -590,6 +606,7 @@ export default function EntriesPage() {
               <th className="py-2 font-medium">Valor</th>
               <th className="py-2 font-medium">Vencimento</th>
               <th className="py-2 font-medium">Data planejada</th>
+              <th className="py-2 font-medium">Competência</th>
               <th className="py-2 font-medium">Data de pagamento</th>
               <th className="py-2 font-medium">Categoria</th>
               <th className="py-2 font-medium">Status</th>
@@ -636,6 +653,9 @@ export default function EntriesPage() {
                         {entry.plannedPaymentDate ? formatDate(entry.plannedPaymentDate) : "—"}
                       </button>
                     )}
+                  </td>
+                  <td className="py-2 text-muted">
+                    {entry.competenceDate ? formatDate(entry.competenceDate) : "—"}
                   </td>
                   <td className="py-2 text-muted">
                     {entry.paidAt ? formatDate(entry.paidAt) : "—"}

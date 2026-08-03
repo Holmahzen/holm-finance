@@ -28,6 +28,17 @@ export const dreRepository = {
   },
 
   async getCategoryTotals(start: Date, end: Date) {
+    // Entra no período pela data de competência quando ela foi informada
+    // (ex.: cada compra de uma fatura de cartão, lançada com a data em que
+    // a compra foi feita) — sem competência, cai no comportamento de sempre
+    // (data de pagamento), pra não quebrar lançamentos já existentes.
+    const periodWhere = {
+      OR: [
+        { competenceDate: { gte: start, lt: end } },
+        { competenceDate: null, paidAt: { gte: start, lt: end } },
+      ],
+    };
+
     const [categories, payableSums, receivableSums] = await Promise.all([
       prisma.category.findMany({
         where: { dreGroup: { not: null } },
@@ -37,9 +48,9 @@ export const dreRepository = {
         by: ["categoryId"],
         where: {
           status: "PAID",
-          paidAt: { gte: start, lt: end },
           categoryId: { not: null },
           type: "PAYABLE",
+          ...periodWhere,
         },
         _sum: { paidAmount: true },
       }),
@@ -47,9 +58,9 @@ export const dreRepository = {
         by: ["categoryId"],
         where: {
           status: "PAID",
-          paidAt: { gte: start, lt: end },
           categoryId: { not: null },
           type: "RECEIVABLE",
+          ...periodWhere,
         },
         _sum: { paidAmount: true },
       }),
