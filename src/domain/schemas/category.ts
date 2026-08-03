@@ -21,6 +21,7 @@ export const createCategorySchema = z.object({
   type: entryTypeSchema.optional(),
   parentId: z.string().optional(),
   dreGroup: dreGroupSchema.nullable().optional(),
+  isAdvertising: z.boolean().optional(),
 });
 
 export const updateCategorySchema = createCategorySchema.partial().extend({

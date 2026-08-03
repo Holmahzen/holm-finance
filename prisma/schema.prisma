@@ -132,8 +132,10 @@ model Category {
   parentId String?
   parent   Category?  @relation("CategoryToCategory", fields: [parentId], references: [id])
   children Category[] @relation("CategoryToCategory")
-  isActive Boolean    @default(true)
-  dreGroup DreGroup?
+  isActive      Boolean    @default(true)
+  dreGroup      DreGroup?
+  // Marca a categoria como gasto com anúncio/publicidade, pra somar no CAC do Dashboard Executivo.
+  isAdvertising Boolean    @default(false)
 
   entries        Entry[]
   counterparties Counterparty[]

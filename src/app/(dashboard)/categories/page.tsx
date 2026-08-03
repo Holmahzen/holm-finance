@@ -7,6 +7,7 @@ type Category = {
   name: string;
   type: "PAYABLE" | "RECEIVABLE" | null;
   parentId: string | null;
+  isAdvertising: boolean;
 };
 
 export default function CategoriesPage() {
@@ -15,6 +16,7 @@ export default function CategoriesPage() {
   const [name, setName] = useState("");
   const [type, setType] = useState<"" | "PAYABLE" | "RECEIVABLE">("");
   const [parentId, setParentId] = useState("");
+  const [isAdvertising, setIsAdvertising] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,7 +41,12 @@ export default function CategoriesPage() {
     const res = await fetch("/api/categories", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, type: type || undefined, parentId: parentId || undefined }),
+      body: JSON.stringify({
+        name,
+        type: type || undefined,
+        parentId: parentId || undefined,
+        isAdvertising,
+      }),
     });
     if (!res.ok) {
       const body = await res.json();
@@ -48,9 +55,19 @@ export default function CategoriesPage() {
       setName("");
       setType("");
       setParentId("");
+      setIsAdvertising(false);
       await load();
     }
     setSubmitting(false);
+  }
+
+  async function toggleAdvertising(category: Category) {
+    await fetch(`/api/categories/${category.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isAdvertising: !category.isAdvertising }),
+    });
+    await load();
   }
 
   return (
@@ -104,6 +121,15 @@ export default function CategoriesPage() {
             ))}
           </select>
         </div>
+        <label className="flex items-center gap-2 pb-1.5 text-sm text-foreground">
+          <input
+            type="checkbox"
+            checked={isAdvertising}
+            onChange={(e) => setIsAdvertising(e.target.checked)}
+            className="accent-gold"
+          />
+          Publicidade/anúncios (usada pro CAC)
+        </label>
         <button
           type="submit"
           disabled={submitting}
@@ -125,6 +151,7 @@ export default function CategoriesPage() {
             <tr className="border-b border-border text-muted">
               <th className="py-2 font-medium">Nome</th>
               <th className="py-2 font-medium">Tipo</th>
+              <th className="py-2 font-medium">Publicidade</th>
             </tr>
           </thead>
           <tbody>
@@ -139,6 +166,18 @@ export default function CategoriesPage() {
                         ? "A receber"
                         : "Ambos"}
                   </td>
+                  <td className="py-2">
+                    <button
+                      onClick={() => toggleAdvertising(parent)}
+                      className={
+                        parent.isAdvertising
+                          ? "text-xs font-medium text-gold hover:underline"
+                          : "text-xs font-medium text-muted hover:text-gold hover:underline"
+                      }
+                    >
+                      {parent.isAdvertising ? "Sim — clique pra desmarcar" : "Não — clique pra marcar"}
+                    </button>
+                  </td>
                 </tr>
                 {childrenOf(parent.id).map((child) => (
                   <tr key={child.id} className="border-b border-border/50">
@@ -149,6 +188,18 @@ export default function CategoriesPage() {
                         : child.type === "RECEIVABLE"
                           ? "A receber"
                           : "Ambos"}
+                    </td>
+                    <td className="py-2">
+                      <button
+                        onClick={() => toggleAdvertising(child)}
+                        className={
+                          child.isAdvertising
+                            ? "text-xs font-medium text-gold hover:underline"
+                            : "text-xs font-medium text-muted hover:text-gold hover:underline"
+                        }
+                      >
+                        {child.isAdvertising ? "Sim — clique pra desmarcar" : "Não — clique pra marcar"}
+                      </button>
                     </td>
                   </tr>
                 ))}

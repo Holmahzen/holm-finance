@@ -13,6 +13,20 @@ export const dreRepository = {
       .map((s) => ({ sku: s.sku, quantity: s.quantity }));
   },
 
+  /** Soma de lançamentos pagos no período em categorias marcadas como publicidade/anúncio — usada pro CAC. */
+  async getAdvertisingSpend(start: Date, end: Date) {
+    const result = await prisma.entry.aggregate({
+      where: {
+        status: "PAID",
+        paidAt: { gte: start, lt: end },
+        type: "PAYABLE",
+        category: { isAdvertising: true },
+      },
+      _sum: { paidAmount: true },
+    });
+    return Number(result._sum.paidAmount ?? 0);
+  },
+
   async getCategoryTotals(start: Date, end: Date) {
     const [categories, payableSums, receivableSums] = await Promise.all([
       prisma.category.findMany({

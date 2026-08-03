@@ -26,4 +26,12 @@ export const marketplaceSaleRepository = {
       },
     });
   },
+
+  /** Nomes de comprador (com venda válida) no período — pra contar clientes únicos no CAC. */
+  findCustomerNamesByPeriod(start: Date, end: Date) {
+    return prisma.marketplaceSale.findMany({
+      where: { saleDate: { gte: start, lt: end }, customerName: { not: null } },
+      select: { customerName: true, status: true },
+    });
+  },
 };
