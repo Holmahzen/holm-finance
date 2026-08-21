@@ -46,3 +46,6 @@ next-env.d.ts
 
 # real bank statement fixtures (contain live financial data, never commit)
 tests/fixtures/ofx/real/
+
+# pg_dump/pg_restore backups (contain live financial data, never commit)
+*.dump
