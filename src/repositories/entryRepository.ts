@@ -1,11 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 
+const creditCardIncludes = {
+  fixedCost: { select: { creditCard: { select: { id: true, name: true } } } },
+  creditCardPurchase: { select: { creditCard: { select: { id: true, name: true } } } },
+} as const;
+
 export const entryRepository = {
   findMany(where?: Prisma.EntryWhereInput) {
     return prisma.entry.findMany({
       where,
-      include: { category: true, counterparty: true, bankAccount: true },
+      include: { category: true, counterparty: true, bankAccount: true, ...creditCardIncludes },
       orderBy: { dueDate: "asc" },
     });
   },
@@ -13,7 +18,7 @@ export const entryRepository = {
   findById(id: string) {
     return prisma.entry.findUnique({
       where: { id },
-      include: { category: true, counterparty: true, bankAccount: true },
+      include: { category: true, counterparty: true, bankAccount: true, ...creditCardIncludes },
     });
   },
 

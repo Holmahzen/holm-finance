@@ -5,6 +5,7 @@ import Link from "next/link";
 import { formatBRL } from "@/lib/format";
 import { PeriodFilter } from "@/components/PeriodFilter";
 import { HorizontalBarChart } from "@/components/HorizontalBarChart";
+import { PrintButton } from "@/components/PrintButton";
 import {
   healthSignalText,
   HEALTH_SEVERITY_STYLE,
@@ -103,6 +104,7 @@ export default function DashboardPage() {
   const [mlWithin7d, setMlWithin7d] = useState("");
   const [mlAfter7d, setMlAfter7d] = useState("");
   const [savingMl, setSavingMl] = useState(false);
+  const [mlError, setMlError] = useState<string | null>(null);
 
   function loadMlReceivable() {
     fetch("/api/mercadolivre-receivables")
@@ -131,18 +133,31 @@ export default function DashboardPage() {
   }, []);
 
   async function handleSaveMl() {
+    setMlError(null);
+    // Aceita vírgula como separador decimal (comum ao digitar em teclado
+    // numérico/pt-BR) — o banco só entende ponto.
+    const normalize = (v: string) => v.trim().replace(",", ".") || "0";
+    const values = {
+      today: normalize(mlToday),
+      tomorrow: normalize(mlTomorrow),
+      within7d: normalize(mlWithin7d),
+      after7d: normalize(mlAfter7d),
+    };
+    if (Object.values(values).some((v) => !Number.isFinite(Number(v)))) {
+      setMlError("Algum valor não é um número válido.");
+      return;
+    }
     setSavingMl(true);
-    await fetch("/api/mercadolivre-receivables", {
+    const res = await fetch("/api/mercadolivre-receivables", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        today: mlToday,
-        tomorrow: mlTomorrow,
-        within7d: mlWithin7d,
-        after7d: mlAfter7d,
-      }),
+      body: JSON.stringify(values),
     });
     setSavingMl(false);
+    if (!res.ok) {
+      setMlError("Não foi possível salvar. Confira se os valores são números válidos.");
+      return;
+    }
     setEditingMl(false);
     loadMlReceivable();
   }
@@ -157,9 +172,12 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        <h1 className="font-serif text-3xl text-foreground">Visão geral</h1>
-        <p className="text-sm text-muted">Resumo financeiro da Holm Confecções.</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-serif text-3xl text-foreground">Visão geral</h1>
+          <p className="text-sm text-muted">Resumo financeiro da Holm Confecções.</p>
+        </div>
+        <PrintButton />
       </div>
 
       <PeriodFilter
@@ -273,7 +291,7 @@ export default function DashboardPage() {
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-serif text-xl text-foreground">Recebimentos Mercado Livre</h2>
               {!editingMl && (
-                <div className="flex items-center gap-3">
+                <div className="no-print flex items-center gap-3">
                   <button
                     onClick={() => setMlExpanded((v) => !v)}
                     className="text-xs font-medium text-gold hover:text-gold-soft hover:underline"
@@ -281,7 +299,10 @@ export default function DashboardPage() {
                     {mlExpanded ? "Recolher" : "Ver detalhamento"}
                   </button>
                   <button
-                    onClick={() => setEditingMl(true)}
+                    onClick={() => {
+                      setMlError(null);
+                      setEditingMl(true);
+                    }}
                     className="text-xs font-medium text-gold hover:text-gold-soft hover:underline"
                   >
                     Editar
@@ -291,7 +312,7 @@ export default function DashboardPage() {
             </div>
 
             {editingMl ? (
-              <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-surface p-4">
+              <div className="no-print flex flex-wrap items-end gap-3 rounded-lg border border-border bg-surface p-4">
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-medium text-muted">Hoje</label>
                   <input
@@ -340,11 +361,15 @@ export default function DashboardPage() {
                   {savingMl ? "Salvando..." : "Salvar"}
                 </button>
                 <button
-                  onClick={() => setEditingMl(false)}
+                  onClick={() => {
+                    setMlError(null);
+                    setEditingMl(false);
+                  }}
                   className="text-sm text-muted hover:text-foreground hover:underline"
                 >
                   Cancelar
                 </button>
+                {mlError && <p className="w-full text-sm text-red-400">{mlError}</p>}
               </div>
             ) : mlExpanded ? (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:grid-cols-5">

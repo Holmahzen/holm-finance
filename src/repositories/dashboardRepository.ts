@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@/generated/prisma/client";
 
 export const dashboardRepository = {
   async getAccountBalances() {
@@ -13,29 +14,51 @@ export const dashboardRepository = {
       },
     });
 
-    const paidSums = await prisma.entry.groupBy({
-      by: ["bankAccountId", "type"],
+    // Traz todos os lançamentos pagos com data, em vez de já agregar por conta:
+    // uma conta com extrato importado só deve somar o que foi pago DEPOIS da
+    // data daquele extrato, pra não contar de novo o que o extrato já reflete.
+    // Lançamentos com vínculo de conciliação (reconciliationMatch) correspondem
+    // a uma transação que já veio de um extrato importado — o saldo do extrato
+    // já inclui esse valor, então eles NUNCA entram na soma "desde o extrato",
+    // senão o valor é contado duas vezes.
+    const paidEntries = await prisma.entry.findMany({
       where: { status: "PAID", bankAccountId: { not: null } },
-      _sum: { paidAmount: true },
+      select: {
+        bankAccountId: true,
+        type: true,
+        paidAmount: true,
+        paidAt: true,
+        reconciliationMatch: { select: { id: true } },
+      },
     });
 
     return accounts.map((account) => {
       const latestBatch = account.importBatches[0];
+      const entriesForAccount = paidEntries.filter((e) => e.bankAccountId === account.id);
+
       if (latestBatch?.ledgerBalance) {
-        return { id: account.id, name: account.name, balance: latestBatch.ledgerBalance };
+        const cutoff = latestBatch.ledgerBalanceDate;
+        const sumSince = (type: "RECEIVABLE" | "PAYABLE") =>
+          entriesForAccount
+            .filter(
+              (e) =>
+                e.type === type && !e.reconciliationMatch && cutoff && e.paidAt && e.paidAt > cutoff,
+            )
+            .reduce((acc, e) => acc.add(e.paidAmount ?? 0), new Prisma.Decimal(0));
+
+        const balance = latestBatch.ledgerBalance.add(sumSince("RECEIVABLE")).sub(sumSince("PAYABLE"));
+        return { id: account.id, name: account.name, balance };
       }
 
-      const paidIn =
-        paidSums.find((s) => s.bankAccountId === account.id && s.type === "RECEIVABLE")?._sum
-          .paidAmount ?? 0;
-      const paidOut =
-        paidSums.find((s) => s.bankAccountId === account.id && s.type === "PAYABLE")?._sum
-          .paidAmount ?? 0;
+      const sumAll = (type: "RECEIVABLE" | "PAYABLE") =>
+        entriesForAccount
+          .filter((e) => e.type === type)
+          .reduce((acc, e) => acc.add(e.paidAmount ?? 0), new Prisma.Decimal(0));
 
       return {
         id: account.id,
         name: account.name,
-        balance: account.openingBalance.add(paidIn).sub(paidOut),
+        balance: account.openingBalance.add(sumAll("RECEIVABLE")).sub(sumAll("PAYABLE")),
       };
     });
   },

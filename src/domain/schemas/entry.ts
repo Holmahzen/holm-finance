@@ -21,6 +21,13 @@ export const payEntrySchema = z.object({
   paidAt: z.coerce.date().default(() => new Date()),
 });
 
+export const bulkPayEntrySchema = z.object({
+  ids: z.array(z.string().min(1)).min(1, "Selecione ao menos um lançamento"),
+  bankAccountId: z.string().min(1, "Conta é obrigatória"),
+  paidAt: z.coerce.date().default(() => new Date()),
+});
+
 export type CreateEntryInput = z.infer<typeof createEntrySchema>;
 export type UpdateEntryInput = z.infer<typeof updateEntrySchema>;
 export type PayEntryInput = z.infer<typeof payEntrySchema>;
+export type BulkPayEntryInput = z.infer<typeof bulkPayEntrySchema>;

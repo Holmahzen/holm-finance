@@ -11,6 +11,10 @@ export type MercadoTurboSaleRow = {
   quantity: number;
   grossRevenue: number;
   netRevenue: number;
+  /** "Custo (-)" — custo de produto que o Mercado Turbo já descontou dentro
+   * de "Margem Contrib. (=)". Guardado à parte pra não ser descontado de
+   * novo junto com o custo de produção cadastrado no Holm Finance. */
+  marketplaceCost: number;
   customerName: string | null;
   status: string;
 };
@@ -82,6 +86,7 @@ export function parseMercadoTurboWorkbook(buffer: Buffer): MercadoTurboParseResu
       quantity: Math.round(parseAmountCell(row["Qtd."])),
       grossRevenue: parseAmountCell(row["Faturamento ML"]),
       netRevenue: parseAmountCell(row["Margem Contrib. (=)"]),
+      marketplaceCost: parseAmountCell(row["Custo (-)"]),
       customerName: cellString(row, "Nome do Comprador") || null,
       status: cellString(row, "Status Pedido"),
     });

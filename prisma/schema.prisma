@@ -55,6 +55,13 @@ enum EntryType {
   RECEIVABLE
 }
 
+enum ReserveCategory {
+  THIRTEENTH
+  VACATION
+  CONTINGENCY
+  TAX
+}
+
 enum EntryStatus {
   PENDING
   PAID
@@ -143,6 +150,7 @@ model Category {
   fixedCosts     FixedCost[]
   categoryRules  CategoryRule[]
   loans          Loan[]
+  creditCardPurchases CreditCardPurchase[]
 
   @@map("categories")
 }
@@ -188,6 +196,7 @@ model Counterparty {
 
   entries    Entry[]
   fixedCosts FixedCost[]
+  creditCardPurchases CreditCardPurchase[]
 
   @@map("counterparties")
 }
@@ -211,6 +220,9 @@ model Entry {
   counterparty       Counterparty?     @relation(fields: [counterpartyId], references: [id])
   fixedCostId        String?
   fixedCost          FixedCost?        @relation(fields: [fixedCostId], references: [id])
+  creditCardPurchaseId String?
+  creditCardPurchase   CreditCardPurchase? @relation(fields: [creditCardPurchaseId], references: [id])
+  installmentNumber    Int?
   notes              String?
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
@@ -219,6 +231,37 @@ model Entry {
 
   @@index([status, dueDate])
   @@map("entries")
+}
+
+model CreditCard {
+  id        String   @id @default(cuid())
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  purchases  CreditCardPurchase[]
+  fixedCosts FixedCost[]
+
+  @@map("credit_cards")
+}
+
+model CreditCardPurchase {
+  id             String        @id @default(cuid())
+  creditCardId   String
+  creditCard     CreditCard    @relation(fields: [creditCardId], references: [id])
+  description    String
+  totalAmount    Decimal       @db.Decimal(14, 2)
+  installments   Int
+  purchaseDate   DateTime
+  categoryId     String?
+  category       Category?     @relation(fields: [categoryId], references: [id])
+  counterpartyId String?
+  counterparty   Counterparty? @relation(fields: [counterpartyId], references: [id])
+  createdAt      DateTime      @default(now())
+
+  generatedEntries Entry[]
+
+  @@map("credit_card_purchases")
 }
 
 model SalesImportBatch {
@@ -246,6 +289,11 @@ model MarketplaceSale {
   quantity         Int
   grossRevenue     Decimal           @db.Decimal(14, 2)
   netRevenue       Decimal           @db.Decimal(14, 2)
+  /** "Custo (-)" do Mercado Turbo — custo de produto já descontado por ELE
+   * dentro do netRevenue. Guardado à parte pra somar de volta antes de
+   * descontar o custo de produção cadastrado no Holm Finance, evitando
+   * descontar o mesmo custo duas vezes. Sempre 0 pra vendas da Shopee. */
+  marketplaceCost  Decimal           @default(0) @db.Decimal(14, 2)
   customerName     String?
   status           String
   importBatchId    String?
@@ -276,6 +324,11 @@ model FixedCost {
   category       Category?     @relation(fields: [categoryId], references: [id])
   counterpartyId String?
   counterparty   Counterparty? @relation(fields: [counterpartyId], references: [id])
+  creditCardId   String?
+  creditCard     CreditCard?   @relation(fields: [creditCardId], references: [id])
+  // Marca custos fixos que representam salário (empregado CLT ou pró-labore),
+  // usados como base pro cálculo de provisão de 13º e férias.
+  laborProvisionEligible Boolean @default(false)
   isActive       Boolean       @default(true)
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
@@ -343,4 +396,15 @@ model ReconciliationMatch {
   updatedAt             DateTime             @updatedAt
 
   @@map("reconciliation_matches")
+}
+
+model ReserveDeposit {
+  id        String          @id @default(cuid())
+  category  ReserveCategory
+  amount    Decimal         @db.Decimal(14, 2)
+  date      DateTime
+  notes     String?
+  createdAt DateTime        @default(now())
+
+  @@map("reserve_deposits")
 }

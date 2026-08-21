@@ -2,7 +2,15 @@ import { describe, it, expect } from "vitest";
 import { rankUncostedProducts } from "@/domain/productPriority";
 
 function sku(overrides: Partial<Parameters<typeof rankUncostedProducts>[0][number]> = {}) {
-  return { sku: "A", name: "Produto A", quantity: 1, grossRevenue: 100, netRevenue: 30, ...overrides };
+  return {
+    sku: "A",
+    name: "Produto A",
+    quantity: 1,
+    grossRevenue: 100,
+    netRevenue: 30,
+    marketplaceCost: 0,
+    ...overrides,
+  };
 }
 
 describe("rankUncostedProducts", () => {

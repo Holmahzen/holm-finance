@@ -10,10 +10,18 @@ import {
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export const cashFlowService = {
-  async getProjection(days = 30) {
+  async getProjection(range: number | "month" = 30) {
     const now = new Date();
     const todayUTC = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-    const windowEnd = new Date(todayUTC.getTime() + days * MS_PER_DAY);
+
+    // "month" = até o fim do mês vigente, em vez de N dias corridos a partir
+    // de hoje — evita que o alerta de "não sobra nada" misture contas do mês
+    // que vem junto com as do mês atual.
+    const windowEnd =
+      range === "month"
+        ? new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 1))
+        : new Date(todayUTC.getTime() + range * MS_PER_DAY);
+    const days = Math.round((windowEnd.getTime() - todayUTC.getTime()) / MS_PER_DAY);
 
     const tomorrowUTC = new Date(todayUTC.getTime() + MS_PER_DAY);
 
@@ -82,6 +90,12 @@ export const cashFlowService = {
       .reduce((sum, m) => sum + Math.abs(m.amount), 0);
     const safeToSpend = Math.max(0, startingBalance - totalPendingOutflows);
 
+    // Mesma conta, só que otimista: soma também o que está "a liberar" no
+    // Mercado Livre (as 4 faixas informadas em Início, inclusive "após 7
+    // dias" — que não tem data exata e por isso fica fora da curva/projeção).
+    const mlTotal = mlToday + mlTomorrow + mlWithin7d + mlAfter7d;
+    const safeToSpendWithML = Math.max(0, startingBalance - totalPendingOutflows + mlTotal);
+
     const realizedTodayMovements: CashFlowMovement[] = paidToday.map((e) => ({
       date: todayUTC,
       amount: e.type === "RECEIVABLE" ? Number(e.paidAmount ?? e.amount) : -Number(e.paidAmount ?? e.amount),
@@ -102,6 +116,8 @@ export const cashFlowService = {
       mlAfter7d,
       realizedToday,
       safeToSpend,
+      safeToSpendWithML,
+      mlTotal,
       totalPendingOutflows,
     };
   },

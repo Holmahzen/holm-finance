@@ -49,24 +49,29 @@ export function PeriodFilter({
   years: number[];
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-surface px-4 py-2">
-      <div className="flex flex-wrap items-center gap-1">
-        <span className="mr-1 text-xs text-muted">Ano</span>
-        {years.map((y) => (
-          <Pill key={y} label={String(y)} active={y === year} onClick={() => onChange(y, month)} />
-        ))}
+    <>
+      <div className="no-print flex flex-wrap items-center gap-4 rounded-lg border border-border bg-surface px-4 py-2">
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="mr-1 text-xs text-muted">Ano</span>
+          {years.map((y) => (
+            <Pill key={y} label={String(y)} active={y === year} onClick={() => onChange(y, month)} />
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="mr-1 text-xs text-muted">Mês</span>
+          {MONTHS.map((label, idx) => (
+            <Pill
+              key={label}
+              label={label}
+              active={idx + 1 === month}
+              onClick={() => onChange(year, idx + 1)}
+            />
+          ))}
+        </div>
       </div>
-      <div className="flex flex-wrap items-center gap-1">
-        <span className="mr-1 text-xs text-muted">Mês</span>
-        {MONTHS.map((label, idx) => (
-          <Pill
-            key={label}
-            label={label}
-            active={idx + 1 === month}
-            onClick={() => onChange(year, idx + 1)}
-          />
-        ))}
-      </div>
-    </div>
+      <p className="hidden text-sm text-muted print:block">
+        Período: {MONTHS[month - 1]}/{year}
+      </p>
+    </>
   );
 }

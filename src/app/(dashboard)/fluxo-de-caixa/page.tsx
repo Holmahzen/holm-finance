@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { formatBRL } from "@/lib/format";
+import { PrintButton } from "@/components/PrintButton";
 
 type Movement = { date: string; amount: number; label: string };
 type CashFlowDay = {
@@ -26,6 +27,8 @@ type CashFlowReport = {
   mlAfter7d: number;
   realizedToday: RealizedToday;
   safeToSpend: number;
+  safeToSpendWithML: number;
+  mlTotal: number;
   totalPendingOutflows: number;
 };
 
@@ -147,20 +150,28 @@ function StatCard({
   );
 }
 
+type Range = 30 | 60 | 90 | "month";
+
 export default function CashFlowPage() {
-  const [days, setDays] = useState(30);
+  const [range, setRange] = useState<Range>(30);
   const [report, setReport] = useState<CashFlowReport | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/cash-flow?days=${days}`)
+    const query = range === "month" ? "range=month" : `days=${range}`;
+    fetch(`/api/cash-flow?${query}`)
       .then((res) => res.json())
       .then((data) => {
         setReport(data);
         setLoading(false);
       });
-  }, [days]);
+  }, [range]);
+
+  // Frase usada nos textos ("as contas pendentes ...") — no modo "mês
+  // vigente" o período tem um nome fixo em vez de "X dias".
+  const periodPhrase = range === "month" ? "até o fim do mês" : `nos próximos ${range} dias`;
+  const periodLabel = range === "month" ? "até o fim do mês" : `em ${range} dias`;
 
   const daysWithMovement = report?.days.filter((d) => d.movements.length > 0) ?? [];
   const lowestDay = report?.days.reduce(
@@ -173,26 +184,41 @@ export default function CashFlowPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-serif text-3xl text-foreground">Fluxo de Caixa</h1>
-          <p className="text-sm text-muted">
+          <p className="no-print text-sm text-muted">
             Projeção do saldo dia a dia, somando o saldo atual das contas com as contas a pagar e a
             receber ainda pendentes (pelas datas de vencimento). Vencidos entram a partir de hoje.
           </p>
+          <p className="hidden text-sm text-muted print:block">Projeção {periodLabel}</p>
         </div>
-        <div className="flex gap-1 rounded-lg border border-border bg-surface p-1">
-          {[30, 60, 90].map((d) => (
+        <div className="flex items-center gap-3">
+          <div className="no-print flex gap-1 rounded-lg border border-border bg-surface p-1">
+            {([30, 60, 90] as const).map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setRange(d)}
+                className={
+                  d === range
+                    ? "rounded bg-gold px-3 py-1.5 text-sm font-medium text-black"
+                    : "rounded px-3 py-1.5 text-sm font-medium text-muted transition hover:text-foreground"
+                }
+              >
+                {d} dias
+              </button>
+            ))}
             <button
-              key={d}
               type="button"
-              onClick={() => setDays(d)}
+              onClick={() => setRange("month")}
               className={
-                d === days
+                range === "month"
                   ? "rounded bg-gold px-3 py-1.5 text-sm font-medium text-black"
                   : "rounded px-3 py-1.5 text-sm font-medium text-muted transition hover:text-foreground"
               }
             >
-              {d} dias
+              Mês vigente
             </button>
-          ))}
+          </div>
+          <PrintButton />
         </div>
       </div>
 
@@ -210,35 +236,53 @@ export default function CashFlowPage() {
             </div>
           )}
 
-          {report.safeToSpend > 0 ? (
-            <div className="rounded-lg border border-emerald-400/40 bg-emerald-400/10 p-4">
-              <span className="text-xs font-medium tracking-wide text-emerald-400 uppercase">
-                Compras
-              </span>
-              <p className="font-serif text-2xl text-emerald-400">
-                Pode gastar até {formatBRL(report.safeToSpend)}
-              </p>
-              <p className="text-sm text-emerald-400/80">
-                {report.totalPendingOutflows > 0 ? (
-                  <>
-                    Já descontando {formatBRL(report.totalPendingOutflows)} em contas pendentes
-                    (inclusive custos fixos) que vencem nos próximos {days} dias — sem contar com
-                    nenhuma entrada futura, nem confirmada.
-                  </>
-                ) : (
-                  "Não há contas pendentes nos próximos dias descontando esse valor."
-                )}
-              </p>
-            </div>
-          ) : (
-            !report.firstNegativeDay && (
-              <div className="rounded-lg border border-red-400/40 bg-red-400/10 p-4 text-sm text-red-400">
-                <span className="mr-1.5 text-xs font-medium tracking-wide uppercase">Compras</span>
-                Não sobra nada pra gastar agora — as contas pendentes nos próximos {days} dias
-                ({formatBRL(report.totalPendingOutflows)}) já consomem todo o saldo atual.
+          <div className={`grid grid-cols-1 gap-4 ${report.mlTotal > 0 ? "md:grid-cols-2" : ""}`}>
+            {report.safeToSpend > 0 ? (
+              <div className="rounded-lg border border-emerald-400/40 bg-emerald-400/10 p-4">
+                <span className="text-xs font-medium tracking-wide text-emerald-400 uppercase">
+                  Compras
+                </span>
+                <p className="font-serif text-2xl text-emerald-400">
+                  Pode gastar até {formatBRL(report.safeToSpend)}
+                </p>
+                <p className="text-sm text-emerald-400/80">
+                  {report.totalPendingOutflows > 0 ? (
+                    <>
+                      Já descontando {formatBRL(report.totalPendingOutflows)} em contas pendentes
+                      (inclusive custos fixos) que vencem {periodPhrase} — sem contar com
+                      nenhuma entrada futura, nem confirmada.
+                    </>
+                  ) : (
+                    "Não há contas pendentes nesse período descontando esse valor."
+                  )}
+                </p>
               </div>
-            )
-          )}
+            ) : (
+              !report.firstNegativeDay && (
+                <div className="rounded-lg border border-red-400/40 bg-red-400/10 p-4 text-sm text-red-400">
+                  <span className="mr-1.5 text-xs font-medium tracking-wide uppercase">Compras</span>
+                  Não sobra nada pra gastar agora — as contas pendentes {periodPhrase}
+                  ({formatBRL(report.totalPendingOutflows)}) já consomem todo o saldo atual.
+                </div>
+              )
+            )}
+
+            {report.mlTotal > 0 && (
+              <div className="rounded-lg border border-sky-400/40 bg-sky-400/10 p-4">
+                <span className="text-xs font-medium tracking-wide text-sky-400 uppercase">
+                  Compras, contando com o Mercado Livre
+                </span>
+                <p className="font-serif text-2xl text-sky-400">
+                  Pode gastar até {formatBRL(report.safeToSpendWithML)}
+                </p>
+                <p className="text-sm text-sky-400/80">
+                  Mesma conta de "Compras", somando também {formatBRL(report.mlTotal)} que está a
+                  liberar no Mercado Livre (hoje + amanhã + até 7 dias + depois de 7 dias) — só use
+                  se confia que esse valor vai mesmo cair na conta.
+                </p>
+              </div>
+            )}
+          </div>
 
           {report.mlAfter7d > 0 && (
             <p className="text-xs text-muted">
@@ -268,7 +312,7 @@ export default function CashFlowPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <StatCard label="Saldo atual" value={formatBRL(report.startingBalance)} />
             <StatCard
-              label={`Saldo projetado em ${days} dias`}
+              label={`Saldo projetado ${periodLabel}`}
               value={formatBRL(report.days[report.days.length - 1].runningBalance)}
               tone={report.days[report.days.length - 1].runningBalance >= 0 ? "positive" : "negative"}
             />

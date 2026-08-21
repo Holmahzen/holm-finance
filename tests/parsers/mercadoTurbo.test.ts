@@ -84,6 +84,7 @@ describe("parseMercadoTurboWorkbook", () => {
       quantity: 1,
       grossRevenue: 47.65,
       netRevenue: 8.99,
+      marketplaceCost: 10.75,
       customerName: "Denis",
       status: "Pago",
     });

@@ -47,3 +47,22 @@ export function computeFixedCostDueDates(
     }
   }
 }
+
+/**
+ * Valor total de um custo fixo NUM MÊS ESPECÍFICO, multiplicando o valor por
+ * ocorrência pela quantidade de vencimentos no mês — essencial pra semanal
+ * (4 ou 5 vezes/mês) e quinzenal (2x/mês), que custam bem mais por mês do que
+ * o valor cadastrado por ocorrência sozinho.
+ */
+export function computeFixedCostMonthlyAmount(
+  fc: { frequency: FixedCostFrequency; dueDay: number | null; secondDueDay: number | null; weekday: number | null; amount: number },
+  year: number,
+  month: number,
+): number {
+  const occurrences = computeFixedCostDueDates(
+    { frequency: fc.frequency, dueDay: fc.dueDay, secondDueDay: fc.secondDueDay, weekday: fc.weekday },
+    year,
+    month,
+  );
+  return occurrences.length * fc.amount;
+}

@@ -12,6 +12,8 @@ import {
 import { computeMonthRevenueProjection, computeProjectedBreakEvenDay } from "@/domain/projections";
 import { computeInsights } from "@/domain/insights";
 import { aggregateSalesBySku } from "@/domain/salesAggregation";
+import { computeDaysRemainingInMonth, computeDailyGoal } from "@/domain/cashReserve";
+import { computeFixedCostMonthlyAmount } from "@/domain/fixedCostSchedule";
 
 export const breakEvenService = {
   async getReport(year?: number, month?: number) {
@@ -32,7 +34,12 @@ export const breakEvenService = {
 
     const productionCostBySku = new Map(productCosts.map((c) => [c.sku, c]));
 
-    const fixedCostsTotal = fixedCosts.reduce((sum, fc) => sum + Number(fc.amount), 0);
+    // Soma pelo valor mensal de fato (não o valor bruto por ocorrência) —
+    // um custo semanal/quinzenal custa mais de uma vez por mês.
+    const fixedCostsTotal = fixedCosts.reduce(
+      (sum, fc) => sum + computeFixedCostMonthlyAmount({ ...fc, amount: Number(fc.amount) }, y, m),
+      0,
+    );
 
     const skuAggregates = aggregateSalesBySku(
       sales.map((s) => ({
@@ -41,6 +48,7 @@ export const breakEvenService = {
         quantity: s.quantity,
         grossRevenue: Number(s.grossRevenue),
         netRevenue: Number(s.netRevenue),
+        marketplaceCost: Number(s.marketplaceCost),
         status: s.status,
       })),
     );
@@ -124,6 +132,21 @@ export const breakEvenService = {
       ? computeProjectedBreakEvenDay(breakEven.breakEvenRevenue, projection.dailyPace, daysInMonth)
       : null;
 
+    // Meta diária de faturamento: quanto falta pra bater o ponto de
+    // equilíbrio, dividido pelos dias que restam no mês corrente. Só faz
+    // sentido pro período atual (mês fechado não tem "dias restantes").
+    const daysRemainingInMonth = isCurrentPeriod
+      ? computeDaysRemainingInMonth(y, m, now.getDate())
+      : null;
+    const remainingToBreakEven =
+      breakEven.breakEvenRevenue !== null
+        ? Math.max(0, breakEven.breakEvenRevenue - actualRevenueThisMonth)
+        : null;
+    const dailyRevenueGoal =
+      isCurrentPeriod && daysRemainingInMonth !== null && remainingToBreakEven !== null
+        ? computeDailyGoal(remainingToBreakEven, daysRemainingInMonth)
+        : null;
+
     const insights = computeInsights({
       weightedMarginPercent: breakEven.weightedMarginPercent,
       marginAlertThreshold,
@@ -149,6 +172,8 @@ export const breakEvenService = {
       negativeMarginProductsCount: negativeMarginProducts.length,
       projection,
       projectedBreakEvenDay,
+      daysRemainingInMonth,
+      dailyRevenueGoal,
       insights,
       dataSource,
       productionCostMatchedSkus: dataSource === "vendas" ? productionCostMatchedSkus : null,

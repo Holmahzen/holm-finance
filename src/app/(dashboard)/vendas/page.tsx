@@ -38,11 +38,10 @@ type ImportBatch = {
 };
 
 type ImportResult = {
-  alreadyImported: boolean;
   totalRows: number;
   skippedRows: number;
   newSales: number;
-  duplicateSales: number;
+  updatedSales: number;
 };
 
 function StatCard({ label, value }: { label: string; value: string }) {
@@ -121,8 +120,11 @@ export default function VendasPage() {
       <div>
         <h1 className="font-serif text-3xl text-foreground">Vendas</h1>
         <p className="text-sm text-muted">
-          Importe a planilha de pedidos do Mercado Turbo para atualizar receita, quantidade e
-          status das vendas. Pedidos já importados (mesmo número) nunca são duplicados.
+          Importe a planilha de pedidos do Mercado Turbo (Mercado Livre) ou da Shopee pra
+          atualizar receita, quantidade e status das vendas — o sistema reconhece o formato
+          sozinho. Pedidos já importados (mesmo número) nunca são duplicados — se você reimportar
+          uma planilha antiga, os pedidos que já existem são atualizados com os valores dela, não
+          duplicados.
         </p>
       </div>
 
@@ -131,7 +133,9 @@ export default function VendasPage() {
         className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-surface p-4"
       >
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-muted">Planilha do Mercado Turbo (.xlsx)</label>
+          <label className="text-xs font-medium text-muted">
+            Planilha do Mercado Turbo ou da Shopee (.xlsx)
+          </label>
           <input
             required
             type="file"
@@ -152,18 +156,14 @@ export default function VendasPage() {
       {error && <p className="text-sm text-red-400">{error}</p>}
       {result && (
         <div className="rounded-lg border border-border bg-surface p-4 text-sm">
-          {result.alreadyImported ? (
-            <p>Este arquivo já havia sido importado antes. Nenhuma venda nova.</p>
-          ) : (
-            <ul className="flex flex-col gap-1">
-              <li>Linhas na planilha: {result.totalRows}</li>
-              {result.skippedRows > 0 && (
-                <li>Ignoradas por falta de dado essencial (pedido/SKU/data): {result.skippedRows}</li>
-              )}
-              <li className="text-emerald-400">Vendas novas importadas: {result.newSales}</li>
-              <li>Já existentes (puladas): {result.duplicateSales}</li>
-            </ul>
-          )}
+          <ul className="flex flex-col gap-1">
+            <li>Linhas na planilha: {result.totalRows}</li>
+            {result.skippedRows > 0 && (
+              <li>Ignoradas por falta de dado essencial (pedido/SKU/data): {result.skippedRows}</li>
+            )}
+            <li className="text-emerald-400">Vendas novas importadas: {result.newSales}</li>
+            <li>Já existentes, atualizadas com os valores desta planilha: {result.updatedSales}</li>
+          </ul>
         </div>
       )}
 
@@ -225,7 +225,9 @@ export default function VendasPage() {
                         <td className="py-1.5">{s.shippingModality ?? "—"}</td>
                         <td className="py-1.5">{s.quantity}</td>
                         <td className="py-1.5">{formatBRL(s.grossRevenue)}</td>
-                        <td className="py-1.5">{formatBRL(s.netRevenue)}</td>
+                        <td className={`py-1.5 ${Number(s.netRevenue) < 0 ? "text-red-400" : ""}`}>
+                          {formatBRL(s.netRevenue)}
+                        </td>
                         <td className="py-1.5">{s.customerName ?? "—"}</td>
                         <td className="py-1.5">{s.status}</td>
                       </tr>

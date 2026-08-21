@@ -35,3 +35,36 @@ body {
   background: var(--gold);
   color: #0e0d0b;
 }
+
+/*
+ * Impressão: o tema é escuro (fundo quase preto, texto claro), que
+ * imprimiria uma página cheia de tinta e com baixo contraste. Redefinindo
+ * as mesmas variáveis de cor pro branco/preto, todo componente que já usa
+ * bg-background/bg-surface/text-foreground/text-muted/border-border se
+ * adapta sozinho, sem precisar mexer em cada tela.
+ */
+@media print {
+  :root {
+    --background: #ffffff;
+    --foreground: #1a1a1a;
+    --surface: #ffffff;
+    --surface-hover: #ffffff;
+    --border: #cccccc;
+    --gold: #8a6d1a;
+    --gold-soft: #8a6d1a;
+    --muted: #555555;
+  }
+
+  body {
+    background: white !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  main {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+}

@@ -76,7 +76,7 @@ describe("computeSalesBasedMargin", () => {
     // salePrice = 1000/10 = 100; netRevenue/unit = 800/10 = 80 (já líquido de comissão ML)
     // custo de produção = 20+8+2 = 30 por peça
     const result = computeSalesBasedMargin(
-      { quantity: 10, grossRevenue: 1000, netRevenue: 800 },
+      { quantity: 10, grossRevenue: 1000, netRevenue: 800, marketplaceCost: 0 },
       { tecidoCost: 20, costuraCost: 8, aviamentosCost: 2 },
     );
     expect(result.marginValue).toBeCloseTo(50); // 80 - 30
@@ -85,9 +85,24 @@ describe("computeSalesBasedMargin", () => {
     expect(result.markupPercent).toBeCloseTo(1); // 50/50
   });
 
+  it("adds the marketplace's own product-cost deduction back before subtracting our production cost, to avoid double-counting", () => {
+    // O Mercado Turbo já descontou R$300 de "Custo (-)" pra chegar em
+    // netRevenue=800 (de um faturamento de 1000). Precisamos somar esse
+    // valor de volta antes de descontar nosso próprio custo de produção,
+    // senão o custo é descontado duas vezes (uma pelo Mercado Turbo, com um
+    // valor que pode estar desatualizado, outra pelo Holm Finance).
+    // netRevenue + marketplaceCost = 800 + 300 = 1100 (base antes de QUALQUER custo de produto)
+    // por unidade: 1100/10 = 110; custo de produção real = 20+8+2 = 30/un
+    const result = computeSalesBasedMargin(
+      { quantity: 10, grossRevenue: 1000, netRevenue: 800, marketplaceCost: 300 },
+      { tecidoCost: 20, costuraCost: 8, aviamentosCost: 2 },
+    );
+    expect(result.marginValue).toBeCloseTo(80); // 110 - 30
+  });
+
   it("falls back to the marketplace's net margin when there's no registered production cost", () => {
     const result = computeSalesBasedMargin(
-      { quantity: 10, grossRevenue: 1000, netRevenue: 800 },
+      { quantity: 10, grossRevenue: 1000, netRevenue: 800, marketplaceCost: 0 },
       null,
     );
     expect(result.marginValue).toBeCloseTo(80);
@@ -96,7 +111,7 @@ describe("computeSalesBasedMargin", () => {
 
   it("can go negative when production cost exceeds the marketplace's net revenue", () => {
     const result = computeSalesBasedMargin(
-      { quantity: 1, grossRevenue: 100, netRevenue: 70 },
+      { quantity: 1, grossRevenue: 100, netRevenue: 70, marketplaceCost: 0 },
       { tecidoCost: 50, costuraCost: 20, aviamentosCost: 10 },
     );
     expect(result.marginValue).toBeCloseTo(-10); // 70 - 80
@@ -105,7 +120,7 @@ describe("computeSalesBasedMargin", () => {
 
   it("returns zero margin when quantity is zero", () => {
     const result = computeSalesBasedMargin(
-      { quantity: 0, grossRevenue: 0, netRevenue: 0 },
+      { quantity: 0, grossRevenue: 0, netRevenue: 0, marketplaceCost: 0 },
       { tecidoCost: 10, costuraCost: 0, aviamentosCost: 0 },
     );
     expect(result.marginValue).toBe(0);

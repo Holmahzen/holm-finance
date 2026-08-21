@@ -4,7 +4,7 @@ import type { Prisma } from "@/generated/prisma/client";
 export const fixedCostRepository = {
   findMany() {
     return prisma.fixedCost.findMany({
-      include: { category: true, counterparty: true },
+      include: { category: true, counterparty: true, creditCard: true },
       orderBy: { description: "asc" },
     });
   },

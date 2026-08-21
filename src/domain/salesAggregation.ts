@@ -4,6 +4,7 @@ export type SaleForAggregation = {
   quantity: number;
   grossRevenue: number;
   netRevenue: number;
+  marketplaceCost: number;
   status: string;
 };
 
@@ -13,6 +14,7 @@ export type SkuSalesAggregate = {
   quantity: number;
   grossRevenue: number;
   netRevenue: number;
+  marketplaceCost: number;
 };
 
 /**
@@ -50,6 +52,7 @@ export function aggregateSalesBySku(
       existing.quantity += sale.quantity;
       existing.grossRevenue += sale.grossRevenue;
       existing.netRevenue += sale.netRevenue;
+      existing.marketplaceCost += sale.marketplaceCost;
     } else {
       bySku.set(sale.sku, {
         sku: sale.sku,
@@ -57,6 +60,7 @@ export function aggregateSalesBySku(
         quantity: sale.quantity,
         grossRevenue: sale.grossRevenue,
         netRevenue: sale.netRevenue,
+        marketplaceCost: sale.marketplaceCost,
       });
     }
   }

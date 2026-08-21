@@ -42,6 +42,12 @@ export type SkuSalesInput = {
   quantity: number;
   grossRevenue: number;
   netRevenue: number;
+  /** "Custo (-)" que o Mercado Turbo já descontou dentro de netRevenue (0
+   * pra Shopee). Precisa ser somado de volta antes de descontar o custo de
+   * produção cadastrado no Holm Finance, senão o custo é descontado duas
+   * vezes — uma pelo Mercado Turbo (com um valor que pode estar
+   * desatualizado) e outra pelo Holm Finance (com o valor atual). */
+  marketplaceCost: number;
 };
 
 export type ProductionCost = {
@@ -52,10 +58,11 @@ export type ProductionCost = {
 
 /**
  * Margem de contribuição de um SKU a partir de vendas reais (Mercado Turbo):
- * netRevenue já vem líquido de comissão do marketplace/logística, então só
- * falta descontar o custo de produção (tecido/costura/aviamentos) por peça,
- * que o marketplace não tem como saber — é o mesmo custo cadastrado em
- * Produtos e usado na DRE (custo das peças vendidas).
+ * netRevenue já vem líquido de comissão do marketplace/logística E de um
+ * "Custo (-)" que o próprio Mercado Turbo desconta (configurado por ela lá
+ * dentro, podendo estar desatualizado) — por isso soma `marketplaceCost` de
+ * volta antes de descontar o custo de produção (tecido/costura/aviamentos)
+ * por peça cadastrado aqui em Produtos, que é a fonte mais confiável.
  */
 export function computeSalesBasedMargin(
   sale: SkuSalesInput,
@@ -65,8 +72,9 @@ export function computeSalesBasedMargin(
   const productionCostPerUnit = productionCost
     ? productionCost.tecidoCost + productionCost.costuraCost + productionCost.aviamentosCost
     : 0;
+  const netRevenueBeforeProductionCost = sale.netRevenue + sale.marketplaceCost;
   const marginValue =
-    sale.quantity > 0 ? sale.netRevenue / sale.quantity - productionCostPerUnit : 0;
+    sale.quantity > 0 ? netRevenueBeforeProductionCost / sale.quantity - productionCostPerUnit : 0;
   const marginPercent = salePrice > 0 ? marginValue / salePrice : 0;
   const variableCost = salePrice - marginValue;
   const markupPercent = variableCost > 0 ? marginValue / variableCost : 0;

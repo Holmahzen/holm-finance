@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeFixedCostDueDates } from "@/domain/fixedCostSchedule";
+import { computeFixedCostDueDates, computeFixedCostMonthlyAmount } from "@/domain/fixedCostSchedule";
 
 function isoDates(dates: Date[]) {
   return dates.map((d) => d.toISOString().slice(0, 10));
@@ -96,5 +96,45 @@ describe("computeFixedCostDueDates", () => {
         ),
       ).toEqual([]);
     });
+  });
+});
+
+describe("computeFixedCostMonthlyAmount", () => {
+  it("returns the raw amount once for a monthly cost", () => {
+    const total = computeFixedCostMonthlyAmount(
+      { frequency: "MONTHLY", dueDay: 5, secondDueDay: null, weekday: null, amount: 4000 },
+      2026,
+      8,
+    );
+    expect(total).toBe(4000);
+  });
+
+  it("multiplies by 4 occurrences for a weekly cost in a 4-Friday month", () => {
+    // Agosto/2026 tem 4 sextas-feiras (bug real: um custo semanal de R$4.000
+    // não custa R$4.000/mês, custa 4x isso).
+    const total = computeFixedCostMonthlyAmount(
+      { frequency: "WEEKLY", dueDay: null, secondDueDay: null, weekday: 5, amount: 4000 },
+      2026,
+      8,
+    );
+    expect(total).toBe(16000);
+  });
+
+  it("multiplies by 5 occurrences for a weekly cost in a 5-Friday month", () => {
+    const total = computeFixedCostMonthlyAmount(
+      { frequency: "WEEKLY", dueDay: null, secondDueDay: null, weekday: 5, amount: 4000 },
+      2026,
+      7,
+    );
+    expect(total).toBe(20000);
+  });
+
+  it("doubles the amount for a biweekly cost", () => {
+    const total = computeFixedCostMonthlyAmount(
+      { frequency: "BIWEEKLY", dueDay: 5, secondDueDay: 20, weekday: null, amount: 1000 },
+      2026,
+      8,
+    );
+    expect(total).toBe(2000);
   });
 });

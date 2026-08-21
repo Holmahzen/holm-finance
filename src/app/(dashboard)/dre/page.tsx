@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { formatBRL } from "@/lib/format";
+import { PrintButton } from "@/components/PrintButton";
 
 const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
@@ -240,25 +241,35 @@ export default function DrePage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-serif text-3xl text-foreground">DRE</h1>
-          <p className="text-sm text-muted">
+          <p className="text-sm text-muted no-print">
             Demonstrativo de Resultado do Exercício, por regime de caixa (lançamentos pagos no
             período). Selecione mais de um mês pra comparar lado a lado.
           </p>
+          {!loading && dre && (
+            <p className="hidden text-sm text-muted print:block">
+              {isComparing
+                ? reports.map((r) => `${MONTHS[r.period.month - 1]}/${r.period.year}`).join(" · ")
+                : `${MONTHS[dre.period.month - 1]}/${dre.period.year}`}
+            </p>
+          )}
         </div>
-        {!isComparing && (
-          <label className="flex items-center gap-2 text-sm text-muted">
-            <input
-              type="checkbox"
-              checked={showZero}
-              onChange={(e) => setShowZero(e.target.checked)}
-              className="accent-gold"
-            />
-            Mostrar linhas zeradas
-          </label>
-        )}
+        <div className="flex items-center gap-3">
+          {!isComparing && (
+            <label className="no-print flex items-center gap-2 text-sm text-muted">
+              <input
+                type="checkbox"
+                checked={showZero}
+                onChange={(e) => setShowZero(e.target.checked)}
+                className="accent-gold"
+              />
+              Mostrar linhas zeradas
+            </label>
+          )}
+          <PrintButton />
+        </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-surface px-4 py-2">
+      <div className="no-print flex flex-wrap items-center gap-4 rounded-lg border border-border bg-surface px-4 py-2">
         <div className="flex items-center gap-1">
           <span className="mr-1 text-xs text-muted">Ano</span>
           {[now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map((y) => (

@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useState, type FormEvent } from "react";
 import { formatBRL } from "@/lib/format";
 import { PeriodFilter } from "@/components/PeriodFilter";
+import { PrintButton } from "@/components/PrintButton";
 
 type Entry = {
   id: string;
@@ -16,6 +17,7 @@ type Entry = {
   status: "PENDING" | "PAID" | "CANCELED";
   category: { id: string; name: string } | null;
   counterparty: { id: string; name: string } | null;
+  creditCard: { id: string; name: string } | null;
 };
 
 type Option = { id: string; name: string };
@@ -67,12 +69,20 @@ export default function EntriesPage() {
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [counterparties, setCounterparties] = useState<Option[]>([]);
   const [accounts, setAccounts] = useState<Option[]>([]);
+  const [creditCards, setCreditCards] = useState<Option[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewType, setViewType] = useState<"PAYABLE" | "RECEIVABLE">("PAYABLE");
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [statusFilter, setStatusFilter] = useState<PaymentStatus | null>(null);
   const [search, setSearch] = useState("");
+  const [cardFilter, setCardFilter] = useState<string | null>(null);
+
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkPayAccountId, setBulkPayAccountId] = useState("");
+  const [bulkPayDate, setBulkPayDate] = useState("");
+  const [bulkPaying, setBulkPaying] = useState(false);
+  const [showBulkPayForm, setShowBulkPayForm] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [type, setType] = useState<"PAYABLE" | "RECEIVABLE">("PAYABLE");
@@ -102,16 +112,19 @@ export default function EntriesPage() {
 
   async function load() {
     setLoading(true);
-    const [entriesRes, categoriesRes, counterpartiesRes, accountsRes] = await Promise.all([
+    const [entriesRes, categoriesRes, counterpartiesRes, accountsRes, creditCardsRes] = await Promise.all([
       fetch(`/api/entries?type=${viewType}&year=${year}&month=${month}`),
       fetch("/api/categories"),
       fetch("/api/counterparties"),
       fetch("/api/accounts"),
+      fetch("/api/credit-cards"),
     ]);
     setEntries(await entriesRes.json());
     setCategories(await categoriesRes.json());
     setCounterparties(await counterpartiesRes.json());
     setAccounts(await accountsRes.json());
+    setCreditCards(await creditCardsRes.json());
+    setSelectedIds(new Set());
     setLoading(false);
   }
 
@@ -292,6 +305,7 @@ export default function EntriesPage() {
   const searchTerm = search.trim().toLowerCase();
   const visibleEntries = entries.filter((entry) => {
     if (statusFilter && getPaymentStatus(entry) !== statusFilter) return false;
+    if (cardFilter && entry.creditCard?.id !== cardFilter) return false;
     if (searchTerm) {
       const haystack = [entry.description, entry.category?.name, entry.counterparty?.name]
         .filter(Boolean)
@@ -302,6 +316,50 @@ export default function EntriesPage() {
     return true;
   });
   const visibleTotal = visibleEntries.reduce((sum, entry) => sum + Number(entry.amount), 0);
+  const selectablePendingEntries = visibleEntries.filter((e) => e.status === "PENDING");
+  const allSelectableSelected =
+    selectablePendingEntries.length > 0 && selectablePendingEntries.every((e) => selectedIds.has(e.id));
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAllVisible() {
+    setSelectedIds((prev) => {
+      if (allSelectableSelected) {
+        const next = new Set(prev);
+        for (const e of selectablePendingEntries) next.delete(e.id);
+        return next;
+      }
+      const next = new Set(prev);
+      for (const e of selectablePendingEntries) next.add(e.id);
+      return next;
+    });
+  }
+
+  async function handleBulkPay() {
+    if (!bulkPayAccountId || !bulkPayDate || selectedIds.size === 0) return;
+    setBulkPaying(true);
+    await fetch("/api/entries/bulk-pay", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ids: Array.from(selectedIds),
+        bankAccountId: bulkPayAccountId,
+        paidAt: bulkPayDate,
+      }),
+    });
+    setBulkPaying(false);
+    setShowBulkPayForm(false);
+    setBulkPayAccountId("");
+    setBulkPayDate("");
+    await load();
+  }
 
   return (
     <div className="flex flex-col gap-8">
@@ -310,17 +368,20 @@ export default function EntriesPage() {
           <h1 className="font-serif text-3xl text-foreground">
             {viewType === "PAYABLE" ? "Controle de Pagamento" : "Controle de Recebimento"}
           </h1>
-          <p className="text-sm text-muted">Contas a pagar e a receber.</p>
+          <p className="no-print text-sm text-muted">Contas a pagar e a receber.</p>
         </div>
-        <div className="text-right">
-          <span className="block text-xs font-medium tracking-wide text-muted uppercase">
-            Total ({visibleEntries.length})
-          </span>
-          <span className="font-serif text-2xl text-gold">{formatBRL(visibleTotal)}</span>
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <span className="block text-xs font-medium tracking-wide text-muted uppercase">
+              Total ({visibleEntries.length})
+            </span>
+            <span className="font-serif text-2xl text-gold">{formatBRL(visibleTotal)}</span>
+          </div>
+          <PrintButton />
         </div>
       </div>
 
-      <div className="flex gap-1 rounded-lg border border-border bg-surface p-1 w-fit">
+      <div className="no-print flex gap-1 rounded-lg border border-border bg-surface p-1 w-fit">
         <button
           type="button"
           onClick={() => setViewType("PAYABLE")}
@@ -344,6 +405,9 @@ export default function EntriesPage() {
           A receber
         </button>
       </div>
+      <p className="hidden text-sm text-muted print:block">
+        {viewType === "PAYABLE" ? "A pagar" : "A receber"}
+      </p>
 
       <PeriodFilter
         year={year}
@@ -380,26 +444,68 @@ export default function EntriesPage() {
         ))}
       </div>
 
-      <div className="flex flex-col gap-1">
-        <label className="text-xs font-medium text-muted">Pesquisar</label>
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Descrição, categoria ou contraparte..."
-          className="w-full max-w-sm rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
-        />
+      <div className="no-print flex flex-wrap items-end gap-4">
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-muted">Pesquisar</label>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Descrição, categoria ou contraparte..."
+            className="w-full max-w-sm rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
+          />
+        </div>
+        {creditCards.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted">Cartão</label>
+            <div className="flex gap-1 rounded-lg border border-border bg-surface p-1">
+              <button
+                type="button"
+                onClick={() => setCardFilter(null)}
+                className={
+                  cardFilter === null
+                    ? "rounded bg-gold px-2.5 py-1 text-xs font-medium text-black"
+                    : "rounded px-2.5 py-1 text-xs font-medium text-muted transition hover:text-foreground"
+                }
+              >
+                Todos
+              </button>
+              {creditCards.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setCardFilter((prev) => (prev === c.id ? null : c.id))}
+                  className={
+                    cardFilter === c.id
+                      ? "rounded bg-gold px-2.5 py-1 text-xs font-medium text-black"
+                      : "rounded px-2.5 py-1 text-xs font-medium text-muted transition hover:text-foreground"
+                  }
+                >
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      {(statusFilter || searchTerm) && (
-        <div className="flex flex-wrap items-center gap-2 text-sm text-muted">
+      {(statusFilter || searchTerm || cardFilter) && (
+        <div className="no-print flex flex-wrap items-center gap-2 text-sm text-muted">
           {statusFilter && (
             <>
               Filtrando por{" "}
               <span className="font-medium text-foreground">{paymentStatusMeta[statusFilter].label}</span>
             </>
           )}
-          {statusFilter && searchTerm && <span>·</span>}
+          {cardFilter && (
+            <>
+              {statusFilter && <span>·</span>} Cartão{" "}
+              <span className="font-medium text-foreground">
+                {creditCards.find((c) => c.id === cardFilter)?.name}
+              </span>
+            </>
+          )}
+          {(statusFilter || cardFilter) && searchTerm && <span>·</span>}
           {searchTerm && (
             <>
               Pesquisando por <span className="font-medium text-foreground">&quot;{search.trim()}&quot;</span>
@@ -409,6 +515,7 @@ export default function EntriesPage() {
             type="button"
             onClick={() => {
               setStatusFilter(null);
+              setCardFilter(null);
               setSearch("");
             }}
             className="text-gold hover:underline"
@@ -418,7 +525,64 @@ export default function EntriesPage() {
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface p-4">
+      {selectedIds.size > 0 && (
+        <div className="no-print flex flex-wrap items-center gap-3 rounded-lg border border-gold/40 bg-gold/10 p-4">
+          <span className="text-sm font-medium text-gold">
+            {selectedIds.size} lançamento{selectedIds.size > 1 ? "s" : ""} selecionado
+            {selectedIds.size > 1 ? "s" : ""}
+          </span>
+          {showBulkPayForm ? (
+            <>
+              <select
+                value={bulkPayAccountId}
+                onChange={(e) => setBulkPayAccountId(e.target.value)}
+                className="rounded border border-border bg-background px-2 py-1.5 text-xs text-foreground"
+              >
+                <option value="">Conta...</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="date"
+                value={bulkPayDate}
+                onChange={(e) => setBulkPayDate(e.target.value)}
+                className="rounded border border-border bg-background px-2 py-1.5 text-xs text-foreground"
+              />
+              <button
+                type="button"
+                onClick={handleBulkPay}
+                disabled={bulkPaying || !bulkPayAccountId || !bulkPayDate}
+                className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-emerald-500 disabled:opacity-50"
+              >
+                {bulkPaying ? "Confirmando..." : "Confirmar pagamento"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowBulkPayForm(false)}
+                className="text-xs text-muted hover:text-foreground hover:underline"
+              >
+                Cancelar
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setShowBulkPayForm(true);
+                setBulkPayDate(todayLocalDateString());
+              }}
+              className="rounded bg-gold px-3 py-1.5 text-xs font-medium text-black transition hover:bg-gold-soft"
+            >
+              Marcar selecionados como pagos
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="no-print flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface p-4">
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-muted">Preencher a partir de um boleto (PDF)</label>
           <input
@@ -473,7 +637,7 @@ export default function EntriesPage() {
 
       <form
         onSubmit={handleSubmit}
-        className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-surface p-4"
+        className="no-print flex flex-wrap items-end gap-3 rounded-lg border border-border bg-surface p-4"
       >
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-muted">Tipo</label>
@@ -602,6 +766,17 @@ export default function EntriesPage() {
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-border text-muted">
+              <th className="no-print py-2 font-medium">
+                {selectablePendingEntries.length > 0 && (
+                  <input
+                    type="checkbox"
+                    checked={allSelectableSelected}
+                    onChange={toggleSelectAllVisible}
+                    className="h-4 w-4"
+                    title="Selecionar todos os pendentes visíveis"
+                  />
+                )}
+              </th>
               <th className="py-2 font-medium">Descrição</th>
               <th className="py-2 font-medium">Valor</th>
               <th className="py-2 font-medium">Vencimento</th>
@@ -610,8 +785,8 @@ export default function EntriesPage() {
               <th className="py-2 font-medium">Data de pagamento</th>
               <th className="py-2 font-medium">Categoria</th>
               <th className="py-2 font-medium">Status</th>
-              <th className="py-2 font-medium"></th>
-              <th className="py-2 font-medium"></th>
+              <th className="no-print py-2 font-medium"></th>
+              <th className="no-print py-2 font-medium"></th>
             </tr>
           </thead>
           <tbody>
@@ -619,7 +794,24 @@ export default function EntriesPage() {
               const paymentStatus = paymentStatusMeta[getPaymentStatus(entry)];
               return (
                 <tr key={entry.id} className="border-b border-border/50">
-                  <td className="py-2">{entry.description}</td>
+                  <td className="no-print py-2">
+                    {entry.status === "PENDING" && (
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(entry.id)}
+                        onChange={() => toggleSelected(entry.id)}
+                        className="h-4 w-4"
+                      />
+                    )}
+                  </td>
+                  <td className="py-2">
+                    {entry.description}
+                    {entry.creditCard && (
+                      <span className="ml-1.5 rounded-full border border-border px-1.5 py-0.5 text-xs text-muted">
+                        {entry.creditCard.name}
+                      </span>
+                    )}
+                  </td>
                   <td className="py-2">{formatBRL(entry.amount)}</td>
                   <td className="py-2">{formatDate(entry.dueDate)}</td>
                   <td className="py-2">
@@ -666,7 +858,7 @@ export default function EntriesPage() {
                       {paymentStatus.label}
                     </span>
                   </td>
-                  <td className="py-2">
+                  <td className="no-print py-2">
                     {entry.status === "PENDING" &&
                       (payingId === entry.id ? (
                         <div className="flex items-center gap-2">
@@ -707,7 +899,7 @@ export default function EntriesPage() {
                         </button>
                       ))}
                   </td>
-                  <td className="py-2 whitespace-nowrap">
+                  <td className="no-print py-2 whitespace-nowrap">
                     <button
                       onClick={() => startEdit(entry)}
                       className="mr-3 text-xs font-medium text-gold hover:text-gold-soft hover:underline"

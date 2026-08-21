@@ -63,32 +63,46 @@ export default function ReconciliationPage() {
   const [applyingRules, setApplyingRules] = useState(false);
   const [applyResult, setApplyResult] = useState<ApplyRulesResult | null>(null);
 
-  async function fetchAll() {
-    const [matchesRes, unmatchedRes, categoriesRes, rulesRes] = await Promise.all([
+  async function fetchMatchesAndUnmatched() {
+    const [matchesRes, unmatchedRes] = await Promise.all([
       fetch("/api/reconciliation/matches"),
       fetch("/api/reconciliation/transactions"),
-      fetch("/api/categories"),
-      fetch("/api/category-rules"),
     ]);
     setMatches(await matchesRes.json());
     setUnmatched(await unmatchedRes.json());
-    setCategories(await categoriesRes.json());
+  }
+
+  async function fetchRules() {
+    const rulesRes = await fetch("/api/category-rules");
     setRules(await rulesRes.json());
   }
 
   async function load() {
     setLoading(true);
-    await fetchAll();
+    const [, categoriesRes] = await Promise.all([
+      fetchMatchesAndUnmatched(),
+      fetch("/api/categories"),
+      fetchRules(),
+    ]);
+    setCategories(await categoriesRes.json());
     setLoading(false);
   }
 
-  // Reload silencioso, usado depois de ações (confirmar/rejeitar/criar
-  // lançamento etc.) — não passa por `loading`, que esconderia a página
-  // inteira atrás de "Carregando..." a cada clique, mesmo pra atualizar uma
-  // única linha. É isso que fazia os botões parecerem lentos.
+  // Reload silencioso, usado depois de confirmar/rejeitar/criar lançamento —
+  // essas ações só mudam sugestões e transações sem par, nunca categorias ou
+  // regras, então não faz sentido refazer as 4 buscas a cada clique (isso é
+  // o que fazia os botões parecerem lentos: 4 requisições pra atualizar uma
+  // única linha). Não passa por `loading`, que esconderia a página inteira.
   async function refresh() {
     setRefreshing(true);
-    await fetchAll();
+    await fetchMatchesAndUnmatched();
+    setRefreshing(false);
+  }
+
+  // Reload só das regras, usado depois de adicionar/remover uma regra.
+  async function refreshRules() {
+    setRefreshing(true);
+    await fetchRules();
     setRefreshing(false);
   }
 
@@ -123,12 +137,12 @@ export default function ReconciliationPage() {
     setRuleKeyword("");
     setRuleCategoryId("");
     setSavingRule(false);
-    await refresh();
+    await refreshRules();
   }
 
   async function handleDeleteRule(id: string) {
     await fetch(`/api/category-rules/${id}`, { method: "DELETE" });
-    await refresh();
+    await refreshRules();
   }
 
   async function handleApplyRulesToExisting() {

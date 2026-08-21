@@ -3,7 +3,14 @@
 import { useEffect, useState } from "react";
 import { formatBRL } from "@/lib/format";
 import { PeriodFilter } from "@/components/PeriodFilter";
+import { PrintButton } from "@/components/PrintButton";
 import { computeBreakEvenTargets, computeEstimatedProfit } from "@/domain/breakEven";
+import {
+  breakEvenInsightText,
+  BREAK_EVEN_SEVERITY_STYLE,
+  BREAK_EVEN_SEVERITY_LABEL,
+  type BreakEvenInsight,
+} from "@/lib/breakEvenInsightText";
 
 type ProductRanked = {
   id: string;
@@ -14,25 +21,6 @@ type ProductRanked = {
   marginPercent: number;
   markupPercent: number;
 };
-
-type Insight =
-  | { type: "margin_below_threshold"; severity: "critical"; marginPercent: number; threshold: number }
-  | { type: "negative_margin_products"; severity: "critical"; count: number; sampleNames: string[] }
-  | { type: "negative_estimated_profit"; severity: "warning"; estimatedProfit: number }
-  | {
-      type: "projection_below_break_even";
-      severity: "warning";
-      projectedRevenue: number;
-      breakEvenRevenue: number;
-    }
-  | { type: "break_even_reached"; severity: "info"; surplus: number }
-  | {
-      type: "projection_above_break_even";
-      severity: "info";
-      projectedRevenue: number;
-      breakEvenRevenue: number;
-    }
-  | { type: "projected_break_even_day"; severity: "info"; day: number };
 
 type RevenueProjection = {
   daysElapsed: number;
@@ -61,47 +49,15 @@ type BreakEvenReport = {
   negativeMarginProductsCount: number;
   projection: RevenueProjection | null;
   projectedBreakEvenDay: number | null;
-  insights: Insight[];
+  daysRemainingInMonth: number | null;
+  dailyRevenueGoal: number | null;
+  insights: BreakEvenInsight[];
   dataSource: "vendas" | "produtos";
   productionCostMatchedSkus: number | null;
   productionCostUnmatchedSkus: number | null;
 };
 
-function insightText(insight: Insight): string {
-  switch (insight.type) {
-    case "margin_below_threshold":
-      return `Margem de contribuição média (${(insight.marginPercent * 100).toFixed(1)}%) está abaixo do limite de alerta que você definiu (${insight.threshold}%).`;
-    case "negative_margin_products": {
-      const names = insight.sampleNames.join(", ");
-      const extra = insight.count > insight.sampleNames.length ? ` e mais ${insight.count - insight.sampleNames.length}` : "";
-      return `${insight.count} produto(s) com margem de contribuição negativa: ${names}${extra}. Cada venda desses produtos gera prejuízo — revise preço ou custo em Produtos.`;
-    }
-    case "negative_estimated_profit":
-      return `O lucro estimado do período está negativo (${formatBRL(insight.estimatedProfit)}) — os custos fixos ainda não estão sendo cobertos pela margem gerada pelo faturamento atual.`;
-    case "projection_below_break_even":
-      return `No ritmo atual de vendas, a projeção é fechar o mês em ${formatBRL(insight.projectedRevenue)} — abaixo do ponto de equilíbrio (${formatBRL(insight.breakEvenRevenue)}).`;
-    case "break_even_reached":
-      return `Ponto de equilíbrio já superado neste período, com excedente de ${formatBRL(insight.surplus)}.`;
-    case "projection_above_break_even":
-      return `No ritmo atual de vendas, a projeção é fechar o mês em ${formatBRL(insight.projectedRevenue)}, superando o ponto de equilíbrio (${formatBRL(insight.breakEvenRevenue)}).`;
-    case "projected_break_even_day":
-      return `No ritmo atual, você deve bater o ponto de equilíbrio por volta do dia ${insight.day}.`;
-  }
-}
-
-const SEVERITY_STYLE: Record<Insight["severity"], string> = {
-  critical: "border-red-400/40 bg-red-400/10 text-red-400",
-  warning: "border-amber-400/40 bg-amber-400/10 text-amber-400",
-  info: "border-sky-400/40 bg-sky-400/10 text-sky-400",
-};
-
-const SEVERITY_LABEL: Record<Insight["severity"], string> = {
-  critical: "Alerta",
-  warning: "Atenção",
-  info: "Análise",
-};
-
-function IntelligencePanel({ insights }: { insights: Insight[] }) {
+function IntelligencePanel({ insights }: { insights: BreakEvenInsight[] }) {
   if (insights.length === 0) return null;
 
   return (
@@ -111,12 +67,12 @@ function IntelligencePanel({ insights }: { insights: Insight[] }) {
         {insights.map((insight, idx) => (
           <div
             key={idx}
-            className={`rounded-lg border px-3 py-2 text-sm ${SEVERITY_STYLE[insight.severity]}`}
+            className={`rounded-lg border px-3 py-2 text-sm ${BREAK_EVEN_SEVERITY_STYLE[insight.severity]}`}
           >
             <span className="mr-1.5 text-xs font-medium tracking-wide uppercase">
-              {SEVERITY_LABEL[insight.severity]}
+              {BREAK_EVEN_SEVERITY_LABEL[insight.severity]}
             </span>
-            {insightText(insight)}
+            {breakEvenInsightText(insight)}
           </div>
         ))}
       </div>
@@ -148,7 +104,7 @@ function WhatIfSimulator({ report }: { report: BreakEvenReport }) {
     : null;
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-dashed border-gold/50 bg-surface p-4">
+    <div className="no-print flex flex-col gap-3 rounded-lg border border-dashed border-gold/50 bg-surface p-4">
       <div>
         <h2 className="font-serif text-lg text-foreground">Simulador — e se o custo fixo fosse outro?</h2>
         <p className="text-sm text-muted">
@@ -422,16 +378,19 @@ export default function BreakEvenPage() {
 
   return (
     <div className="flex flex-col gap-6 sm:gap-8">
-      <div>
-        <h1 className="font-serif text-2xl text-foreground sm:text-3xl">Ponto de equilíbrio</h1>
-        <p className="text-sm text-muted">
-          Quanto você precisa faturar e vender por mês pra cobrir os custos fixos e variáveis, com
-          base no mix médio de produtos cadastrado em{" "}
-          <a href="/produtos" className="text-gold hover:underline">
-            Produtos
-          </a>
-          .
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-serif text-2xl text-foreground sm:text-3xl">Ponto de equilíbrio</h1>
+          <p className="no-print text-sm text-muted">
+            Quanto você precisa faturar e vender por mês pra cobrir os custos fixos e variáveis, com
+            base no mix médio de produtos cadastrado em{" "}
+            <a href="/produtos" className="text-gold hover:underline">
+              Produtos
+            </a>
+            .
+          </p>
+        </div>
+        <PrintButton />
       </div>
 
       <PeriodFilter
@@ -485,6 +444,31 @@ export default function BreakEvenPage() {
             )}
 
           <ManagementSummary report={report} monthLabel={MONTH_NAMES[month - 1]} />
+
+          {report.daysRemainingInMonth !== null && (
+            <div className="rounded-lg border border-gold/40 bg-gold/10 p-4">
+              {report.dailyRevenueGoal !== null && report.dailyRevenueGoal > 0 ? (
+                <div className="flex flex-wrap items-end justify-between gap-4">
+                  <div>
+                    <span className="text-xs font-medium tracking-wide text-gold uppercase">
+                      Meta diária de faturamento ({report.daysRemainingInMonth} dia(s) restantes)
+                    </span>
+                    <p className="font-serif text-3xl text-gold">
+                      {formatBRL(report.dailyRevenueGoal)}/dia
+                    </p>
+                  </div>
+                  <p className="max-w-xs text-xs text-muted">
+                    É quanto falta pra bater o ponto de equilíbrio, dividido pelos dias que restam no
+                    mês — vendendo isso por dia a partir de hoje, você cobre os custos do mês.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-gold">
+                  Ponto de equilíbrio deste mês já foi batido — qualquer venda a mais agora é lucro.
+                </p>
+              )}
+            </div>
+          )}
 
           <IntelligencePanel insights={report.insights} />
 
@@ -564,7 +548,7 @@ export default function BreakEvenPage() {
             target={report.breakEven.breakEvenRevenue}
           />
 
-          <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-surface p-4">
+          <div className="no-print flex flex-wrap items-end gap-3 rounded-lg border border-border bg-surface p-4">
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-muted">Limite de alerta de margem (%)</label>
               <input

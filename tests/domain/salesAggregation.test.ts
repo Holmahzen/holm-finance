@@ -8,6 +8,7 @@ function sale(overrides: Partial<Parameters<typeof aggregateSalesBySku>[0][numbe
     quantity: 1,
     grossRevenue: 100,
     netRevenue: 30,
+    marketplaceCost: 10,
     status: "Pago",
     ...overrides,
   };
@@ -16,12 +17,18 @@ function sale(overrides: Partial<Parameters<typeof aggregateSalesBySku>[0][numbe
 describe("aggregateSalesBySku", () => {
   it("sums quantity, gross and net revenue for repeated SKUs", () => {
     const result = aggregateSalesBySku([
-      sale({ sku: "SKU-1", quantity: 1, grossRevenue: 100, netRevenue: 30 }),
-      sale({ sku: "SKU-1", quantity: 2, grossRevenue: 180, netRevenue: 50 }),
+      sale({ sku: "SKU-1", quantity: 1, grossRevenue: 100, netRevenue: 30, marketplaceCost: 10 }),
+      sale({ sku: "SKU-1", quantity: 2, grossRevenue: 180, netRevenue: 50, marketplaceCost: 15 }),
     ]);
 
     expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({ sku: "SKU-1", quantity: 3, grossRevenue: 280, netRevenue: 80 });
+    expect(result[0]).toMatchObject({
+      sku: "SKU-1",
+      quantity: 3,
+      grossRevenue: 280,
+      netRevenue: 80,
+      marketplaceCost: 25,
+    });
   });
 
   it("keeps different SKUs as separate entries", () => {

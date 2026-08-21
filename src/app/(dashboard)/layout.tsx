@@ -5,14 +5,18 @@ import { usePathname } from "next/navigation";
 
 const navItems = [
   { href: "/", label: "Início" },
+  { href: "/alertas", label: "Alertas" },
   { href: "/executivo", label: "Dashboard Executivo" },
   { href: "/accounts", label: "Contas" },
   { href: "/entries", label: "Lançamentos" },
+  { href: "/cartao-credito", label: "Cartão de Crédito" },
   { href: "/fluxo-de-caixa", label: "Fluxo de Caixa" },
+  { href: "/reserva-de-caixa", label: "Reserva de Caixa" },
   { href: "/custos-fixos", label: "Custos fixos" },
   { href: "/emprestimos", label: "Empréstimos" },
   { href: "/produtos", label: "Produtos" },
   { href: "/ponto-de-equilibrio", label: "Ponto de Equilíbrio" },
+  { href: "/projecao-90-dias", label: "Projeção" },
   { href: "/vendas", label: "Vendas" },
   { href: "/dre", label: "DRE" },
   { href: "/saude-financeira", label: "Saúde Financeira" },
@@ -29,7 +33,7 @@ export default function DashboardLayout({
 
   return (
     <div className="flex flex-1 flex-col">
-      <header className="border-b border-border bg-surface/60">
+      <header className="no-print border-b border-border bg-surface/60">
         <div className="mx-auto flex max-w-5xl items-center gap-4 px-6 py-4 sm:gap-8">
           <span className="shrink-0 font-serif text-xl tracking-wide text-gold">
             Holm <span className="text-foreground">Finance</span>

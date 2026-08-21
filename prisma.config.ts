@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { defineConfig, env } from "prisma/config";
+import { defineConfig } from "prisma/config";
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
@@ -7,6 +7,9 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: env("DATABASE_URL"),
+    // `prisma generate` (run from postinstall on every deploy) doesn't need a
+    // live connection — using env() here would throw when DATABASE_URL isn't
+    // set yet (e.g. before the production database is provisioned).
+    url: process.env.DATABASE_URL ?? "",
   },
 });

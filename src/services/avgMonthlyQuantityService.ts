@@ -21,6 +21,7 @@ export const avgMonthlyQuantityService = {
         quantity: s.quantity,
         grossRevenue: Number(s.grossRevenue),
         netRevenue: Number(s.netRevenue),
+        marketplaceCost: Number(s.marketplaceCost),
         status: s.status,
       })),
     );

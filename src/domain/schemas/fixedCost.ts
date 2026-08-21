@@ -15,6 +15,8 @@ export const createFixedCostSchema = z.object({
   weekday: z.coerce.number().int().min(0, "Dia da semana inválido").max(6, "Dia da semana inválido").optional(),
   categoryId: z.string().optional(),
   counterpartyId: z.string().optional(),
+  creditCardId: z.string().optional(),
+  laborProvisionEligible: z.boolean().optional(),
 });
 
 export const updateFixedCostSchema = createFixedCostSchema.partial().extend({

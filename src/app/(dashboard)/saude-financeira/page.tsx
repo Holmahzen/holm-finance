@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { formatBRL } from "@/lib/format";
+import { PrintButton } from "@/components/PrintButton";
 import {
   healthSignalText,
   HEALTH_SEVERITY_STYLE,
@@ -136,26 +137,30 @@ export default function SaudeFinanceiraPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-serif text-3xl text-foreground">Saúde Financeira</h1>
-          <p className="text-sm text-muted">
+          <p className="no-print text-sm text-muted">
             Evolução dos últimos meses e diagnóstico automático: a empresa está crescendo ou tem
             sinais de problema financeiro?
           </p>
+          <p className="hidden text-sm text-muted print:block">Últimos {months} meses</p>
         </div>
-        <div className="flex gap-1 rounded-lg border border-border bg-surface p-1">
-          {[6, 12, 24].map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMonths(m)}
-              className={
-                m === months
-                  ? "rounded bg-gold px-3 py-1.5 text-sm font-medium text-black"
-                  : "rounded px-3 py-1.5 text-sm font-medium text-muted transition hover:text-foreground"
-              }
-            >
-              {m} meses
-            </button>
-          ))}
+        <div className="flex items-center gap-3">
+          <div className="no-print flex gap-1 rounded-lg border border-border bg-surface p-1">
+            {[6, 12, 24].map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMonths(m)}
+                className={
+                  m === months
+                    ? "rounded bg-gold px-3 py-1.5 text-sm font-medium text-black"
+                    : "rounded px-3 py-1.5 text-sm font-medium text-muted transition hover:text-foreground"
+                }
+              >
+                {m} meses
+              </button>
+            ))}
+          </div>
+          <PrintButton />
         </div>
       </div>
 
