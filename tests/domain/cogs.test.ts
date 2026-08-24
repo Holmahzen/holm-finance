@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeCogsBySku } from "@/domain/cogs";
+import { computeCogsBySku, computeMaterialSpendSplit } from "@/domain/cogs";
 
 describe("computeCogsBySku", () => {
   it("multiplies quantity sold by per-piece cost for matched SKUs", () => {
@@ -81,5 +81,21 @@ describe("computeCogsBySku", () => {
   it("returns null coverage when there is no quantity sold at all", () => {
     const result = computeCogsBySku([], []);
     expect(result.coveragePercent).toBeNull();
+  });
+});
+
+describe("computeMaterialSpendSplit", () => {
+  it("splits proportionally between tecido and aviamento, ignoring costura", () => {
+    const result = computeMaterialSpendSplit(75, 25);
+    expect(result).toEqual({ tecidoPercent: 75, aviamentoPercent: 25 });
+  });
+
+  it("returns null when there is nothing to base a proportion on", () => {
+    expect(computeMaterialSpendSplit(0, 0)).toBeNull();
+  });
+
+  it("gives 100% to the only material that has cost", () => {
+    expect(computeMaterialSpendSplit(50, 0)).toEqual({ tecidoPercent: 100, aviamentoPercent: 0 });
+    expect(computeMaterialSpendSplit(0, 50)).toEqual({ tecidoPercent: 0, aviamentoPercent: 100 });
   });
 });

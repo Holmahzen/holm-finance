@@ -1,13 +1,18 @@
 import { dashboardRepository } from "@/repositories/dashboardRepository";
 import { entryRepository } from "@/repositories/entryRepository";
+import { productRepository } from "@/repositories/productRepository";
+import { marketplaceSaleRepository } from "@/repositories/marketplaceSaleRepository";
 import { mercadoLivreReceivableService } from "@/services/mercadoLivreReceivableService";
 import {
   computeCashFlowProjection,
   findFirstNegativeDay,
   type CashFlowMovement,
 } from "@/domain/cashFlow";
+import { aggregateSalesBySku } from "@/domain/salesAggregation";
+import { computeCogsBySku, computeMaterialSpendSplit } from "@/domain/cogs";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const MATERIAL_SPLIT_MIN_COVERAGE_PERCENT = 80;
 
 export const cashFlowService = {
   async getProjection(range: number | "month" = 30) {
@@ -25,7 +30,9 @@ export const cashFlowService = {
 
     const tomorrowUTC = new Date(todayUTC.getTime() + MS_PER_DAY);
 
-    const [accounts, entries, mlReceivable, paidToday] = await Promise.all([
+    const last30dStart = new Date(todayUTC.getTime() - 30 * MS_PER_DAY);
+
+    const [accounts, entries, mlReceivable, paidToday, recentSales, productCosts] = await Promise.all([
       dashboardRepository.getAccountBalances(),
       entryRepository.findMany({ status: "PENDING" }),
       mercadoLivreReceivableService.get(),
@@ -33,6 +40,8 @@ export const cashFlowService = {
         status: "PAID",
         paidAt: { gte: todayUTC, lt: tomorrowUTC },
       }),
+      marketplaceSaleRepository.findByPeriod(last30dStart, tomorrowUTC),
+      productRepository.getProductCostsBySku(),
     ]);
 
     const startingBalance = accounts.reduce((sum, a) => sum + Number(a.balance), 0);
@@ -96,6 +105,37 @@ export const cashFlowService = {
     const mlTotal = mlToday + mlTomorrow + mlWithin7d + mlAfter7d;
     const safeToSpendWithML = Math.max(0, startingBalance - totalPendingOutflows + mlTotal);
 
+    // Sugestão de pra onde deveria ir o "pode gastar": tecido x aviamento, na
+    // mesma proporção das peças efetivamente vendidas nos últimos 30 dias
+    // (custo cadastrado em Produtos × quantidade vendida) — não depende do
+    // período de projeção escolhido na tela, reflete o mix de venda atual.
+    const skuAggregates = aggregateSalesBySku(
+      recentSales.map((s) => ({
+        sku: s.sku,
+        productName: s.productName,
+        quantity: s.quantity,
+        grossRevenue: Number(s.grossRevenue),
+        netRevenue: Number(s.netRevenue),
+        marketplaceCost: Number(s.marketplaceCost),
+        status: s.status,
+      })),
+    );
+    const cogs = computeCogsBySku(
+      skuAggregates.map((s) => ({ sku: s.sku, quantity: s.quantity })),
+      productCosts,
+    );
+    const split = computeMaterialSpendSplit(cogs.tecido, cogs.aviamentos);
+    const materialSplit =
+      split === null
+        ? null
+        : {
+            tecidoPercent: split.tecidoPercent,
+            aviamentoPercent: split.aviamentoPercent,
+            coveragePercent: cogs.coveragePercent,
+            lowCoverage:
+              cogs.coveragePercent !== null && cogs.coveragePercent < MATERIAL_SPLIT_MIN_COVERAGE_PERCENT,
+          };
+
     const realizedTodayMovements: CashFlowMovement[] = paidToday.map((e) => ({
       date: todayUTC,
       amount: e.type === "RECEIVABLE" ? Number(e.paidAmount ?? e.amount) : -Number(e.paidAmount ?? e.amount),
@@ -119,6 +159,7 @@ export const cashFlowService = {
       safeToSpendWithML,
       mlTotal,
       totalPendingOutflows,
+      materialSplit,
     };
   },
 };

@@ -68,3 +68,24 @@ export function computeCogsBySku(
     coveragePercent,
   };
 }
+
+export type MaterialSpendSplit = {
+  tecidoPercent: number;
+  aviamentoPercent: number;
+};
+
+/**
+ * Divide um valor de compra entre tecido e aviamento na mesma proporção do
+ * que já foi gasto com peças vendidas — costura fica de fora por ser mão de
+ * obra, não material que se compra/estoca. `null` sem base nenhuma pra
+ * calcular a proporção (tecido + aviamentos = 0).
+ */
+export function computeMaterialSpendSplit(tecido: number, aviamentos: number): MaterialSpendSplit | null {
+  const total = tecido + aviamentos;
+  if (total <= 0) return null;
+
+  return {
+    tecidoPercent: (tecido / total) * 100,
+    aviamentoPercent: (aviamentos / total) * 100,
+  };
+}

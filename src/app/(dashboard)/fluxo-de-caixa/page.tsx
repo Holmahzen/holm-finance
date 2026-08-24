@@ -20,6 +20,13 @@ type RealizedToday = {
   movements: Movement[];
 };
 
+type MaterialSplit = {
+  tecidoPercent: number;
+  aviamentoPercent: number;
+  coveragePercent: number | null;
+  lowCoverage: boolean;
+} | null;
+
 type CashFlowReport = {
   startingBalance: number;
   days: CashFlowDay[];
@@ -30,7 +37,23 @@ type CashFlowReport = {
   safeToSpendWithML: number;
   mlTotal: number;
   totalPendingOutflows: number;
+  materialSplit: MaterialSplit;
 };
+
+function MaterialSplitLine({ amount, split }: { amount: number; split: MaterialSplit }) {
+  if (!split) return null;
+  const tecido = amount * (split.tecidoPercent / 100);
+  const aviamento = amount * (split.aviamentoPercent / 100);
+  return (
+    <p className="text-xs opacity-80">
+      Sugestão: {formatBRL(tecido)} em tecido ({split.tecidoPercent.toFixed(0)}%) ·{" "}
+      {formatBRL(aviamento)} em aviamento ({split.aviamentoPercent.toFixed(0)}%)
+      {split.lowCoverage && split.coveragePercent !== null && (
+        <> — baseado em {split.coveragePercent.toFixed(0)}% das vendas recentes com custo cadastrado</>
+      )}
+    </p>
+  );
+}
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("pt-BR", { timeZone: "UTC" });
@@ -256,6 +279,7 @@ export default function CashFlowPage() {
                     "Não há contas pendentes nesse período descontando esse valor."
                   )}
                 </p>
+                <MaterialSplitLine amount={report.safeToSpend} split={report.materialSplit} />
               </div>
             ) : (
               !report.firstNegativeDay && (
@@ -280,6 +304,7 @@ export default function CashFlowPage() {
                   liberar no Mercado Livre (hoje + amanhã + até 7 dias + depois de 7 dias) — só use
                   se confia que esse valor vai mesmo cair na conta.
                 </p>
+                <MaterialSplitLine amount={report.safeToSpendWithML} split={report.materialSplit} />
               </div>
             )}
           </div>
