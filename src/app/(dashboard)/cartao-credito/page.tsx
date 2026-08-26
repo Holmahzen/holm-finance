@@ -62,6 +62,7 @@ export default function CreditCardPage() {
   const [counterparties, setCounterparties] = useState<Option[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedCommitmentMonth, setExpandedCommitmentMonth] = useState<string | null>(null);
   const [cardFilter, setCardFilter] = useState("");
   const [averageRevenue, setAverageRevenue] = useState<AverageRevenue | null>(null);
 
@@ -237,11 +238,20 @@ export default function CreditCardPage() {
     return sum + dueThisMonth;
   }, 0);
 
-  const pendingInstallments = visiblePurchases.flatMap((p) =>
+  const pendingInstallmentsDetailed = visiblePurchases.flatMap((p) =>
     p.generatedEntries
       .filter((e) => e.status === "PENDING")
-      .map((e) => ({ amount: Number(e.amount), dueDate: new Date(e.dueDate) })),
+      .map((e) => ({
+        amount: Number(e.amount),
+        dueDate: new Date(e.dueDate),
+        description: e.description,
+        cardName: p.creditCard.name,
+      })),
   );
+  const pendingInstallments = pendingInstallmentsDetailed.map((e) => ({
+    amount: e.amount,
+    dueDate: e.dueDate,
+  }));
   const committedMonths = computeMonthlyCommitment(pendingInstallments, now.getFullYear(), now.getMonth() + 1, 6);
   const committedMonthsWithPercent = committedMonths.map((m) => ({
     ...m,
@@ -292,21 +302,55 @@ export default function CreditCardPage() {
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            {committedMonthsWithPercent.map((m) => (
-              <div
-                key={`${m.year}-${m.month}`}
-                className="flex flex-col gap-1 rounded-lg border border-border bg-background p-3"
-              >
-                <span className="text-xs font-medium tracking-wide text-muted uppercase">
-                  {MONTHS[m.month - 1]}/{String(m.year).slice(2)}
-                </span>
-                <span className="font-serif text-lg text-foreground">{formatBRL(m.committed)}</span>
-                <span className={`text-xs font-medium ${commitmentTone(m.percentOfRevenue)}`}>
-                  {m.percentOfRevenue !== null ? `${m.percentOfRevenue.toFixed(1)}% da receita` : "—"}
-                </span>
-              </div>
-            ))}
+            {committedMonthsWithPercent.map((m) => {
+              const key = `${m.year}-${m.month}`;
+              const isExpanded = expandedCommitmentMonth === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  disabled={m.committed === 0}
+                  onClick={() => setExpandedCommitmentMonth(isExpanded ? null : key)}
+                  className={`flex flex-col gap-1 rounded-lg border p-3 text-left transition ${
+                    isExpanded ? "border-gold bg-background" : "border-border bg-background"
+                  } ${m.committed > 0 ? "cursor-pointer hover:border-gold/60" : "cursor-default opacity-70"}`}
+                >
+                  <span className="text-xs font-medium tracking-wide text-muted uppercase">
+                    {MONTHS[m.month - 1]}/{String(m.year).slice(2)}
+                  </span>
+                  <span className="font-serif text-lg text-foreground">{formatBRL(m.committed)}</span>
+                  <span className={`text-xs font-medium ${commitmentTone(m.percentOfRevenue)}`}>
+                    {m.percentOfRevenue !== null ? `${m.percentOfRevenue.toFixed(1)}% da receita` : "—"}
+                  </span>
+                </button>
+              );
+            })}
           </div>
+
+          {expandedCommitmentMonth &&
+            (() => {
+              const [y, mo] = expandedCommitmentMonth.split("-").map(Number);
+              const monthLabel = `${MONTHS[mo - 1]}/${y}`;
+              const items = pendingInstallmentsDetailed
+                .filter((e) => e.dueDate.getUTCFullYear() === y && e.dueDate.getUTCMonth() + 1 === mo)
+                .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
+              return (
+                <div className="flex flex-col gap-2 rounded-lg border border-border bg-background p-3">
+                  <h3 className="text-sm font-medium text-foreground">Parcelas de {monthLabel}</h3>
+                  <ul className="flex flex-col gap-1 text-sm">
+                    {items.map((e, idx) => (
+                      <li key={idx} className="flex items-center justify-between gap-3 text-muted">
+                        <span>
+                          {e.description}
+                          {!cardFilter && <span className="text-xs opacity-70"> — {e.cardName}</span>}
+                        </span>
+                        <span className="whitespace-nowrap text-foreground">{formatBRL(e.amount)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })()}
         </div>
       )}
 
