@@ -51,7 +51,7 @@ function trailingStreak(values: number[], direction: "down" | "up"): number {
   return streak;
 }
 
-function percentChange(from: number, to: number): number {
+export function percentChange(from: number, to: number): number {
   if (from === 0) return to === 0 ? 0 : 100;
   return ((to - from) / Math.abs(from)) * 100;
 }

@@ -19,6 +19,7 @@ const navItems = [
   { href: "/projecao-90-dias", label: "Projeção" },
   { href: "/vendas", label: "Vendas" },
   { href: "/dre", label: "DRE" },
+  { href: "/relatorio-mensal", label: "Relatório Mensal" },
   { href: "/saude-financeira", label: "Saúde Financeira" },
   { href: "/categories", label: "Categorias" },
   { href: "/counterparties", label: "Contrapartes" },
