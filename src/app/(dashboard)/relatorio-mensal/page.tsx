@@ -162,9 +162,13 @@ export default function RelatorioMensalPage() {
           </div>
 
           <div>
-            <h2 className="mb-3 font-serif text-xl text-foreground">
+            <h2 className="font-serif text-xl text-foreground">
               Projeção — {periodLabel(report.nextMonthProjection.period)}
             </h2>
+            <p className="mb-3 text-xs text-muted">
+              Calculada a partir de hoje, sempre pro mês seguinte ao atual — independente do período
+              selecionado acima.
+            </p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="rounded-lg border border-border bg-surface p-4">
                 <span className="text-xs font-medium tracking-wide text-muted uppercase">
