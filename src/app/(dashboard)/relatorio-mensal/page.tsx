@@ -29,6 +29,7 @@ type MonthlyReport = {
     projectedRevenue: number;
     projectedProfit: number | null;
   };
+  revenueInTransit: { fromDay: number; salesCount: number; grossRevenue: number; netRevenue: number };
 };
 
 function periodLabel(p: { year: number; month: number }) {
@@ -133,6 +134,18 @@ export default function RelatorioMensalPage() {
                 <p className="font-serif text-xl text-foreground">{report.salesSummary.salesCount}</p>
               </div>
             </div>
+
+            {report.revenueInTransit.salesCount > 0 && (
+              <p className="mt-3 text-xs text-muted">
+                <span className="font-medium text-foreground">
+                  {formatBRL(report.revenueInTransit.netRevenue)}
+                </span>{" "}
+                dessa receita líquida ({report.revenueInTransit.salesCount} venda(s)) é de vendas
+                feitas a partir do dia {report.revenueInTransit.fromDay} — essa fatia tem boa chance
+                de o Mercado Livre só liberar o dinheiro no mês seguinte, mesmo já sendo receita
+                reconhecida nesse mês.
+              </p>
+            )}
 
             {report.salesSummary.topProducts.length > 0 && (
               <div className="mt-4 rounded-lg border border-border bg-surface p-4">

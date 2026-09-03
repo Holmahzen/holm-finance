@@ -2,7 +2,12 @@ import { dreService } from "@/services/dreService";
 import { salesService } from "@/services/salesService";
 import { companyProjectionService } from "@/services/companyProjectionService";
 import { percentChange } from "@/domain/health";
-import { aggregateSalesBySku } from "@/domain/salesAggregation";
+import { aggregateSalesBySku, computeRevenueInTransit } from "@/domain/salesAggregation";
+
+// Vendas feitas a partir desse dia do mês têm mais chance de o Mercado Livre
+// só liberar o dinheiro no mês seguinte — não é uma regra exata da
+// plataforma, é uma observação prática confirmada com a Mariana.
+const REVENUE_IN_TRANSIT_FROM_DAY = 20;
 
 export const monthlyReportService = {
   async getReport(year?: number, month?: number) {
@@ -55,6 +60,16 @@ export const monthlyReportService = {
     );
     const topProducts = [...skuAggregates].sort((a, b) => b.grossRevenue - a.grossRevenue).slice(0, 5);
 
+    const revenueInTransit = computeRevenueInTransit(
+      sales.sales.map((s) => ({
+        saleDate: new Date(s.saleDate),
+        grossRevenue: Number(s.grossRevenue),
+        netRevenue: Number(s.netRevenue),
+        status: s.status,
+      })),
+      REVENUE_IN_TRANSIT_FROM_DAY,
+    );
+
     return {
       period: { year: y, month: m },
       previousPeriod: { year: prevYear, month: prevMonth },
@@ -67,6 +82,7 @@ export const monthlyReportService = {
         salesCount: sales.salesCount,
         topProducts,
       },
+      revenueInTransit,
       nextMonthProjection: {
         period: { year: nextMonthYear, month: nextMonth },
         days: daysInNextMonth,

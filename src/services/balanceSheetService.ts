@@ -7,13 +7,16 @@ import { computeBalanceSheet, type BalanceSheetLine } from "@/domain/balanceShee
 
 export const balanceSheetService = {
   async getReport() {
-    const [accounts, pending, loans, manualItems, mlReceivable] = await Promise.all([
-      dashboardRepository.getAccountBalances(),
-      dashboardRepository.getPendingEntriesSummary(),
-      loanRepository.findActive(),
-      balanceSheetItemRepository.findActive(),
-      mercadoLivreReceivableService.get(),
-    ]);
+    const [accounts, pending, loans, manualItems, mlReceivable, payableBreakdown, receivableBreakdown] =
+      await Promise.all([
+        dashboardRepository.getAccountBalances(),
+        dashboardRepository.getPendingEntriesSummary(),
+        loanRepository.findActive(),
+        balanceSheetItemRepository.findActive(),
+        mercadoLivreReceivableService.get(),
+        dashboardRepository.getPendingByCategory("PAYABLE"),
+        dashboardRepository.getPendingByCategory("RECEIVABLE"),
+      ]);
 
     // "A liberar" no Mercado Livre não é um lançamento de Contas a Receber
     // (é informado à parte, em Início) — mas é dinheiro real que a
@@ -64,6 +67,13 @@ export const balanceSheetService = {
       patrimonioLiquidoManual: manualLines("PATRIMONIO_LIQUIDO"),
     });
 
-    return { ...report, generatedAt: new Date().toISOString() };
+    // Detalhamento por categoria pras linhas automáticas que a tela deixa
+    // clicáveis — chave é o mesmo texto do label da linha correspondente.
+    const breakdowns: Record<string, { name: string; total: number }[]> = {
+      "Contas a pagar": payableBreakdown.map((b) => ({ name: b.name, total: Number(b.total) })),
+      "Contas a receber": receivableBreakdown.map((b) => ({ name: b.name, total: Number(b.total) })),
+    };
+
+    return { ...report, breakdowns, generatedAt: new Date().toISOString() };
   },
 };

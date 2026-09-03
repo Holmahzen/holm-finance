@@ -9,6 +9,8 @@ type Section = "ATIVO_CIRCULANTE" | "ATIVO_NAO_CIRCULANTE" | "PASSIVO_CIRCULANTE
 type Line = { label: string; amount: number };
 type SectionTotals = { lines: Line[]; total: number };
 
+type CategoryBreakdown = { name: string; total: number };
+
 type Report = {
   ativoCirculante: SectionTotals;
   ativoNaoCirculante: SectionTotals;
@@ -19,6 +21,7 @@ type Report = {
   patrimonioLiquido: number;
   capitalSocial: number;
   lucrosAcumulados: number;
+  breakdowns: Record<string, CategoryBreakdown[]>;
   generatedAt: string;
 };
 
@@ -43,11 +46,17 @@ function SectionCard({
   helpText,
   section,
   tone,
+  breakdowns,
+  expandedLine,
+  onToggleLine,
 }: {
   title: string;
   helpText: string;
   section: SectionTotals;
   tone: "positive" | "negative";
+  breakdowns: Record<string, CategoryBreakdown[]>;
+  expandedLine: string | null;
+  onToggleLine: (label: string) => void;
 }) {
   const toneClass = tone === "positive" ? "text-emerald-400" : "text-red-400";
   return (
@@ -63,12 +72,48 @@ function SectionCard({
         <p className="pt-2 text-sm text-muted">Nada cadastrado ainda.</p>
       ) : (
         <div className="flex flex-col gap-1 pt-2">
-          {section.lines.map((line, idx) => (
-            <div key={idx} className="flex justify-between text-sm">
-              <span className="text-muted">{line.label}</span>
-              <span className="text-foreground">{formatBRL(line.amount)}</span>
-            </div>
-          ))}
+          {section.lines.map((line, idx) => {
+            const detail = breakdowns[line.label];
+            const hasDetail = detail && detail.length > 0;
+            const isExpanded = expandedLine === line.label;
+            return (
+              <div key={idx}>
+                {hasDetail ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => onToggleLine(line.label)}
+                      className="no-print flex w-full items-center justify-between text-sm hover:text-gold"
+                    >
+                      <span className="text-muted">
+                        {line.label} {isExpanded ? "▾" : "▸"}
+                      </span>
+                      <span className="text-foreground">{formatBRL(line.amount)}</span>
+                    </button>
+                    <div className="hidden justify-between text-sm print:flex">
+                      <span className="text-muted">{line.label}</span>
+                      <span className="text-foreground">{formatBRL(line.amount)}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted">{line.label}</span>
+                    <span className="text-foreground">{formatBRL(line.amount)}</span>
+                  </div>
+                )}
+                {hasDetail && isExpanded && (
+                  <div className="mt-1 mb-1 flex flex-col gap-0.5 border-l border-border/50 pl-3">
+                    {detail!.map((d, dIdx) => (
+                      <div key={dIdx} className="flex justify-between text-xs text-muted">
+                        <span>{d.name}</span>
+                        <span>{formatBRL(d.total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -79,6 +124,7 @@ export default function BalancoPatrimonialPage() {
   const [report, setReport] = useState<Report | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedLine, setExpandedLine] = useState<string | null>(null);
 
   const [section, setSection] = useState<Section>("ATIVO_CIRCULANTE");
   const [description, setDescription] = useState("");
@@ -172,12 +218,18 @@ export default function BalancoPatrimonialPage() {
                 helpText="Vira dinheiro em até 12 meses: saldo em conta, a receber, estoque."
                 section={report.ativoCirculante}
                 tone="positive"
+                breakdowns={report.breakdowns}
+                expandedLine={expandedLine}
+                onToggleLine={(l) => setExpandedLine(expandedLine === l ? null : l)}
               />
               <SectionCard
                 title="2. Ativo Não Circulante"
                 helpText="Fica na empresa por mais tempo: máquinas, equipamentos, investimentos."
                 section={report.ativoNaoCirculante}
                 tone="positive"
+                breakdowns={report.breakdowns}
+                expandedLine={expandedLine}
+                onToggleLine={(l) => setExpandedLine(expandedLine === l ? null : l)}
               />
             </div>
             <p className="mt-2 text-right text-sm text-muted">
@@ -193,12 +245,18 @@ export default function BalancoPatrimonialPage() {
                 helpText="Vence em até 12 meses: contas a pagar."
                 section={report.passivoCirculante}
                 tone="negative"
+                breakdowns={report.breakdowns}
+                expandedLine={expandedLine}
+                onToggleLine={(l) => setExpandedLine(expandedLine === l ? null : l)}
               />
               <SectionCard
                 title="4. Passivo Não Circulante"
                 helpText="Vence depois de 12 meses: saldo devedor de empréstimos (uma parte pode vencer antes — veja com seu contador se quiser separar)."
                 section={report.passivoNaoCirculante}
                 tone="negative"
+                breakdowns={report.breakdowns}
+                expandedLine={expandedLine}
+                onToggleLine={(l) => setExpandedLine(expandedLine === l ? null : l)}
               />
             </div>
             <p className="mt-2 text-right text-sm text-muted">

@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { aggregateSalesBySku, isExcludedSaleStatus } from "@/domain/salesAggregation";
+import { aggregateSalesBySku, isExcludedSaleStatus, computeRevenueInTransit } from "@/domain/salesAggregation";
+
+const utcDay = (day: number) => new Date(Date.UTC(2026, 7, day));
 
 function sale(overrides: Partial<Parameters<typeof aggregateSalesBySku>[0][number]> = {}) {
   return {
@@ -95,5 +97,38 @@ describe("isExcludedSaleStatus", () => {
   it("accepts a custom excluded-status list", () => {
     expect(isExcludedSaleStatus("Devolvido", ["devolvido"])).toBe(true);
     expect(isExcludedSaleStatus("Cancelado", ["devolvido"])).toBe(false);
+  });
+});
+
+describe("computeRevenueInTransit", () => {
+  it("sums only sales from the cutoff day onward", () => {
+    const result = computeRevenueInTransit(
+      [
+        { saleDate: utcDay(10), grossRevenue: 100, netRevenue: 30, status: "Pago" },
+        { saleDate: utcDay(20), grossRevenue: 200, netRevenue: 50, status: "Pago" },
+        { saleDate: utcDay(25), grossRevenue: 300, netRevenue: 70, status: "Pago" },
+      ],
+      20,
+    );
+    expect(result).toEqual({ fromDay: 20, salesCount: 2, grossRevenue: 500, netRevenue: 120 });
+  });
+
+  it("excludes cancelled/returned sales even within the cutoff window", () => {
+    const result = computeRevenueInTransit(
+      [
+        { saleDate: utcDay(22), grossRevenue: 200, netRevenue: 50, status: "Pago" },
+        { saleDate: utcDay(25), grossRevenue: 300, netRevenue: 70, status: "Cancelado" },
+      ],
+      20,
+    );
+    expect(result).toEqual({ fromDay: 20, salesCount: 1, grossRevenue: 200, netRevenue: 50 });
+  });
+
+  it("returns zeros when nothing falls on or after the cutoff day", () => {
+    const result = computeRevenueInTransit(
+      [{ saleDate: utcDay(5), grossRevenue: 100, netRevenue: 30, status: "Pago" }],
+      20,
+    );
+    expect(result).toEqual({ fromDay: 20, salesCount: 0, grossRevenue: 0, netRevenue: 0 });
   });
 });

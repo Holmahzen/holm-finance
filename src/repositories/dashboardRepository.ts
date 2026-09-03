@@ -158,6 +158,29 @@ export const dashboardRepository = {
       .sort((a, b) => Number(b.total) - Number(a.total));
   },
 
+  /** Mesma ideia de `getByCategory`, mas pra tudo que ainda está PENDENTE (sem recorte de período) — usado no Balanço Patrimonial pra detalhar Contas a Pagar/Receber. */
+  async getPendingByCategory(type: "PAYABLE" | "RECEIVABLE") {
+    const grouped = await prisma.entry.groupBy({
+      by: ["categoryId"],
+      where: { type, status: "PENDING" },
+      _sum: { amount: true },
+    });
+
+    const categoryIds = grouped.map((g) => g.categoryId).filter((id): id is string => !!id);
+    const categories = await prisma.category.findMany({
+      where: { id: { in: categoryIds } },
+      select: { id: true, name: true },
+    });
+    const nameById = new Map(categories.map((c) => [c.id, c.name]));
+
+    return grouped
+      .map((g) => ({
+        name: g.categoryId ? (nameById.get(g.categoryId) ?? "—") : "Sem categoria",
+        total: g._sum.amount ?? 0,
+      }))
+      .sort((a, b) => Number(b.total) - Number(a.total));
+  },
+
   async getTopCounterparties(
     type: "PAYABLE" | "RECEIVABLE",
     start: Date,

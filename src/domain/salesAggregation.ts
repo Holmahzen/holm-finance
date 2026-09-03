@@ -67,3 +67,36 @@ export function aggregateSalesBySku(
 
   return Array.from(bySku.values());
 }
+
+export type SaleDateRevenue = { saleDate: Date; grossRevenue: number; netRevenue: number; status: string };
+
+export type RevenueInTransit = {
+  fromDay: number;
+  salesCount: number;
+  grossRevenue: number;
+  netRevenue: number;
+};
+
+/**
+ * Receita de vendas feitas do dia `fromDay` do mês em diante — a fatia com
+ * mais chance de o dinheiro só ser liberado (e virar entrada de caixa de
+ * verdade) no mês seguinte, mesmo já sendo receita reconhecida no mês da
+ * venda. `saleDate` é comparado em UTC, mesma convenção usada no resto do
+ * sistema pra datas vindas do banco.
+ */
+export function computeRevenueInTransit(
+  sales: SaleDateRevenue[],
+  fromDay: number,
+  excludedStatuses: string[] = DEFAULT_EXCLUDED_SALE_STATUSES,
+): RevenueInTransit {
+  const filtered = sales.filter(
+    (s) => !isExcludedSaleStatus(s.status, excludedStatuses) && s.saleDate.getUTCDate() >= fromDay,
+  );
+
+  return {
+    fromDay,
+    salesCount: filtered.length,
+    grossRevenue: filtered.reduce((sum, s) => sum + s.grossRevenue, 0),
+    netRevenue: filtered.reduce((sum, s) => sum + s.netRevenue, 0),
+  };
+}
