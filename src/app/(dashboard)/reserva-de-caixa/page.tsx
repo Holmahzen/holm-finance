@@ -23,6 +23,7 @@ type Contingency = {
 
 type Tax = {
   ratePercent: number;
+  referencePeriod: { year: number; month: number };
   monthlyRevenue: number;
   target: number;
   saved: number;
@@ -392,9 +393,9 @@ export default function CashReservePage() {
                 <h2 className="font-serif text-lg text-foreground">Impostos</h2>
                 <p className="text-xs text-muted">
                   {report.tax.ratePercent}% sobre o faturamento de{" "}
-                  {MONTHS[report.period.month - 1]}/{report.period.year} (
-                  {formatBRL(report.tax.monthlyRevenue)} até agora) — reseta todo mês, não acumula
-                  como 13º/férias.
+                  {MONTHS[report.tax.referencePeriod.month - 1]}/{report.tax.referencePeriod.year} (
+                  {formatBRL(report.tax.monthlyRevenue)}) — DAS desse mês, ainda não vencido; reseta
+                  a cada novo mês, não acumula como 13º/férias.
                 </p>
               </div>
               <div className="no-print flex items-end gap-2">

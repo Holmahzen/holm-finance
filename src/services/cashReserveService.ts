@@ -30,23 +30,37 @@ export const cashReserveService = {
     const monthStart = new Date(year, month - 1, 1);
     const monthEnd = new Date(year, month, 1);
 
-    const [fixedCosts, monthlyFlow] = await Promise.all([
+    // DAS: até o dia `taxDueDay` do mês corrente, a obrigação que ainda não
+    // venceu é sobre o mês FECHADO anterior (é ela que vence agora) — só
+    // depois que esse dia passa é que a atenção vira pro mês corrente (a
+    // vencer só no mês seguinte). Sem isso, o card pula pro faturamento do
+    // mês corrente assim que o calendário vira, mesmo antes do DAS do mês
+    // anterior vencer, "escondendo" o que já foi guardado pra essa obrigação.
+    const taxRefDate =
+      now.getDate() < taxDueDay ? new Date(year, month - 2, 1) : new Date(year, month - 1, 1);
+    const taxRefYear = taxRefDate.getFullYear();
+    const taxRefMonth = taxRefDate.getMonth() + 1;
+    const taxRefMonthStart = new Date(taxRefYear, taxRefMonth - 1, 1);
+    const taxRefMonthEnd = new Date(taxRefYear, taxRefMonth, 1);
+
+    const [fixedCosts, monthlyFlow, taxRefFlow] = await Promise.all([
       fixedCostRepository.findMany(),
       dashboardRepository.getMonthlyFlow(monthStart, monthEnd),
+      dashboardRepository.getMonthlyFlow(taxRefMonthStart, taxRefMonthEnd),
     ]);
     const active = fixedCosts.filter((fc) => fc.isActive && fc.type === "PAYABLE");
 
     const salaryCosts = active.filter((fc) => fc.laborProvisionEligible);
     const monthlySalaries = salaryCosts.reduce((sum, fc) => sum + monthlyAmount(fc, year, month), 0);
     const totalMonthlyFixedCosts = active.reduce((sum, fc) => sum + monthlyAmount(fc, year, month), 0);
-    const currentMonthRevenue = Number(monthlyFlow.inflow);
+    const taxRefRevenue = Number(taxRefFlow.inflow);
 
     const thirteenth = computeThirteenthProvision(monthlySalaries, monthsElapsed);
     const vacation = computeVacationProvision(monthlySalaries, monthsElapsed);
     const contingencyTarget = computeContingencyTarget(totalMonthlyFixedCosts, contingencyMonths);
     const contingencyMonthlySaving = contingencyTarget / 12;
-    const taxTarget = computeTaxEstimate(currentMonthRevenue, taxRatePercent);
-    const taxDueDate = computeTaxDueDate(year, month, taxDueDay);
+    const taxTarget = computeTaxEstimate(taxRefRevenue, taxRatePercent);
+    const taxDueDate = computeTaxDueDate(taxRefYear, taxRefMonth, taxDueDay);
     const taxDaysUntilDue = computeDaysUntil(taxDueDate, now);
 
     // Meta diária: quanto guardar por dia, no ritmo do que resta do mês, pra
@@ -78,7 +92,17 @@ export const cashReserveService = {
     const thirteenthSaved = sumDeposits("THIRTEENTH", "year");
     const vacationSaved = sumDeposits("VACATION", "year");
     const contingencySaved = sumDeposits("CONTINGENCY", "all");
-    const taxSaved = sumDeposits("TAX", "month");
+    // Impostos usa o mês de REFERÊNCIA calculado acima, não o mês corrente —
+    // mesma razão do taxTarget: perto da virada do mês, o que já foi guardado
+    // continua contando pro DAS que está prestes a vencer.
+    const taxSaved = deposits
+      .filter(
+        (d) =>
+          d.category === "TAX" &&
+          d.date.getFullYear() === taxRefYear &&
+          d.date.getMonth() + 1 === taxRefMonth,
+      )
+      .reduce((sum, d) => sum + Number(d.amount), 0);
 
     return {
       period: { year, month, monthsElapsed },
@@ -96,7 +120,8 @@ export const cashReserveService = {
       },
       tax: {
         ratePercent: taxRatePercent,
-        monthlyRevenue: currentMonthRevenue,
+        referencePeriod: { year: taxRefYear, month: taxRefMonth },
+        monthlyRevenue: taxRefRevenue,
         target: taxTarget,
         saved: taxSaved,
         dueDay: taxDueDay,
