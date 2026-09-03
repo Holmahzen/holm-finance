@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { computeCashFlowProjection, findFirstNegativeDay } from "@/domain/cashFlow";
+import {
+  computeCashFlowProjection,
+  findFirstNegativeDay,
+  aggregateProjectionByWeek,
+} from "@/domain/cashFlow";
 
 const day = (y: number, m: number, d: number) => new Date(Date.UTC(y, m - 1, d));
 
@@ -62,5 +66,52 @@ describe("findFirstNegativeDay", () => {
   it("returns null when the balance never goes negative", () => {
     const projection = computeCashFlowProjection(1000, [], day(2026, 8, 1), 5);
     expect(findFirstNegativeDay(projection)).toBeNull();
+  });
+});
+
+describe("aggregateProjectionByWeek", () => {
+  it("groups 14 days into 2 buckets of 7", () => {
+    const projection = computeCashFlowProjection(1000, [], day(2026, 8, 1), 14);
+    const buckets = aggregateProjectionByWeek(projection);
+    expect(buckets).toHaveLength(2);
+    expect(buckets[0].days).toBe(7);
+    expect(buckets[1].days).toBe(7);
+  });
+
+  it("makes the last bucket smaller when the total isn't a multiple of the week length", () => {
+    const projection = computeCashFlowProjection(1000, [], day(2026, 8, 1), 10);
+    const buckets = aggregateProjectionByWeek(projection);
+    expect(buckets).toHaveLength(2);
+    expect(buckets[0].days).toBe(7);
+    expect(buckets[1].days).toBe(3);
+  });
+
+  it("sums inflow/outflow within each bucket and uses the last day's runningBalance as endingBalance", () => {
+    const movements = [
+      { date: day(2026, 8, 1), amount: 500, label: "A" },
+      { date: day(2026, 8, 3), amount: -200, label: "B" },
+      { date: day(2026, 8, 9), amount: 100, label: "C" },
+    ];
+    const projection = computeCashFlowProjection(0, movements, day(2026, 8, 1), 14);
+    const buckets = aggregateProjectionByWeek(projection);
+
+    expect(buckets[0].inflow).toBe(500);
+    expect(buckets[0].outflow).toBe(200);
+    expect(buckets[0].netChange).toBe(300);
+    expect(buckets[0].endingBalance).toBe(projection[6].runningBalance);
+
+    expect(buckets[1].inflow).toBe(100);
+    expect(buckets[1].endingBalance).toBe(projection[13].runningBalance);
+  });
+
+  it("supports a custom bucket length", () => {
+    const projection = computeCashFlowProjection(1000, [], day(2026, 8, 1), 9);
+    const buckets = aggregateProjectionByWeek(projection, 3);
+    expect(buckets).toHaveLength(3);
+    expect(buckets.every((b) => b.days === 3)).toBe(true);
+  });
+
+  it("returns an empty array for an empty projection", () => {
+    expect(aggregateProjectionByWeek([])).toEqual([]);
   });
 });

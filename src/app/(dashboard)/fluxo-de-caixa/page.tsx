@@ -27,6 +27,17 @@ type MaterialSplit = {
   lowCoverage: boolean;
 } | null;
 
+type WeeklyBucket = {
+  startDate: string;
+  endDate: string;
+  inflow: number;
+  outflow: number;
+  netChange: number;
+  endingBalance: number;
+  days: number;
+  estimatedAdditionalRevenue: number;
+};
+
 type CashFlowReport = {
   startingBalance: number;
   days: CashFlowDay[];
@@ -38,6 +49,8 @@ type CashFlowReport = {
   mlTotal: number;
   totalPendingOutflows: number;
   materialSplit: MaterialSplit;
+  weeklyBreakdown: WeeklyBucket[];
+  dailyNetRevenuePace: number;
 };
 
 function MaterialSplitLine({ amount, split }: { amount: number; split: MaterialSplit }) {
@@ -52,6 +65,50 @@ function MaterialSplitLine({ amount, split }: { amount: number; split: MaterialS
         <> — baseado em {split.coveragePercent.toFixed(0)}% das vendas recentes com custo cadastrado</>
       )}
     </p>
+  );
+}
+
+function WeeklyBreakdown({ buckets }: { buckets: WeeklyBucket[] }) {
+  if (buckets.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4">
+      <h2 className="font-serif text-lg text-foreground">Visão semanal</h2>
+      <p className="text-xs text-muted">
+        Cada linha é um bloco de dias corridos a partir de hoje — o saldo já é o mesmo calculado na
+        curva acima, só agrupado. A estimativa de venda é o ritmo real dos últimos 30 dias
+        (vendas ainda não registradas como lançamento) e nunca é somada ao saldo garantido.
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-border text-muted">
+              <th className="py-2 font-medium">Semana</th>
+              <th className="py-2 font-medium">Entradas</th>
+              <th className="py-2 font-medium">Saídas</th>
+              <th className="py-2 font-medium">Saldo no fim da semana</th>
+              <th className="py-2 font-medium">Estimativa de venda (não garantida)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {buckets.map((b, idx) => (
+              <tr key={idx} className="border-b border-border/50">
+                <td className="py-2 whitespace-nowrap">
+                  {formatDate(b.startDate)} – {formatDate(b.endDate)}
+                </td>
+                <td className="py-2 text-emerald-400">{formatBRL(b.inflow)}</td>
+                <td className="py-2 text-red-400">{formatBRL(b.outflow)}</td>
+                <td
+                  className={`py-2 font-medium ${b.endingBalance >= 0 ? "text-foreground" : "text-red-400"}`}
+                >
+                  {formatBRL(b.endingBalance)}
+                </td>
+                <td className="py-2 text-muted">≈ {formatBRL(b.estimatedAdditionalRevenue)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
@@ -349,6 +406,8 @@ export default function CashFlowPage() {
           </div>
 
           <BalanceChart days={report.days} />
+
+          <WeeklyBreakdown buckets={report.weeklyBreakdown} />
 
           <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4">
             <h2 className="font-serif text-lg text-foreground">Movimentos previstos</h2>

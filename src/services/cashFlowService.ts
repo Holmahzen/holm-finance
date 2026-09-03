@@ -6,9 +6,10 @@ import { mercadoLivreReceivableService } from "@/services/mercadoLivreReceivable
 import {
   computeCashFlowProjection,
   findFirstNegativeDay,
+  aggregateProjectionByWeek,
   type CashFlowMovement,
 } from "@/domain/cashFlow";
-import { aggregateSalesBySku } from "@/domain/salesAggregation";
+import { aggregateSalesBySku, isExcludedSaleStatus } from "@/domain/salesAggregation";
 import { computeCogsBySku, computeMaterialSpendSplit } from "@/domain/cogs";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -124,6 +125,20 @@ export const cashFlowService = {
       skuAggregates.map((s) => ({ sku: s.sku, quantity: s.quantity })),
       productCosts,
     );
+    // Ritmo diário de receita líquida (últimos 30 dias) — nunca somado ao
+    // "pode gastar" garantido, só mostrado ao lado da visão semanal como
+    // contexto: vendas ainda não registradas continuam acontecendo todo dia,
+    // mesmo que não entrem como "garantidas" na projeção.
+    const last30dNetRevenue = recentSales
+      .filter((s) => !isExcludedSaleStatus(s.status))
+      .reduce((sum, s) => sum + Number(s.netRevenue), 0);
+    const dailyNetRevenuePace = last30dNetRevenue / 30;
+
+    const weeklyBreakdown = aggregateProjectionByWeek(projection).map((bucket) => ({
+      ...bucket,
+      estimatedAdditionalRevenue: dailyNetRevenuePace * bucket.days,
+    }));
+
     const split = computeMaterialSpendSplit(cogs.tecido, cogs.aviamentos);
     const materialSplit =
       split === null
@@ -160,6 +175,8 @@ export const cashFlowService = {
       mlTotal,
       totalPendingOutflows,
       materialSplit,
+      weeklyBreakdown,
+      dailyNetRevenuePace,
     };
   },
 };

@@ -73,3 +73,46 @@ export function computeCashFlowProjection(
 export function findFirstNegativeDay(projection: CashFlowDay[]): CashFlowDay | null {
   return projection.find((d) => d.runningBalance < 0) ?? null;
 }
+
+export type WeeklyCashFlowBucket = {
+  startDate: Date;
+  endDate: Date;
+  inflow: number;
+  outflow: number;
+  netChange: number;
+  /** Saldo projetado no último dia do bloco (o mesmo `runningBalance` já calculado, não um novo cálculo). */
+  endingBalance: number;
+  days: number;
+};
+
+/**
+ * Agrupa a projeção dia a dia em blocos corridos de `weekLengthDays` dias a
+ * partir de hoje (não semana de calendário) — o último bloco pode ficar
+ * menor que os outros se o total de dias não for múltiplo exato.
+ */
+export function aggregateProjectionByWeek(
+  projectionDays: CashFlowDay[],
+  weekLengthDays = 7,
+): WeeklyCashFlowBucket[] {
+  const buckets: WeeklyCashFlowBucket[] = [];
+
+  for (let i = 0; i < projectionDays.length; i += weekLengthDays) {
+    const chunk = projectionDays.slice(i, i + weekLengthDays);
+    if (chunk.length === 0) continue;
+
+    const inflow = chunk.reduce((sum, d) => sum + d.inflow, 0);
+    const outflow = chunk.reduce((sum, d) => sum + d.outflow, 0);
+
+    buckets.push({
+      startDate: chunk[0].date,
+      endDate: chunk[chunk.length - 1].date,
+      inflow,
+      outflow,
+      netChange: inflow - outflow,
+      endingBalance: chunk[chunk.length - 1].runningBalance,
+      days: chunk.length,
+    });
+  }
+
+  return buckets;
+}
