@@ -3,6 +3,7 @@ import {
   computePriceAmortization,
   splitInstallment,
   computeLoanInterestForPeriod,
+  computeOutstandingPrincipal,
 } from "@/domain/loanAmortization";
 
 describe("computePriceAmortization", () => {
@@ -107,5 +108,26 @@ describe("computeLoanInterestForPeriod", () => {
     );
     expect(result.matchedCount).toBe(1);
     expect(result.interestInPeriod).toBeCloseTo(500, 2);
+  });
+});
+
+describe("computeOutstandingPrincipal", () => {
+  const loan = { principal: 200000, monthlyRatePercent: 1.89, installments: 48 };
+
+  it("returns the full principal when no installments have been paid yet", () => {
+    expect(computeOutstandingPrincipal(loan, 0)).toBe(200000);
+  });
+
+  it("matches the schedule's balance after a given number of paid installments", () => {
+    const schedule = computePriceAmortization(200000, 1.89, 48);
+    expect(computeOutstandingPrincipal(loan, 10)).toBeCloseTo(schedule[9].balance, 6);
+  });
+
+  it("returns zero once every installment has been paid", () => {
+    expect(computeOutstandingPrincipal(loan, 48)).toBeCloseTo(0, 2);
+  });
+
+  it("clamps to the last installment's balance if paid count exceeds the schedule", () => {
+    expect(computeOutstandingPrincipal(loan, 100)).toBeCloseTo(0, 2);
   });
 });

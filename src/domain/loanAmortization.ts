@@ -64,6 +64,18 @@ export type LoanConfig = {
   installments: number;
 };
 
+/**
+ * Saldo devedor atual do empréstimo, dado quantas parcelas já foram pagas —
+ * pra Passivo do balanço patrimonial (quanto ainda falta pagar, não o
+ * principal original). Nenhuma parcela paga ainda = saldo cheio.
+ */
+export function computeOutstandingPrincipal(loan: LoanConfig, paidInstallments: number): number {
+  if (paidInstallments <= 0) return loan.principal;
+  const schedule = computePriceAmortization(loan.principal, loan.monthlyRatePercent, loan.installments);
+  const lastPaid = schedule[Math.min(paidInstallments, schedule.length) - 1];
+  return lastPaid ? lastPaid.balance : 0;
+}
+
 export type LoanPayment = { id: string; paidAmount: number; paidAt: Date };
 
 export type LoanPeriodSplit = {

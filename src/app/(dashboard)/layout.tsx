@@ -20,6 +20,7 @@ const navItems = [
   { href: "/vendas", label: "Vendas" },
   { href: "/dre", label: "DRE" },
   { href: "/relatorio-mensal", label: "Relatório Mensal" },
+  { href: "/balanco-patrimonial", label: "Balanço Patrimonial" },
   { href: "/saude-financeira", label: "Saúde Financeira" },
   { href: "/categories", label: "Categorias" },
   { href: "/counterparties", label: "Contrapartes" },

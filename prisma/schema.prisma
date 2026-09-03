@@ -408,3 +408,23 @@ model ReserveDeposit {
 
   @@map("reserve_deposits")
 }
+
+enum BalanceSheetSection {
+  ATIVO_CIRCULANTE
+  ATIVO_NAO_CIRCULANTE
+  PASSIVO_CIRCULANTE
+  PASSIVO_NAO_CIRCULANTE
+  PATRIMONIO_LIQUIDO
+}
+
+model BalanceSheetItem {
+  id          String              @id @default(cuid())
+  section     BalanceSheetSection
+  description String
+  amount      Decimal             @db.Decimal(14, 2)
+  isActive    Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@map("balance_sheet_items")
+}
