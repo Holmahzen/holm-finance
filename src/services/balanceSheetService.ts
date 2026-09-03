@@ -1,17 +1,29 @@
 import { dashboardRepository } from "@/repositories/dashboardRepository";
 import { loanRepository } from "@/repositories/loanRepository";
 import { balanceSheetItemRepository } from "@/repositories/balanceSheetItemRepository";
+import { mercadoLivreReceivableService } from "@/services/mercadoLivreReceivableService";
 import { computeOutstandingPrincipal } from "@/domain/loanAmortization";
 import { computeBalanceSheet, type BalanceSheetLine } from "@/domain/balanceSheet";
 
 export const balanceSheetService = {
   async getReport() {
-    const [accounts, pending, loans, manualItems] = await Promise.all([
+    const [accounts, pending, loans, manualItems, mlReceivable] = await Promise.all([
       dashboardRepository.getAccountBalances(),
       dashboardRepository.getPendingEntriesSummary(),
       loanRepository.findActive(),
       balanceSheetItemRepository.findActive(),
+      mercadoLivreReceivableService.get(),
     ]);
+
+    // "A liberar" no Mercado Livre não é um lançamento de Contas a Receber
+    // (é informado à parte, em Início) — mas é dinheiro real que a
+    // plataforma ainda vai repassar, então entra como ativo circulante
+    // também, só que numa linha própria.
+    const mlReceivableTotal =
+      Number(mlReceivable.today) +
+      Number(mlReceivable.tomorrow) +
+      Number(mlReceivable.within7d) +
+      Number(mlReceivable.after7d);
 
     const totalBalance = accounts.reduce((sum, a) => sum + Number(a.balance), 0);
 
@@ -38,6 +50,9 @@ export const balanceSheetService = {
       ativoCirculante: [
         { label: "Caixa e contas bancárias", amount: totalBalance },
         { label: "Contas a receber", amount: Number(pending.receivable.total) },
+        ...(mlReceivableTotal > 0
+          ? [{ label: "A receber — Mercado Livre (a liberar)", amount: mlReceivableTotal }]
+          : []),
         ...manualLines("ATIVO_CIRCULANTE"),
       ],
       ativoNaoCirculante: manualLines("ATIVO_NAO_CIRCULANTE"),
