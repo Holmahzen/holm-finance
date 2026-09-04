@@ -84,7 +84,7 @@ describe("computeFixedCostDueDates", () => {
         7,
       );
       expect(dates).toHaveLength(5);
-      for (const d of dates) expect(d.getDay()).toBe(5);
+      for (const d of dates) expect(d.getUTCDay()).toBe(5);
     });
 
     it("returns an empty array when weekday is missing", () => {

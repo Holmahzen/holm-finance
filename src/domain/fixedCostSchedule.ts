@@ -20,19 +20,24 @@ export function computeFixedCostDueDates(
   year: number,
   month: number,
 ): Date[] {
-  const lastDayOfMonth = new Date(year, month, 0).getDate();
+  // Data em UTC-meia-noite (mesma convenção do resto do sistema, ex.:
+  // src/domain/cashFlow.ts) — `new Date(year, month, day)` usa o fuso
+  // horário local de onde o processo roda, que muda entre o PC local e o
+  // Vercel (UTC), gerando datas diferentes pro "mesmo dia" e duplicando
+  // lançamentos já existentes em vez de detectá-los como iguais.
+  const lastDayOfMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
 
   switch (schedule.frequency) {
     case "MONTHLY": {
       if (schedule.dueDay === null) return [];
       const day = Math.min(schedule.dueDay, lastDayOfMonth);
-      return [new Date(year, month - 1, day)];
+      return [new Date(Date.UTC(year, month - 1, day))];
     }
     case "BIWEEKLY": {
       if (schedule.dueDay === null || schedule.secondDueDay === null) return [];
       const day1 = Math.min(schedule.dueDay, lastDayOfMonth);
       const day2 = Math.min(schedule.secondDueDay, lastDayOfMonth);
-      return [new Date(year, month - 1, day1), new Date(year, month - 1, day2)].sort(
+      return [new Date(Date.UTC(year, month - 1, day1)), new Date(Date.UTC(year, month - 1, day2))].sort(
         (a, b) => a.getTime() - b.getTime(),
       );
     }
@@ -40,8 +45,8 @@ export function computeFixedCostDueDates(
       if (schedule.weekday === null) return [];
       const dates: Date[] = [];
       for (let day = 1; day <= lastDayOfMonth; day++) {
-        const date = new Date(year, month - 1, day);
-        if (date.getDay() === schedule.weekday) dates.push(date);
+        const date = new Date(Date.UTC(year, month - 1, day));
+        if (date.getUTCDay() === schedule.weekday) dates.push(date);
       }
       return dates;
     }
