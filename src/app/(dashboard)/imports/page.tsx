@@ -71,17 +71,36 @@ function UploadForm({
     formData.append("file", file);
     formData.append("bankAccountId", bankAccountId);
 
-    const res = await fetch(endpoint, { method: "POST", body: formData });
-    const body = await res.json();
+    // O try/finally não é zelo excessivo: quando a função do servidor estoura
+    // o tempo, o fetch REJEITA em vez de responder. Sem isto, a linha que
+    // devolve o botão ao normal nunca roda e ele fica em "Importando..." para
+    // sempre, sem erro nenhum na tela — parecendo que ainda está trabalhando.
+    try {
+      const res = await fetch(endpoint, { method: "POST", body: formData });
+      const body = await res.json().catch(() => ({}));
 
-    if (!res.ok) {
-      setError(typeof body.error === "string" ? body.error : JSON.stringify(body.error));
-    } else {
-      setResult(body);
-      setFile(null);
-      onImported();
+      if (!res.ok) {
+        setError(
+          typeof body.error === "string"
+            ? body.error
+            : body.error
+              ? JSON.stringify(body.error)
+              : `A importação falhou (${res.status}). Se o arquivo cobre um período longo, divida em partes menores e importe uma de cada vez.`,
+        );
+      } else {
+        setResult(body);
+        setFile(null);
+        onImported();
+      }
+    } catch (err) {
+      setError(
+        `A importação não terminou: ${err instanceof Error ? err.message : String(err)}. ` +
+          "Isso costuma ser tempo esgotado no servidor com arquivo grande — divida o extrato em períodos menores. " +
+          "Nada foi gravado: a importação é feita em bloco único e desfaz tudo se falhar.",
+      );
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
   }
 
   return (

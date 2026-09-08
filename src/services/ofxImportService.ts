@@ -61,43 +61,50 @@ export const ofxImportService = {
       ? (Number(statement.ledgerBalance) - Number(previousBatch.ledgerBalance)).toFixed(2)
       : null;
 
+    /* Uma consulta só para todas as contrapartes, em vez de uma por Pix.
+       Antes cada transação abria a sua: num extrato de cinco semanas eram
+       centenas de consultas disparadas ao mesmo tempo, que saturavam o pooler
+       do Postgres remoto e estouravam o tempo da função — a importação morria
+       e a tela ficava presa em "Importando...". */
+    const memosPorTransacao = statement.transactions.map((t) => parseMemo(t.memo));
+    const documentosPix = memosPorTransacao
+      .filter((m) => m.kind === "PIX_DEBIT" || m.kind === "PIX_CREDIT")
+      .map((m) => m.document);
+    const contrapartes = await counterpartyRepository.findManyByDocuments(documentosPix);
+    const porDocumento = new Map(contrapartes.map((c) => [c.document, c]));
+
     const enrichedTransactions: Prisma.ImportedTransactionUncheckedCreateInput[] =
-      await Promise.all(
-        statement.transactions.map(async (t) => {
-          const parsedMemo = parseMemo(t.memo);
-          let parsedDocument: string | undefined;
-          let parsedCounterpartyName: string | undefined;
-          let parsedCity: string | undefined;
-          let isSelfTransfer = false;
+      statement.transactions.map((t, i) => {
+        const parsedMemo = memosPorTransacao[i];
+        let parsedDocument: string | undefined;
+        let parsedCounterpartyName: string | undefined;
+        let parsedCity: string | undefined;
+        let isSelfTransfer = false;
 
-          if (parsedMemo.kind === "PIX_DEBIT" || parsedMemo.kind === "PIX_CREDIT") {
-            parsedDocument = parsedMemo.document;
-            parsedCounterpartyName = parsedMemo.name;
-            const counterparty = await counterpartyRepository.findByDocument(
-              parsedMemo.document,
-            );
-            isSelfTransfer = counterparty?.isOwnEntity ?? false;
-          } else if (parsedMemo.kind === "CARD_PURCHASE") {
-            parsedCounterpartyName = parsedMemo.name;
-            parsedCity = parsedMemo.city;
-          }
+        if (parsedMemo.kind === "PIX_DEBIT" || parsedMemo.kind === "PIX_CREDIT") {
+          parsedDocument = parsedMemo.document;
+          parsedCounterpartyName = parsedMemo.name;
+          isSelfTransfer = porDocumento.get(parsedMemo.document)?.isOwnEntity ?? false;
+        } else if (parsedMemo.kind === "CARD_PURCHASE") {
+          parsedCounterpartyName = parsedMemo.name;
+          parsedCity = parsedMemo.city;
+        }
 
-          return {
-            bankAccountId,
-            importBatchId: "", // filled in after batch creation
-            fitId: t.fitId,
-            trnType: t.trnType,
-            postedAt: t.postedAt,
-            amount: t.amount,
-            memo: t.memo,
-            parsedKind: parsedMemo.kind,
-            parsedDocument,
-            parsedCounterpartyName,
-            parsedCity,
-            isSelfTransfer,
-          };
-        }),
-      );
+        return {
+          bankAccountId,
+          importBatchId: "", // filled in after batch creation
+          fitId: t.fitId,
+          trnType: t.trnType,
+          postedAt: t.postedAt,
+          amount: t.amount,
+          memo: t.memo,
+          parsedKind: parsedMemo.kind,
+          parsedDocument,
+          parsedCounterpartyName,
+          parsedCity,
+          isSelfTransfer,
+        };
+      });
 
     const result = await prisma.$transaction(async (tx) => {
       const batch = await importBatchRepository.create(
@@ -127,7 +134,12 @@ export const ofxImportService = {
     // sugestões de vínculo com lançamentos já pendentes aparecem prontas
     // antes de alguém ir direto em "Transações sem par" e criar um
     // lançamento novo duplicado sem perceber que já existia um pendente.
-    await reconciliationService.runMatching();
+    //
+    // Só sobre o lote que acabou de entrar: varrer todo o histórico sem
+    // conciliação a cada importação é o que fazia o custo crescer mês a mês
+    // até estourar o tempo da função. O botão de conciliação continua
+    // varrendo tudo, para quem quiser a passada ampla.
+    await reconciliationService.runMatching({ importBatchId: result.batch.id });
 
     return {
       batchId: result.batch.id,

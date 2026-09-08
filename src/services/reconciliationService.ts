@@ -3,11 +3,28 @@ import { reconciliationMatchRepository } from "@/repositories/reconciliationMatc
 import { matchEntriesToTransactions } from "@/matching/reconciliationMatcher";
 import { NotFoundError, DomainError } from "@/domain/errors";
 
+/** Quantos upserts de sugestão vão ao banco de uma vez. */
+const LOTE_UPSERT = 10;
+
 export const reconciliationService = {
-  async runMatching() {
+  /**
+   * Cruza lançamentos pendentes com transações do extrato e grava as sugestões.
+   *
+   * `importBatchId` limita as transações ao lote recém-importado. É o que a
+   * IMPORTAÇÃO usa: sem isso ela revarre todo o histórico sem conciliação a
+   * cada arquivo enviado, e o custo cresce a cada mês até estourar o tempo da
+   * função do servidor — foi o que travou a importação de um extrato de cinco
+   * semanas em 08/09/2026. Não se perde nada ao restringir: a importação não
+   * cria lançamento nenhum, então as transações antigas já foram cruzadas
+   * contra esses mesmos pendentes nas rodadas anteriores.
+   *
+   * Sem o parâmetro, varre tudo — que é o comportamento certo para o botão de
+   * conciliação, onde a analista está esperando justamente a varredura ampla.
+   */
+  async runMatching(opts: { importBatchId?: string } = {}) {
     const [entries, transactions] = await Promise.all([
       reconciliationMatchRepository.findUnmatchedEntries(),
-      reconciliationMatchRepository.findUnmatchedTransactions(),
+      reconciliationMatchRepository.findUnmatchedTransactions(opts.importBatchId),
     ]);
 
     const candidates = matchEntriesToTransactions(
@@ -29,12 +46,21 @@ export const reconciliationService = {
       })),
     );
 
-    for (const candidate of candidates) {
-      await reconciliationMatchRepository.upsertSuggested(
-        candidate.importedTransactionId,
-        candidate.entryId,
-        candidate.score,
-        candidate.reasons,
+    /* Em lotes paralelos, não um a um: cada upsert é uma ida ao banco, e
+       contra um Postgres remoto (Neon) a soma dessas idas em série é o que
+       consome o tempo — não o cruzamento em si, que acontece em memória. */
+    for (let i = 0; i < candidates.length; i += LOTE_UPSERT) {
+      await Promise.all(
+        candidates
+          .slice(i, i + LOTE_UPSERT)
+          .map((c) =>
+            reconciliationMatchRepository.upsertSuggested(
+              c.importedTransactionId,
+              c.entryId,
+              c.score,
+              c.reasons,
+            ),
+          ),
       );
     }
 

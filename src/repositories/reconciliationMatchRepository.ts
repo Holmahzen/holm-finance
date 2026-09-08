@@ -54,10 +54,19 @@ export const reconciliationMatchRepository = {
     });
   },
 
-  findUnmatchedTransactions() {
+  /**
+   * `importBatchId` restringe a busca a um lote recém-importado.
+   *
+   * Sem ele, a varredura pega TODA transação sem conciliação desde sempre — o
+   * que é o certo quando a analista pede a conciliação na tela, mas caro
+   * demais para rodar dentro da importação, que ainda tem o limite de tempo da
+   * função do servidor para respeitar.
+   */
+  findUnmatchedTransactions(importBatchId?: string) {
     return prisma.importedTransaction.findMany({
       where: {
         OR: [{ reconciliationMatch: null }, { reconciliationMatch: { status: "REJECTED" } }],
+        ...(importBatchId ? { importBatchId } : {}),
       },
       include: { bankAccount: true },
       orderBy: { postedAt: "asc" },
