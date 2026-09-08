@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { formatBRL } from "@/lib/format";
 import { PeriodFilter } from "@/components/PeriodFilter";
+import { SaldoPorConta } from "@/components/SaldoPorConta";
 import { HorizontalBarChart } from "@/components/HorizontalBarChart";
 import { PrintButton } from "@/components/PrintButton";
 import {
@@ -23,7 +24,13 @@ type MercadoLivreReceivable = {
 
 type Summary = {
   period: { year: number; month: number };
-  accounts: { id: string; name: string; balance: string }[];
+  accounts: {
+    id: string;
+    name: string;
+    balance: string;
+    origem: "extrato" | "abertura";
+    desde: string | null;
+  }[];
   totalBalance: string;
   entries: {
     payable: { count: number; total: string; overdueCount: number; overdueTotal: string };
@@ -271,6 +278,8 @@ export default function DashboardPage() {
               href="/reconciliation"
             />
           </div>
+
+          <SaldoPorConta contas={summary.accounts} hoje={now.getTime()} />
 
           <div>
             <h2 className="mb-3 font-serif text-xl text-foreground">Patrimônio financeiro</h2>

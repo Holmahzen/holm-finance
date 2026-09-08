@@ -166,6 +166,16 @@ export const cashFlowService = {
 
     return {
       startingBalance,
+      /* A composição do saldo inicial, conta a conta. A projeção inteira parte
+         deste número, e saber de qual banco ele vem muda a leitura: saldo em
+         conta de marketplace não é o mesmo que saldo na conta operacional. */
+      accounts: accounts.map((a) => ({
+        id: a.id,
+        name: a.name,
+        balance: Number(a.balance),
+        origem: a.origem,
+        desde: a.desde ? a.desde.toISOString() : null,
+      })),
       days: projection,
       firstNegativeDay,
       mlAfter7d,

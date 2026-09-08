@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { formatBRL } from "@/lib/format";
+import { SaldoPorConta, type ContaSaldo } from "@/components/SaldoPorConta";
 import { PrintButton } from "@/components/PrintButton";
 
 type Movement = { date: string; amount: number; label: string };
@@ -38,8 +39,12 @@ type WeeklyBucket = {
   estimatedAdditionalRevenue: number;
 };
 
+/** Fixado na carga do modulo: ler a data durante o render torna o componente impuro. */
+const AGORA = Date.now();
+
 type CashFlowReport = {
   startingBalance: number;
+  accounts: ContaSaldo[];
   days: CashFlowDay[];
   firstNegativeDay: CashFlowDay | null;
   mlAfter7d: number;
@@ -404,6 +409,12 @@ export default function CashFlowPage() {
               tone={lowestDay && lowestDay.runningBalance < 0 ? "negative" : "default"}
             />
           </div>
+
+          <SaldoPorConta
+            contas={report.accounts}
+            hoje={AGORA}
+            titulo="Saldo atual, por conta"
+          />
 
           <BalanceChart days={report.days} />
 

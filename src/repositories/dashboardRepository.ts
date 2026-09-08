@@ -47,7 +47,17 @@ export const dashboardRepository = {
             .reduce((acc, e) => acc.add(e.paidAmount ?? 0), new Prisma.Decimal(0));
 
         const balance = latestBatch.ledgerBalance.add(sumSince("RECEIVABLE")).sub(sumSince("PAYABLE"));
-        return { id: account.id, name: account.name, balance };
+        return {
+          id: account.id,
+          name: account.name,
+          balance,
+          /* De onde veio o número. Somados, cinco saldos parecem todos igualmente
+             atuais; na prática um vem de extrato de ontem e outro de um valor
+             digitado semanas atrás. Sem isto a quebra por banco troca um total
+             honesto por cinco números que enganam. */
+          origem: "extrato" as const,
+          desde: latestBatch.ledgerBalanceDate,
+        };
       }
 
       const sumAll = (type: "RECEIVABLE" | "PAYABLE") =>
@@ -59,6 +69,8 @@ export const dashboardRepository = {
         id: account.id,
         name: account.name,
         balance: account.openingBalance.add(sumAll("RECEIVABLE")).sub(sumAll("PAYABLE")),
+        origem: "abertura" as const,
+        desde: account.openingBalanceDate,
       };
     });
   },
