@@ -18,6 +18,7 @@ const navItems = [
   { href: "/ponto-de-equilibrio", label: "Ponto de Equilíbrio" },
   { href: "/projecao-90-dias", label: "Projeção" },
   { href: "/vendas", label: "Vendas" },
+  { href: "/recebiveis-ml", label: "Recebíveis ML" },
   { href: "/dre", label: "DRE" },
   { href: "/relatorio-mensal", label: "Relatório Mensal" },
   { href: "/balanco-patrimonial", label: "Balanço Patrimonial" },

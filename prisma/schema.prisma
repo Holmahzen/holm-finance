@@ -304,6 +304,48 @@ model MarketplaceSale {
   @@map("marketplace_sales")
 }
 
+/**
+ * Vendas lidas do relatório que o Mercado Livre exporta direto ("Vendas BR"),
+ * numa tabela própria em vez de dentro de MarketplaceSale.
+ *
+ * Os dois relatórios descrevem os MESMOS pedidos com contas incompatíveis: o
+ * Mercado Turbo entrega margem de contribuição (custo do produto já
+ * descontado), o export nativo entrega o líquido do marketplace (antes do
+ * custo do produto) — no mesmo pedido isso dá quase o triplo. Gravar os dois
+ * na mesma linha faria a DRE, a margem por produto e o ponto de equilíbrio
+ * lerem uma coisa pela outra, dependendo de qual planilha foi importada por
+ * último. Aqui o export nativo serve ao que só ele sabe responder: quando o
+ * dinheiro é liberado.
+ */
+model MercadoLivreSale {
+  id               String    @id @default(cuid())
+  orderId          String    @unique
+  saleDate         DateTime
+  sku              String
+  productName      String
+  status           String
+  shippingModality String?
+  customerName     String?
+  quantity         Int
+  /** O que o comprador pagou: produto + acréscimo de parcelamento + envio. */
+  grossRevenue     Decimal   @db.Decimal(14, 2)
+  /** Coluna "Total (BRL)" — o líquido que o Mercado Livre repassa, já sem as
+   * tarifas de venda e de envio. É este valor que entra no caixa. */
+  netTotal         Decimal   @db.Decimal(14, 2)
+  /** Data em que o comprador recebeu o pacote; nula enquanto não entregue. */
+  deliveredAt      DateTime?
+  /** Data estimada do repasse (entrega + prazo de liberação). */
+  releaseDate      DateTime?
+  /** "agosto 2026" — em qual fatura mensal as tarifas dessa venda caem. */
+  billingMonth     String?
+  importedAt       DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([releaseDate])
+  @@index([saleDate])
+  @@map("mercado_livre_sales")
+}
+
 enum FixedCostFrequency {
   MONTHLY
   BIWEEKLY
