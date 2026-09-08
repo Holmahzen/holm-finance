@@ -38,6 +38,16 @@ export async function POST(request: NextRequest) {
     if (err instanceof DomainError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
+    /* Erro de formato do arquivo (data fora do padrão, tag faltando) subia
+       como 500 mudo, e a tela só sabia dizer "falhou (500)". A mensagem do
+       parser é justamente o que identifica o problema — "Data OFX inválida:
+       08/09/2026" aponta o banco e o campo em uma linha. */
+    if (err instanceof Error) {
+      return NextResponse.json(
+        { error: `Não foi possível ler o arquivo OFX: ${err.message}` },
+        { status: 422 },
+      );
+    }
     throw err;
   }
 }

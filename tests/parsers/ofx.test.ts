@@ -181,3 +181,93 @@ describe.skipIf(!hasRealFixtures)("parseOfx (real Sicredi fixtures)", () => {
     expect(new Set(first).size).toBe(first.length);
   });
 });
+
+/**
+ * O PagBank foge do padrão OFX em quatro pontos. Três são do parser e estão
+ * cobertos aqui; o quarto (conta sem bankId cadastrado) vive no serviço de
+ * importação. Cada um deles quebrava a importação do extrato do PagBank —
+ * dois com erro, um em SILÊNCIO.
+ */
+function ofxPagBank({
+  trnType = "OUT",
+  trnAmt = "-8000.00",
+  balAmt = "R$ 13.895,04",
+  dtAsOf = "08/09/2026",
+}: { trnType?: string; trnAmt?: string; balAmt?: string; dtAsOf?: string } = {}) {
+  return Buffer.from(`OFXHEADER:100
+DATA:OFXSGML
+VERSION:100
+ENCODING:UTF-8
+
+<OFX>
+  <BANKMSGSRSV1>
+    <STMTTRNRS>
+      <STMTRS>
+        <CURDEF>BRL
+        <BANKACCTFROM>
+          <BANKID>290
+          <ACCTID>42878195-9
+          <ACCTTYPE>CHECKING
+        </BANKACCTFROM>
+        <BANKTRANLIST>
+          <DTSTART>20260831000000[-3:BRT]
+          <DTEND>20260908000000[-3:BRT]
+          <STMTTRN>
+            <TRNTYPE>${trnType}
+            <DTPOSTED>20260908062606[-3:BRT]
+            <TRNAMT>${trnAmt}
+            <FITID>PB-1
+            <MEMO>Pix enviado - Ricardo Souza Silva
+          </STMTTRN>
+        </BANKTRANLIST>
+        <LEDGERBAL>
+          <BALAMT>${balAmt}
+          <DTASOF>${dtAsOf}
+        </LEDGERBAL>
+      </STMTRS>
+    </STMTTRNRS>
+  </BANKMSGSRSV1>
+</OFX>`);
+}
+
+describe("parseOfx (formato do PagBank)", () => {
+  it("aceita DTASOF em data brasileira, que fazia a importação estourar", () => {
+    const st = parseOfx(ofxPagBank());
+    expect(st.ledgerBalanceDate.toISOString().slice(0, 10)).toBe("2026-09-08");
+  });
+
+  it("lê BALAMT com símbolo de moeda e vírgula decimal", () => {
+    const st = parseOfx(ofxPagBank({ balAmt: "R$ 13.895,04" }));
+    expect(st.ledgerBalance).toBe("13895.04");
+    expect(Number(st.ledgerBalance)).toBe(13895.04);
+  });
+
+  it("trata IN como crédito — cair no padrão DEBIT gravaria entrada como saída", () => {
+    const entrada = parseOfx(ofxPagBank({ trnType: "IN", trnAmt: "5411.02" }));
+    expect(entrada.transactions[0].trnType).toBe("CREDIT");
+
+    const saida = parseOfx(ofxPagBank({ trnType: "OUT" }));
+    expect(saida.transactions[0].trnType).toBe("DEBIT");
+  });
+
+  it("não regride o padrão CREDIT/DEBIT do Sicredi", () => {
+    expect(parseOfx(ofxPagBank({ trnType: "CREDIT" })).transactions[0].trnType).toBe("CREDIT");
+    expect(parseOfx(ofxPagBank({ trnType: "DEBIT" })).transactions[0].trnType).toBe("DEBIT");
+  });
+
+  it("mantém valor de transação já no formato padrão", () => {
+    const st = parseOfx(ofxPagBank({ trnAmt: "-8000.00" }));
+    expect(st.transactions[0].amount).toBe("-8000.00");
+  });
+});
+
+describe("parseOfxDate (data brasileira)", () => {
+  it("lê dd/mm/aaaa sem confundir dia com mês", () => {
+    expect(parseOfxDate("08/09/2026").toISOString()).toBe("2026-09-08T00:00:00.000Z");
+    expect(parseOfxDate("31/12/2026").toISOString()).toBe("2026-12-31T00:00:00.000Z");
+  });
+
+  it("continua recusando o que não é data", () => {
+    expect(() => parseOfxDate("undefined")).toThrow(/Data OFX inválida/);
+  });
+});

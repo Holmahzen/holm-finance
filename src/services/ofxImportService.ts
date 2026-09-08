@@ -47,10 +47,29 @@ export const ofxImportService = {
     }
 
     const statement = parseOfx(buffer);
-    if (statement.bankId !== account.bankId || statement.acctId !== account.acctId) {
+    /* A conferência só faz sentido se a conta já souber a quem pertence.
+       Conta cadastrada à mão nasce sem bankId/acctId, e aí a comparação
+       reprovava TODO extrato — inclusive o primeiro, que é justamente quem
+       poderia preencher esses campos. Na primeira importação a conta adota os
+       dados do arquivo; da segunda em diante a conferência volta a valer e
+       impede mandar o extrato de um banco para a conta de outro. */
+    const contaVirgem = !account.bankId && !account.acctId;
+
+    if (
+      !contaVirgem &&
+      (statement.bankId !== account.bankId || statement.acctId !== account.acctId)
+    ) {
       throw new DomainError(
         `O extrato pertence à conta ${statement.bankId}/${statement.acctId}, diferente da conta selecionada.`,
       );
+    }
+
+    if (contaVirgem) {
+      await accountRepository.update(bankAccountId, {
+        bankId: statement.bankId,
+        acctId: statement.acctId,
+        acctType: statement.acctType,
+      });
     }
 
     const previousBatch = await importBatchRepository.findLatestByAccount(bankAccountId);
