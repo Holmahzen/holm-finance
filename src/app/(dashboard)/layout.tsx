@@ -35,32 +35,30 @@ export default function DashboardLayout({
   const pathname = usePathname();
 
   return (
-    <div className="flex flex-1 flex-col">
-      <header className="no-print border-b border-border bg-surface/60">
-        <div className="mx-auto flex max-w-5xl items-center gap-4 px-6 py-4 sm:gap-8">
-          <span className="shrink-0 font-serif text-xl tracking-wide text-gold">
-            Holm <span className="text-foreground">Finance</span>
-          </span>
-          <nav className="flex min-w-0 flex-1 gap-5 overflow-x-auto text-sm whitespace-nowrap">
-            {navItems.map((item) => {
-              const active = pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={
-                    active
-                      ? "shrink-0 text-gold"
-                      : "shrink-0 text-muted transition hover:text-gold-soft"
-                  }
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
-      </header>
+    <div className="flex flex-1">
+      <aside className="no-print sticky top-0 flex h-screen w-56 shrink-0 flex-col overflow-y-auto border-r border-border bg-surface/60 px-4 py-6">
+        <Link href="/" className="mb-6 block shrink-0 font-serif text-xl tracking-wide text-gold">
+          Holm <span className="text-foreground">Finance</span>
+        </Link>
+        <nav className="flex flex-col gap-0.5 text-sm">
+          {navItems.map((item) => {
+            const active = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={
+                  active
+                    ? "rounded px-3 py-1.5 font-medium text-gold bg-gold/10"
+                    : "rounded px-3 py-1.5 text-muted transition hover:bg-surface-hover hover:text-gold-soft"
+                }
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+      </aside>
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-8">{children}</main>
     </div>
   );
