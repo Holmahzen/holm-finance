@@ -1,4 +1,4 @@
-export type FixedCostFrequency = "MONTHLY" | "BIWEEKLY" | "WEEKLY";
+export type FixedCostFrequency = "MONTHLY" | "BIWEEKLY" | "WEEKLY" | "BIWEEKLY_ROLLING";
 
 export type FixedCostSchedule = {
   frequency: FixedCostFrequency;
@@ -6,7 +6,12 @@ export type FixedCostSchedule = {
   secondDueDay: number | null;
   /** 0 = domingo .. 6 = sábado (mesma convenção do Date.getDay()). */
   weekday: number | null;
+  /** Só usado por BIWEEKLY_ROLLING: data-base de onde as ocorrências de 14 em 14 dias partem. */
+  anchorDate: Date | null;
 };
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const ROLLING_CYCLE_DAYS = 14;
 
 /**
  * Datas de vencimento de um custo fixo num mês específico, de acordo com a
@@ -50,6 +55,27 @@ export function computeFixedCostDueDates(
       }
       return dates;
     }
+    case "BIWEEKLY_ROLLING": {
+      if (schedule.anchorDate === null) return [];
+      // Diferente de BIWEEKLY (dois dias fixos que se repetem todo mês), aqui as
+      // ocorrências rolam de 14 em 14 dias corridos a partir da data-base, sem
+      // resetar no início do mês — por isso o dia do mês muda mês a mês.
+      const anchorTime = Date.UTC(
+        schedule.anchorDate.getUTCFullYear(),
+        schedule.anchorDate.getUTCMonth(),
+        schedule.anchorDate.getUTCDate(),
+      );
+      const cycleMs = ROLLING_CYCLE_DAYS * MS_PER_DAY;
+      const firstOfMonth = Date.UTC(year, month - 1, 1);
+      const lastOfMonth = Date.UTC(year, month - 1, lastDayOfMonth);
+      const kMin = Math.ceil((firstOfMonth - anchorTime) / cycleMs);
+      const kMax = Math.floor((lastOfMonth - anchorTime) / cycleMs);
+      const dates: Date[] = [];
+      for (let k = kMin; k <= kMax; k++) {
+        dates.push(new Date(anchorTime + k * cycleMs));
+      }
+      return dates;
+    }
   }
 }
 
@@ -60,12 +86,25 @@ export function computeFixedCostDueDates(
  * o valor cadastrado por ocorrência sozinho.
  */
 export function computeFixedCostMonthlyAmount(
-  fc: { frequency: FixedCostFrequency; dueDay: number | null; secondDueDay: number | null; weekday: number | null; amount: number },
+  fc: {
+    frequency: FixedCostFrequency;
+    dueDay: number | null;
+    secondDueDay: number | null;
+    weekday: number | null;
+    anchorDate: Date | null;
+    amount: number;
+  },
   year: number,
   month: number,
 ): number {
   const occurrences = computeFixedCostDueDates(
-    { frequency: fc.frequency, dueDay: fc.dueDay, secondDueDay: fc.secondDueDay, weekday: fc.weekday },
+    {
+      frequency: fc.frequency,
+      dueDay: fc.dueDay,
+      secondDueDay: fc.secondDueDay,
+      weekday: fc.weekday,
+      anchorDate: fc.anchorDate,
+    },
     year,
     month,
   );

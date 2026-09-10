@@ -18,6 +18,7 @@ function validateSchedule(schedule: {
   dueDay?: number | null;
   secondDueDay?: number | null;
   weekday?: number | null;
+  anchorDate?: Date | null;
 }) {
   if (schedule.frequency === "MONTHLY" && (schedule.dueDay === undefined || schedule.dueDay === null)) {
     throw new DomainError("Informe o dia do vencimento.");
@@ -33,6 +34,12 @@ function validateSchedule(schedule: {
   }
   if (schedule.frequency === "WEEKLY" && (schedule.weekday === undefined || schedule.weekday === null)) {
     throw new DomainError("Informe o dia da semana.");
+  }
+  if (
+    schedule.frequency === "BIWEEKLY_ROLLING" &&
+    (schedule.anchorDate === undefined || schedule.anchorDate === null)
+  ) {
+    throw new DomainError("Informe a data-base do primeiro pagamento.");
   }
 }
 
@@ -59,6 +66,7 @@ export const fixedCostService = {
       dueDay: input.dueDay ?? existing.dueDay,
       secondDueDay: input.secondDueDay ?? existing.secondDueDay,
       weekday: input.weekday ?? existing.weekday,
+      anchorDate: input.anchorDate ?? existing.anchorDate,
     });
     return fixedCostRepository.update(id, input);
   },
@@ -84,6 +92,7 @@ export const fixedCostService = {
           dueDay: fc.dueDay,
           secondDueDay: fc.secondDueDay,
           weekday: fc.weekday,
+          anchorDate: fc.anchorDate,
         },
         year,
         month,

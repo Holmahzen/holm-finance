@@ -9,7 +9,7 @@ type Option = { id: string; name: string };
 type CategoryOption = Option & { parentId: string | null };
 type CreditCardOption = { id: string; name: string; isActive: boolean };
 
-type FixedCostFrequency = "MONTHLY" | "BIWEEKLY" | "WEEKLY";
+type FixedCostFrequency = "MONTHLY" | "BIWEEKLY" | "WEEKLY" | "BIWEEKLY_ROLLING";
 
 type FixedCost = {
   id: string;
@@ -20,6 +20,7 @@ type FixedCost = {
   dueDay: number | null;
   secondDueDay: number | null;
   weekday: number | null;
+  anchorDate: string | null;
   isActive: boolean;
   laborProvisionEligible: boolean;
   categoryId: string | null;
@@ -32,7 +33,13 @@ type FixedCost = {
 
 function monthlyAmount(fc: FixedCost, year: number, month: number): number {
   const occurrences = computeFixedCostDueDates(
-    { frequency: fc.frequency, dueDay: fc.dueDay, secondDueDay: fc.secondDueDay, weekday: fc.weekday },
+    {
+      frequency: fc.frequency,
+      dueDay: fc.dueDay,
+      secondDueDay: fc.secondDueDay,
+      weekday: fc.weekday,
+      anchorDate: fc.anchorDate ? new Date(fc.anchorDate) : null,
+    },
     year,
     month,
   );
@@ -48,6 +55,9 @@ function scheduleSortKey(fc: FixedCost): number {
   if (fc.frequency === "WEEKLY") {
     return 32 + (fc.weekday ?? 0);
   }
+  if (fc.frequency === "BIWEEKLY_ROLLING") {
+    return 40;
+  }
   return fc.dueDay ?? 32;
 }
 
@@ -57,6 +67,13 @@ function scheduleLabel(fc: FixedCost): string {
   }
   if (fc.frequency === "WEEKLY") {
     return `Toda ${WEEKDAY_LABELS[fc.weekday ?? 0]} (semanal)`;
+  }
+  if (fc.frequency === "BIWEEKLY_ROLLING") {
+    const anchor = fc.anchorDate ? new Date(fc.anchorDate) : null;
+    const anchorLabel = anchor
+      ? `${String(anchor.getUTCDate()).padStart(2, "0")}/${String(anchor.getUTCMonth() + 1).padStart(2, "0")}/${anchor.getUTCFullYear()}`
+      : "?";
+    return `A cada 14 dias, a partir de ${anchorLabel}`;
   }
   return `Dia ${fc.dueDay ?? "?"}`;
 }
@@ -87,6 +104,7 @@ export default function FixedCostsPage() {
   const [dueDay, setDueDay] = useState("5");
   const [secondDueDay, setSecondDueDay] = useState("20");
   const [weekday, setWeekday] = useState("5");
+  const [anchorDate, setAnchorDate] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [counterpartyId, setCounterpartyId] = useState("");
   const [creditCardId, setCreditCardId] = useState("");
@@ -129,6 +147,7 @@ export default function FixedCostsPage() {
     setDueDay("5");
     setSecondDueDay("20");
     setWeekday("5");
+    setAnchorDate("");
     setCategoryId("");
     setCounterpartyId("");
     setCreditCardId("");
@@ -144,6 +163,7 @@ export default function FixedCostsPage() {
     setDueDay(fc.dueDay !== null ? String(fc.dueDay) : "5");
     setSecondDueDay(fc.secondDueDay !== null ? String(fc.secondDueDay) : "20");
     setWeekday(fc.weekday !== null ? String(fc.weekday) : "5");
+    setAnchorDate(fc.anchorDate ? fc.anchorDate.slice(0, 10) : "");
     setCategoryId(fc.categoryId ?? "");
     setCounterpartyId(fc.counterpartyId ?? "");
     setCreditCardId(fc.creditCardId ?? "");
@@ -162,6 +182,7 @@ export default function FixedCostsPage() {
       dueDay: frequency === "MONTHLY" || frequency === "BIWEEKLY" ? dueDay : undefined,
       secondDueDay: frequency === "BIWEEKLY" ? secondDueDay : undefined,
       weekday: frequency === "WEEKLY" ? weekday : undefined,
+      anchorDate: frequency === "BIWEEKLY_ROLLING" ? anchorDate : undefined,
       categoryId: categoryId || undefined,
       counterpartyId: counterpartyId || undefined,
       creditCardId: creditCardId || undefined,
@@ -374,7 +395,8 @@ export default function FixedCostsPage() {
             className="rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
           >
             <option value="MONTHLY">Mensal</option>
-            <option value="BIWEEKLY">Quinzenal</option>
+            <option value="BIWEEKLY">Quinzenal (dois dias fixos por mês)</option>
+            <option value="BIWEEKLY_ROLLING">Quinzenal (a cada 14 dias corridos)</option>
             <option value="WEEKLY">Semanal</option>
           </select>
         </div>
@@ -419,6 +441,20 @@ export default function FixedCostsPage() {
               />
             </div>
           </>
+        )}
+        {frequency === "BIWEEKLY_ROLLING" && (
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted" title="A partir dessa data, o próximo vencimento é sempre 14 dias depois do anterior — o dia do mês muda mês a mês.">
+              Data do 1º pagamento
+            </label>
+            <input
+              required
+              type="date"
+              value={anchorDate}
+              onChange={(e) => setAnchorDate(e.target.value)}
+              className="rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
+            />
+          </div>
         )}
         {frequency === "WEEKLY" && (
           <div className="flex flex-col gap-1">

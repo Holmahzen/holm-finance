@@ -1,18 +1,20 @@
 import { z } from "zod";
 import { entryTypeSchema } from "./category";
 
-export const fixedCostFrequencySchema = z.enum(["MONTHLY", "BIWEEKLY", "WEEKLY"]);
+export const fixedCostFrequencySchema = z.enum(["MONTHLY", "BIWEEKLY", "WEEKLY", "BIWEEKLY_ROLLING"]);
 
 export const createFixedCostSchema = z.object({
   type: entryTypeSchema.default("PAYABLE"),
   description: z.string().min(1, "Descrição é obrigatória"),
   amount: z.union([z.string(), z.number()]),
   frequency: fixedCostFrequencySchema.default("MONTHLY"),
-  // MONTHLY exige dueDay; BIWEEKLY exige dueDay + secondDueDay; WEEKLY exige weekday.
-  // Validado no service (depende da frequência), não aqui, pro update parcial continuar simples.
+  // MONTHLY exige dueDay; BIWEEKLY exige dueDay + secondDueDay; WEEKLY exige weekday;
+  // BIWEEKLY_ROLLING exige anchorDate. Validado no service (depende da frequência), não
+  // aqui, pro update parcial continuar simples.
   dueDay: z.coerce.number().int().min(1, "Dia inválido").max(31, "Dia inválido").optional(),
   secondDueDay: z.coerce.number().int().min(1, "Dia inválido").max(31, "Dia inválido").optional(),
   weekday: z.coerce.number().int().min(0, "Dia da semana inválido").max(6, "Dia da semana inválido").optional(),
+  anchorDate: z.coerce.date().optional(),
   categoryId: z.string().optional(),
   counterpartyId: z.string().optional(),
   creditCardId: z.string().optional(),

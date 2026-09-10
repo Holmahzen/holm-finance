@@ -14,7 +14,14 @@ import {
 } from "@/domain/cashReserve";
 
 function monthlyAmount(
-  fc: { frequency: "MONTHLY" | "BIWEEKLY" | "WEEKLY"; dueDay: number | null; secondDueDay: number | null; weekday: number | null; amount: unknown },
+  fc: {
+    frequency: "MONTHLY" | "BIWEEKLY" | "WEEKLY" | "BIWEEKLY_ROLLING";
+    dueDay: number | null;
+    secondDueDay: number | null;
+    weekday: number | null;
+    anchorDate: Date | null;
+    amount: unknown;
+  },
   year: number,
   month: number,
 ) {

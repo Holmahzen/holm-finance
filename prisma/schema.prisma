@@ -350,6 +350,7 @@ enum FixedCostFrequency {
   MONTHLY
   BIWEEKLY
   WEEKLY
+  BIWEEKLY_ROLLING
 }
 
 model FixedCost {
@@ -358,10 +359,14 @@ model FixedCost {
   description    String
   amount         Decimal            @db.Decimal(14, 2)
   frequency      FixedCostFrequency @default(MONTHLY)
-  // MONTHLY: dia do mês. BIWEEKLY: dueDay = 1º dia, secondDueDay = 2º dia. WEEKLY: weekday (0=domingo..6=sábado), dueDay/secondDueDay não usados.
+  // MONTHLY: dia do mês. BIWEEKLY: dueDay = 1º dia, secondDueDay = 2º dia (dois dias fixos por mês).
+  // WEEKLY: weekday (0=domingo..6=sábado), dueDay/secondDueDay não usados.
+  // BIWEEKLY_ROLLING: anchorDate = data-base; ocorrências caem a cada 14 dias corridos a partir
+  // dela, sem resetar no início do mês (as datas vão mudando mês a mês, diferente de BIWEEKLY).
   dueDay         Int?
   secondDueDay   Int?
   weekday        Int?
+  anchorDate     DateTime?
   categoryId     String?
   category       Category?     @relation(fields: [categoryId], references: [id])
   counterpartyId String?
