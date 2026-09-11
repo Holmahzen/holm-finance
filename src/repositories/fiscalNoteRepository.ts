@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import type { ParsedFiscalNote } from "@/parsers/nfe/nfeParser";
 import type { FiscalItemRow, FiscalNoteDirection } from "@/domain/fiscalNotes";
+import type { NcmAuditRow } from "@/domain/ncmAudit";
 
 export type NoteToSave = ParsedFiscalNote & { direction: FiscalNoteDirection };
 
@@ -153,6 +154,23 @@ export const fiscalNoteRepository = {
       FROM "fiscal_note_items" i
       JOIN "fiscal_notes" n ON n."id" = i."noteId"
       WHERE n."issueMonth" >= ${fromMonth}`;
+  },
+
+  /** Itens das notas de saída não canceladas, com o que a conferência de NCM precisa. */
+  findSaleItemsForNcmAudit(): Promise<NcmAuditRow[]> {
+    return prisma.$queryRaw<NcmAuditRow[]>`
+      SELECT
+        i."productCode",
+        i."description",
+        i."ncm",
+        i."cfop",
+        i."netValue"::float8 AS "netValue",
+        i."quantity"::float8 AS "quantity",
+        n."issuerName",
+        to_char(n."issuedAt" AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') AS "issuedOn"
+      FROM "fiscal_note_items" i
+      JOIN "fiscal_notes" n ON n."id" = i."noteId"
+      WHERE n."direction" = 'SAIDA' AND n."cancelledAt" IS NULL`;
   },
 
   async getImportSummary() {
