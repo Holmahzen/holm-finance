@@ -679,36 +679,48 @@ export default function NotasFiscaisPage() {
                     <th className="px-4 py-3 text-right font-medium">SP</th>
                     <th className="px-4 py-3 text-right font-medium">Compras</th>
                     <th className="px-4 py-3 text-right font-medium">Serviços ML</th>
+                    <th
+                      className="px-4 py-3 text-right font-medium"
+                      title="Serviços ML (frete + Ebazar + Mercado Pago) dividido pelo faturamento do mês."
+                    >
+                      % Faturamento
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {monthsDesc.map((m) => (
-                    <tr
-                      key={m.month}
-                      onClick={() => setMonth(m.month)}
-                      className={`cursor-pointer border-t border-border transition hover:bg-surface-hover ${
-                        m.month === report.month ? "bg-gold/10" : ""
-                      }`}
-                    >
-                      <td className="px-4 py-2 text-foreground">{monthLabel(m.month)}</td>
-                      <td className="px-4 py-2 text-right text-muted tabular-nums">{int(m.saleNotes)}</td>
-                      <td className="px-4 py-2 text-right text-foreground tabular-nums">{formatBRL(m.grossSales)}</td>
-                      <td className="px-4 py-2 text-right text-muted tabular-nums">{formatBRL(m.returns)}</td>
-                      <td className="px-4 py-2 text-right font-medium text-gold tabular-nums">
-                        {formatBRL(m.netSales)}
-                        {m.saleNotes === 0 && m.returns > 0 && (
-                          <span className="block text-xs font-normal text-amber-300">
-                            só devoluções — vendas do mês não importadas
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 text-right text-muted tabular-nums">{pct(m.spShare)}</td>
-                      <td className="px-4 py-2 text-right text-muted tabular-nums">{formatBRL(m.purchases)}</td>
-                      <td className="px-4 py-2 text-right text-muted tabular-nums">
-                        {report.mlServices.monthTotals[m.month] ? formatBRL(report.mlServices.monthTotals[m.month]) : "—"}
-                      </td>
-                    </tr>
-                  ))}
+                  {monthsDesc.map((m) => {
+                    const mlTotal = report.mlServices.monthTotals[m.month];
+                    return (
+                      <tr
+                        key={m.month}
+                        onClick={() => setMonth(m.month)}
+                        className={`cursor-pointer border-t border-border transition hover:bg-surface-hover ${
+                          m.month === report.month ? "bg-gold/10" : ""
+                        }`}
+                      >
+                        <td className="px-4 py-2 text-foreground">{monthLabel(m.month)}</td>
+                        <td className="px-4 py-2 text-right text-muted tabular-nums">{int(m.saleNotes)}</td>
+                        <td className="px-4 py-2 text-right text-foreground tabular-nums">{formatBRL(m.grossSales)}</td>
+                        <td className="px-4 py-2 text-right text-muted tabular-nums">{formatBRL(m.returns)}</td>
+                        <td className="px-4 py-2 text-right font-medium text-gold tabular-nums">
+                          {formatBRL(m.netSales)}
+                          {m.saleNotes === 0 && m.returns > 0 && (
+                            <span className="block text-xs font-normal text-amber-300">
+                              só devoluções — vendas do mês não importadas
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-right text-muted tabular-nums">{pct(m.spShare)}</td>
+                        <td className="px-4 py-2 text-right text-muted tabular-nums">{formatBRL(m.purchases)}</td>
+                        <td className="px-4 py-2 text-right text-muted tabular-nums">
+                          {mlTotal ? formatBRL(mlTotal) : "—"}
+                        </td>
+                        <td className="px-4 py-2 text-right text-muted tabular-nums">
+                          {mlTotal && m.netSales > 0 ? pct(mlTotal / m.netSales) : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
