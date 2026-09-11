@@ -12,6 +12,15 @@ const nextConfig: NextConfig = {
   // exatamente o tipo de coisa que trava a função em produção mesmo quando
   // só se usa getText() (que nunca toca canvas).
   serverExternalPackages: ["pdf-parse", "@napi-rs/canvas"],
+  // pdf-parse importa o worker do pdfjs-dist dinamicamente (pra rodar "no
+  // mesmo processo" quando não há worker_threads de verdade) — o
+  // rastreamento de arquivos do Vercel não segue esse import e deixa
+  // pdf.worker.mjs de fora do pacote da função, quebrando em produção com
+  // "Cannot find module .../pdf.worker.mjs" mesmo com o arquivo existindo
+  // em node_modules localmente. Incluir a pasta manualmente resolve.
+  outputFileTracingIncludes: {
+    "/api/imports/ml-services": ["./node_modules/pdfjs-dist/legacy/build/*.mjs"],
+  },
 };
 
 export default nextConfig;
