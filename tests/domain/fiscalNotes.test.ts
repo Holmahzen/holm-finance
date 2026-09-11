@@ -26,6 +26,8 @@ function row(overrides: Partial<FiscalItemRow> = {}): FiscalItemRow {
     issuerDocument: HOLM,
     issuerName: "Holm Confeccoes",
     issuerCrt: 1,
+    ncm: "61059000",
+    description: "JALECO",
     cfop: "5102",
     netValue: 100,
     icmsCode: "102",

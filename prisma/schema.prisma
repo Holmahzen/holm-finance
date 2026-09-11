@@ -359,6 +359,32 @@ model FiscalNoteCancellation {
   @@map("fiscal_note_cancellations")
 }
 
+/**
+ * NFS-e que empresas do grupo Mercado Livre emitem contra a Holm (Ebazar e
+ * filiais de envio, Mercado Pago), lidas do PDF "Demonstrativo de Nota
+ * Fiscal". Quase tudo já saiu descontado dos repasses: é custo do mês,
+ * nunca conta a pagar — lançar como conta contaria o custo duas vezes.
+ */
+model MlServiceInvoice {
+  id               String   @id @default(cuid())
+  /** Link da nota na prefeitura, ou prestador+data+valor+arquivo quando o
+   * link é genérico (ver `mlServiceDedupeKey`). Reimportar não duplica. */
+  dedupeKey        String   @unique
+  providerName     String
+  providerDocument String
+  providerCity     String
+  amount           Decimal  @db.Decimal(14, 2)
+  /** "YYYY-MM" do campo MÊS REF. */
+  referenceMonth   String
+  issuedOn         DateTime @db.Date
+  link             String?
+  sourceFileName   String
+  importedAt       DateTime @default(now())
+
+  @@index([referenceMonth])
+  @@map("ml_service_invoices")
+}
+
 model SalesImportBatch {
   id             String   @id @default(cuid())
   fileName       String

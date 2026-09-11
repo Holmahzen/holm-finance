@@ -143,6 +143,8 @@ export const fiscalNoteRepository = {
         n."issuerDocument",
         n."issuerName",
         n."issuerCrt",
+        i."ncm",
+        i."description",
         i."cfop",
         i."netValue"::float8 AS "netValue",
         i."icmsCode",

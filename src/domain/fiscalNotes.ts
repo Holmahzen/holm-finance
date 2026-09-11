@@ -71,6 +71,8 @@ export type FiscalItemRow = {
   issuerDocument: string;
   issuerName: string;
   issuerCrt: number | null;
+  ncm: string;
+  description: string;
   cfop: string;
   netValue: number;
   icmsCode: string | null;
@@ -107,7 +109,7 @@ export type MonthSummary = {
   otherOutflows: number;
 };
 
-function emptyMonth(month: string): MonthSummary {
+export function emptyMonth(month: string): MonthSummary {
   return {
     month, saleNotes: 0, grossSales: 0, returns: 0, netSales: 0, spSales: 0, spShare: 0,
     cancelledNotes: 0, purchaseNotes: 0, purchases: 0, purchaseIcms: 0, purchaseSimplesCredit: 0,
