@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { reconciliationMatchRepository } from "@/repositories/reconciliationMatchRepository";
-import { matchEntriesToTransactions } from "@/matching/reconciliationMatcher";
+import { matchEntriesToTransactions, rejectedPairKey } from "@/matching/reconciliationMatcher";
 import { NotFoundError, DomainError } from "@/domain/errors";
 
 /** Quantos upserts de sugestão vão ao banco de uma vez. */
@@ -22,10 +22,15 @@ export const reconciliationService = {
    * conciliação, onde a analista está esperando justamente a varredura ampla.
    */
   async runMatching(opts: { importBatchId?: string } = {}) {
-    const [entries, transactions] = await Promise.all([
+    const [entries, transactions, rejectedPairRows] = await Promise.all([
       reconciliationMatchRepository.findUnmatchedEntries(),
       reconciliationMatchRepository.findUnmatchedTransactions(opts.importBatchId),
+      reconciliationMatchRepository.findAllRejectedPairs(),
     ]);
+
+    const rejectedPairs = new Set(
+      rejectedPairRows.map((r) => rejectedPairKey(r.entryId, r.importedTransactionId)),
+    );
 
     const candidates = matchEntriesToTransactions(
       entries.map((e) => ({
@@ -44,6 +49,7 @@ export const reconciliationService = {
         parsedDocument: t.parsedDocument,
         parsedCounterpartyName: t.parsedCounterpartyName,
       })),
+      rejectedPairs,
     );
 
     /* Em lotes paralelos, não um a um: cada upsert é uma ida ao banco, e
@@ -123,10 +129,29 @@ export const reconciliationService = {
     if (match.status !== "SUGGESTED") {
       throw new DomainError(`Sugestão já está com status ${match.status}.`);
     }
+    if (!match.entryId) {
+      throw new DomainError("Sugestão sem lançamento vinculado.");
+    }
 
-    return reconciliationMatchRepository.update(id, {
-      status: "REJECTED",
-      entryId: null,
+    // Grava o par como rejeitado permanentemente (não volta a ser sugerido
+    // de novo) antes de liberar os dois lados pra tentar casar com outra
+    // transação/lançamento.
+    return prisma.$transaction(async (tx) => {
+      await tx.rejectedMatchPair.upsert({
+        where: {
+          importedTransactionId_entryId: {
+            importedTransactionId: match.importedTransactionId,
+            entryId: match.entryId!,
+          },
+        },
+        create: { importedTransactionId: match.importedTransactionId, entryId: match.entryId! },
+        update: {},
+      });
+
+      return tx.reconciliationMatch.update({
+        where: { id },
+        data: { status: "REJECTED", entryId: null },
+      });
     });
   },
 

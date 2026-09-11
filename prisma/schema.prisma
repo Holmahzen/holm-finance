@@ -228,6 +228,7 @@ model Entry {
   updatedAt          DateTime          @updatedAt
 
   reconciliationMatch ReconciliationMatch?
+  rejectedMatchPairs  RejectedMatchPair[]
 
   @@index([status, dueDate])
   @@map("entries")
@@ -545,6 +546,7 @@ model ImportedTransaction {
   createdAt              DateTime         @default(now())
 
   reconciliationMatch ReconciliationMatch?
+  rejectedMatchPairs  RejectedMatchPair[]
 
   @@unique([bankAccountId, fitId])
   @@map("imported_transactions")
@@ -564,6 +566,25 @@ model ReconciliationMatch {
   updatedAt             DateTime             @updatedAt
 
   @@map("reconciliation_matches")
+}
+
+/**
+ * Histórico permanente de pares (lançamento, transação) que a analista já
+ * rejeitou explicitamente — separado do ReconciliationMatch (que só guarda
+ * o estado ATUAL de cada transação/lançamento, um registro por um) porque
+ * rejeitar precisa liberar os dois lados pra casar com outra coisa, mas sem
+ * deixar o algoritmo sugerir esse MESMO par de novo, indefinidamente.
+ */
+model RejectedMatchPair {
+  id                    String              @id @default(cuid())
+  importedTransactionId String
+  importedTransaction   ImportedTransaction @relation(fields: [importedTransactionId], references: [id], onDelete: Cascade)
+  entryId               String
+  entry                 Entry               @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  rejectedAt            DateTime            @default(now())
+
+  @@unique([importedTransactionId, entryId])
+  @@map("rejected_match_pairs")
 }
 
 model ReserveDeposit {

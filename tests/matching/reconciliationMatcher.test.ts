@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { matchEntriesToTransactions } from "@/matching/reconciliationMatcher";
+import { matchEntriesToTransactions, rejectedPairKey } from "@/matching/reconciliationMatcher";
 import { nameSimilarity } from "@/matching/nameSimilarity";
 import type { MatchableEntry, MatchableTransaction } from "@/matching/types";
 
@@ -80,6 +80,21 @@ describe("matchEntriesToTransactions", () => {
 
     expect(result).toHaveLength(1);
     expect(result[0].entryId).toBe("entry-close");
+  });
+
+  it("does not re-suggest a pair that was already rejected, even if it's still the best score", () => {
+    const rejectedPairs = new Set([rejectedPairKey("entry-1", "tx-1")]);
+    const result = matchEntriesToTransactions([entry()], [transaction()], rejectedPairs);
+    expect(result).toHaveLength(0);
+  });
+
+  it("still lets a rejected entry/transaction match a different counterpart", () => {
+    // entry-1 x tx-1 foi rejeitado, mas entry-1 ainda pode casar com tx-2.
+    const rejectedPairs = new Set([rejectedPairKey("entry-1", "tx-1")]);
+    const otherTransaction = transaction({ id: "tx-2" });
+    const result = matchEntriesToTransactions([entry()], [otherTransaction], rejectedPairs);
+    expect(result).toHaveLength(1);
+    expect(result[0].importedTransactionId).toBe("tx-2");
   });
 
   it("recognizes similar counterparty names ignoring LTDA suffix and accents", () => {

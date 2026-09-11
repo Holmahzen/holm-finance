@@ -19,19 +19,32 @@ function amountMatches(entry: MatchableEntry, transaction: MatchableTransaction)
   return Math.abs(Number(entry.amount) - Math.abs(Number(transaction.amount))) <= AMOUNT_TOLERANCE;
 }
 
+export function rejectedPairKey(entryId: string, importedTransactionId: string): string {
+  return `${entryId}:${importedTransactionId}`;
+}
+
 /**
  * Pure matching core: no DB access. Produces candidate matches above the
  * suggestion threshold, then greedily assigns the highest-scoring pairs
  * (one entry per transaction).
+ *
+ * `rejectedPairs` exclui pares (lançamento, transação) que a analista já
+ * rejeitou explicitamente antes — sem isso, o mesmo par volta a ser sugerido
+ * toda vez que a conciliação roda de novo, porque rejeitar libera os dois
+ * lados (entry e transação) pra tentar casar com outra coisa, mas nada
+ * impede o algoritmo de escolher exatamente o mesmo par de novo se ainda for
+ * o de maior score disponível.
  */
 export function matchEntriesToTransactions(
   entries: MatchableEntry[],
   transactions: MatchableTransaction[],
+  rejectedPairs: ReadonlySet<string> = new Set(),
 ): MatchCandidate[] {
   const candidates: MatchCandidate[] = [];
 
   for (const transaction of transactions) {
     for (const entry of entries) {
+      if (rejectedPairs.has(rejectedPairKey(entry.id, transaction.id))) continue;
       if (!directionMatches(entry, transaction)) continue;
       if (!amountMatches(entry, transaction)) continue;
 

@@ -72,4 +72,18 @@ export const reconciliationMatchRepository = {
       orderBy: { postedAt: "asc" },
     });
   },
+
+  findAllRejectedPairs() {
+    return prisma.rejectedMatchPair.findMany({
+      select: { entryId: true, importedTransactionId: true },
+    });
+  },
+
+  recordRejectedPair(importedTransactionId: string, entryId: string) {
+    return prisma.rejectedMatchPair.upsert({
+      where: { importedTransactionId_entryId: { importedTransactionId, entryId } },
+      create: { importedTransactionId, entryId },
+      update: {},
+    });
+  },
 };
