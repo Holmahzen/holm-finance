@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { formatBRL } from "@/lib/format";
 import { PrintButton } from "@/components/PrintButton";
 
 type AlertLevel = "ok" | "atencao" | "critico";
 
-type MonthlyRevenue = { year: number; month: number; revenue: number };
+type MonthlyRevenue = { year: number; month: number; revenue: number; source: "notas" | "dre" };
 
 type Report = {
   period: { year: number; month: number };
@@ -21,6 +22,7 @@ type Report = {
   projectedYearEnd: number | null;
   projectedYearEndPercentOfCeiling: number | null;
   alertLevel: AlertLevel;
+  sources: { notas: number; dre: number };
 };
 
 const MONTHS = [
@@ -76,12 +78,12 @@ export default function SimplesNacionalPage() {
       </div>
 
       <div className="rounded-lg border border-border bg-surface p-4 text-xs text-muted">
-        <strong className="text-foreground">Como isso é calculado:</strong> soma a receita bruta{" "}
-        <em>já paga e registrada no sistema</em> (mesma base da DRE), mês a mês — não é o cálculo
-        oficial do contador, que usa a data de emissão da nota fiscal (regime de competência), não a
-        data em que o dinheiro entrou. Pode haver uma pequena defasagem entre os dois. Use isso como
-        alerta antecipado, e confirme o enquadramento exato com seu contador antes de qualquer
-        decisão.
+        <strong className="text-foreground">Como isso é calculado:</strong> mês com notas de venda
+        importadas em <Link href="/notas-fiscais" className="text-gold-soft underline underline-offset-2">Notas
+        Fiscais</Link> usa o faturamento das notas — vendas menos devoluções, pela data de emissão, que é a
+        base do Simples. Mês sem notas usa a DRE, que só registra o dinheiro que entrou no banco: nas vendas
+        do Mercado Livre isso é o repasse, já sem as tarifas, então fica bem abaixo do faturamento real. Use
+        como alerta antecipado e confirme o enquadramento exato com seu contador antes de qualquer decisão.
       </div>
 
       {loading || !report ? (
@@ -116,6 +118,25 @@ export default function SimplesNacionalPage() {
               recolhimento de ICMS/ISS (não tira do Simples): {formatBRL(report.sublimit)}
             </p>
           </div>
+
+          {report.sources.dre > 0 && (
+            <div className="no-print rounded-lg border border-amber-400/40 bg-amber-400/10 p-4 text-sm text-amber-100">
+              {report.sources.notas === 0 ? (
+                <>Nenhum dos 12 meses tem notas de venda importadas, então tudo aqui vem da DRE</>
+              ) : (
+                <>
+                  {report.sources.dre} dos 12 meses ainda {report.sources.dre === 1 ? "vem" : "vêm"} da DRE
+                  (marcados abaixo)
+                </>
+              )}{" "}
+              e a receita dos últimos 12 meses está <strong className="text-amber-300">abaixo do real</strong>.
+              Importe os XMLs das notas de venda desses meses em{" "}
+              <Link href="/notas-fiscais" className="text-amber-300 underline underline-offset-2">
+                Notas Fiscais
+              </Link>{" "}
+              — o valor aqui atualiza sozinho.
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
@@ -197,6 +218,7 @@ export default function SimplesNacionalPage() {
                 <tr className="border-b border-border text-muted">
                   <th className="py-2 font-medium">Mês</th>
                   <th className="py-2 font-medium">Receita bruta</th>
+                  <th className="py-2 font-medium">Fonte</th>
                 </tr>
               </thead>
               <tbody>
@@ -211,6 +233,22 @@ export default function SimplesNacionalPage() {
                       )}
                     </td>
                     <td className="py-2 text-foreground">{formatBRL(m.revenue)}</td>
+                    <td className="py-2">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs ${
+                          m.source === "notas"
+                            ? "bg-emerald-500/15 text-emerald-400"
+                            : "bg-amber-400/15 text-amber-300"
+                        }`}
+                        title={
+                          m.source === "notas"
+                            ? "Faturamento pelas notas fiscais de venda importadas"
+                            : "Sem notas importadas: dinheiro que entrou no banco, pela DRE"
+                        }
+                      >
+                        {m.source === "notas" ? "notas" : "DRE"}
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>

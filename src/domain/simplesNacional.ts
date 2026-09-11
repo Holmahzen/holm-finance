@@ -7,6 +7,32 @@ const ALERT_THRESHOLD_CRITICO_PERCENT = 95;
 
 export type MonthlyRevenue = { year: number; month: number; revenue: number };
 
+export type RevenueSource = "notas" | "dre";
+
+export type SourcedMonthlyRevenue = MonthlyRevenue & { source: RevenueSource };
+
+/**
+ * Receita de cada mês: pelas notas fiscais quando o mês tem nota de venda
+ * importada (vendas − devoluções pela data de emissão, a base que o Simples
+ * usa); senão pela DRE, que só registra o dinheiro que entrou no banco — nas
+ * vendas do marketplace é o repasse, já sem as tarifas, então fica bem abaixo
+ * do faturamento real. Mês só com devoluções importadas também cai na DRE:
+ * sem as vendas, o valor das notas sairia negativo.
+ * As chaves dos dois mapas são "YYYY-MM".
+ */
+export function pickMonthlyRevenues(
+  months: { year: number; month: number }[],
+  fromNotes: Record<string, { netSales: number; saleNotes: number }>,
+  fromDre: Record<string, number>,
+): SourcedMonthlyRevenue[] {
+  return months.map(({ year, month }) => {
+    const key = `${year}-${String(month).padStart(2, "0")}`;
+    const notes = fromNotes[key];
+    if (notes && notes.saleNotes > 0) return { year, month, revenue: notes.netSales, source: "notas" };
+    return { year, month, revenue: fromDre[key] ?? 0, source: "dre" };
+  });
+}
+
 export type AlertLevel = "ok" | "atencao" | "critico";
 
 export type SimplesNacionalStatus = {

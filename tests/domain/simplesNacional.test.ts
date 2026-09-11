@@ -1,5 +1,35 @@
 import { describe, it, expect } from "vitest";
-import { computeTrailingMonths, computeSimplesNacionalStatus } from "@/domain/simplesNacional";
+import { computeTrailingMonths, computeSimplesNacionalStatus, pickMonthlyRevenues } from "@/domain/simplesNacional";
+
+describe("pickMonthlyRevenues", () => {
+  const months = [
+    { year: 2026, month: 7 },
+    { year: 2026, month: 8 },
+    { year: 2026, month: 9 },
+  ];
+
+  it("usa as notas quando o mês tem venda importada e a DRE nos outros", () => {
+    const result = pickMonthlyRevenues(
+      months,
+      {
+        "2026-08": { netSales: -11_180.53, saleNotes: 0 }, // só devoluções importadas
+        "2026-09": { netSales: 153_985.19, saleNotes: 2529 },
+      },
+      { "2026-07": 194_775, "2026-08": 224_913, "2026-09": 90_000 },
+    );
+    expect(result).toEqual([
+      { year: 2026, month: 7, revenue: 194_775, source: "dre" },
+      { year: 2026, month: 8, revenue: 224_913, source: "dre" },
+      { year: 2026, month: 9, revenue: 153_985.19, source: "notas" },
+    ]);
+  });
+
+  it("mês sem notas nem DRE vira zero, pela DRE", () => {
+    expect(pickMonthlyRevenues([{ year: 2025, month: 10 }], {}, {})).toEqual([
+      { year: 2025, month: 10, revenue: 0, source: "dre" },
+    ]);
+  });
+});
 
 describe("computeTrailingMonths", () => {
   it("returns the 12 months ending at the given month, crossing the year boundary", () => {
