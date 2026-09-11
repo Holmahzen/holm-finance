@@ -12,6 +12,7 @@ const navItems = [
   { href: "/cartao-credito", label: "Cartão de Crédito" },
   { href: "/fluxo-de-caixa", label: "Fluxo de Caixa" },
   { href: "/reserva-de-caixa", label: "Reserva de Caixa" },
+  { href: "/simples-nacional", label: "Simples Nacional" },
   { href: "/custos-fixos", label: "Custos fixos" },
   { href: "/emprestimos", label: "Empréstimos" },
   { href: "/produtos", label: "Produtos" },
