@@ -14,7 +14,10 @@ const DIAS_ATE_ENVELHECER = 7;
 function formatarData(iso: string | null): string | null {
   if (!iso) return null;
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString("pt-BR");
+  // As datas de extrato são gravadas em meia-noite UTC (mesma convenção do
+  // resto do sistema) — formatar sem fixar o fuso usa o fuso do navegador
+  // (America/Sao_Paulo, UTC-3) e mostra o dia anterior ao real.
+  return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString("pt-BR", { timeZone: "UTC" });
 }
 
 /**
