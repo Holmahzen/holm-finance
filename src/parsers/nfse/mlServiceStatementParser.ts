@@ -50,12 +50,29 @@ export function parseMlServiceStatementText(text: string): ParsedMlServiceStatem
   };
 }
 
+/**
+ * O worker que o pdf-parse carrega (pdfjs-dist) referencia `DOMMatrix` no
+ * escopo do módulo — existe em navegador/worker de browser, mas não em
+ * Node.js, então carregar o pacote crasha com "DOMMatrix is not defined"
+ * em produção (confirmado batendo direto na rota; localmente não aparecia
+ * porque nunca tínhamos testado o build de produção real). @napi-rs/canvas
+ * (já é dependência do pdf-parse) exporta uma implementação de verdade —
+ * só falta registrá-la global antes do pdf-parse ser carregado.
+ */
+async function ensureDomMatrixPolyfill() {
+  if (typeof globalThis.DOMMatrix !== "undefined") return;
+  const { DOMMatrix } = await import("@napi-rs/canvas");
+  // @ts-expect-error -- polyfill de ambiente Node, não é o DOMMatrix do lib.dom.
+  globalThis.DOMMatrix = DOMMatrix;
+}
+
 export async function parseMlServiceStatementPdf(buffer: Buffer): Promise<ParsedMlServiceStatement> {
   // Import dinâmico: se o binário nativo de alguma dependência do pdf-parse
   // falhar ao carregar em produção, o erro vira uma exceção normal, pega
   // pelo try/catch de quem chama esta função (por arquivo) — em vez de um
   // import estático travando o carregamento do módulo inteiro da rota, que
   // aparece como erro 500 genérico do Next sem nenhuma mensagem útil.
+  await ensureDomMatrixPolyfill();
   const { PDFParse } = await import("pdf-parse");
   const parser = new PDFParse({ data: buffer });
   let text: string;
