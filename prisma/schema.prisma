@@ -264,6 +264,101 @@ model CreditCardPurchase {
   @@map("credit_card_purchases")
 }
 
+enum FiscalNoteDirection {
+  SAIDA
+  ENTRADA_PROPRIA
+  ENTRADA_TERCEIRO
+}
+
+/**
+ * NF-e (modelo 55) lida do XML — as de venda que a Holm emite (Tiny, devoluções
+ * do Mercado Livre) e as de compra que os fornecedores mandam. Uma linha por
+ * chave de acesso: importar o mesmo XML de novo regrava em vez de duplicar.
+ * `direction` diz de que lado a Holm está (ver `classifyDirection`).
+ */
+model FiscalNote {
+  id                   String              @id @default(cuid())
+  accessKey            String              @unique
+  direction            FiscalNoteDirection
+  /** finNFe: 1 normal, 2 complementar, 3 ajuste, 4 devolução. */
+  purpose              Int
+  /** tpNF do ponto de vista de quem emitiu: 0 entrada, 1 saída. */
+  operationType        Int
+  natureOfOperation    String
+  number               Int
+  series               Int
+  issuedAt             DateTime
+  /** "YYYY-MM" tirado do texto de dhEmi — agrupar por issuedAt em UTC jogaria
+   * notas da noite do último dia no mês seguinte. */
+  issueMonth           String
+  issuerDocument       String
+  issuerName           String
+  issuerUf             String
+  issuerCrt            Int?
+  recipientDocument    String?
+  recipientName        String?
+  recipientUf          String?
+  finalConsumer        Boolean
+  intermediaryDocument String?
+  productsTotal        Decimal             @db.Decimal(14, 2)
+  discountTotal        Decimal             @db.Decimal(14, 2)
+  freightTotal         Decimal             @db.Decimal(14, 2)
+  otherTotal           Decimal             @db.Decimal(14, 2)
+  total                Decimal             @db.Decimal(14, 2)
+  icmsTotal            Decimal             @db.Decimal(14, 2)
+  icmsStTotal          Decimal             @db.Decimal(14, 2)
+  ipiTotal             Decimal             @db.Decimal(14, 2)
+  pisTotal             Decimal             @db.Decimal(14, 2)
+  cofinsTotal          Decimal             @db.Decimal(14, 2)
+  difalTotal           Decimal             @db.Decimal(14, 2)
+  simplesCreditTotal   Decimal             @db.Decimal(14, 2)
+  referencedKeys       String[]
+  cancelledAt          DateTime?
+  importedAt           DateTime            @default(now())
+
+  items FiscalNoteItem[]
+
+  @@index([issueMonth])
+  @@index([issuerDocument])
+  @@map("fiscal_notes")
+}
+
+model FiscalNoteItem {
+  id                 String     @id @default(cuid())
+  noteId             String
+  note               FiscalNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  itemNumber         Int
+  productCode        String
+  description        String
+  ncm                String
+  cfop               String
+  quantity           Decimal    @db.Decimal(15, 4)
+  grossValue         Decimal    @db.Decimal(14, 2)
+  discount           Decimal    @db.Decimal(14, 2)
+  netValue           Decimal    @db.Decimal(14, 2)
+  icmsCode           String?
+  icmsBase           Decimal    @db.Decimal(14, 2)
+  icmsRate           Decimal    @db.Decimal(7, 4)
+  icmsValue          Decimal    @db.Decimal(14, 2)
+  simplesCreditValue Decimal    @db.Decimal(14, 2)
+
+  @@index([noteId])
+  @@map("fiscal_note_items")
+}
+
+/**
+ * Cancelamentos lidos dos XMLs de evento, guardados à parte: o evento pode
+ * chegar num .zip antes (ou sem) a própria nota, e precisa valer quando ela
+ * for importada depois.
+ */
+model FiscalNoteCancellation {
+  accessKey   String   @id
+  cancelledAt DateTime
+  importedAt  DateTime @default(now())
+
+  @@map("fiscal_note_cancellations")
+}
+
 model SalesImportBatch {
   id             String   @id @default(cuid())
   fileName       String
