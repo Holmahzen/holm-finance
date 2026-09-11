@@ -1,5 +1,3 @@
-import { PDFParse } from "pdf-parse";
-
 /**
  * "Demonstrativo de Nota Fiscal Eletrônica" que o Mercado Livre manda para
  * cada NFS-e emitida contra a Holm por uma empresa do grupo (Ebazar e suas
@@ -53,6 +51,12 @@ export function parseMlServiceStatementText(text: string): ParsedMlServiceStatem
 }
 
 export async function parseMlServiceStatementPdf(buffer: Buffer): Promise<ParsedMlServiceStatement> {
+  // Import dinâmico: se o binário nativo de alguma dependência do pdf-parse
+  // falhar ao carregar em produção, o erro vira uma exceção normal, pega
+  // pelo try/catch de quem chama esta função (por arquivo) — em vez de um
+  // import estático travando o carregamento do módulo inteiro da rota, que
+  // aparece como erro 500 genérico do Next sem nenhuma mensagem útil.
+  const { PDFParse } = await import("pdf-parse");
   const parser = new PDFParse({ data: buffer });
   let text: string;
   try {

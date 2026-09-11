@@ -35,9 +35,7 @@ export const mlServiceImportService = {
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : "";
-        const reason = message.startsWith("não é um demonstrativo") || message.startsWith("demonstrativo sem")
-          ? message
-          : "PDF que não pôde ser lido";
+        const reason = message || "PDF que não pôde ser lido";
         const entry = ignored.get(reason);
         if (entry) entry.count += 1;
         else ignored.set(reason, { count: 1, example: file.name });
