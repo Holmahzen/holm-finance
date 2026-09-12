@@ -617,3 +617,16 @@ model BalanceSheetItem {
 
   @@map("balance_sheet_items")
 }
+
+/**
+ * Chave de acesso bipada de uma nota impressa (o código de barras do DANFE).
+ * Serve para reconhecer a nota antes do XML: enquanto ele não é importado, a
+ * chave aparece como pendente na tela de Notas Fiscais. A lista de pendentes é
+ * um LEFT JOIN com fiscal_notes, então a chave some sozinha quando o XML entra.
+ */
+model ScannedNoteKey {
+  accessKey String   @id
+  scannedAt DateTime @default(now())
+
+  @@map("scanned_note_keys")
+}

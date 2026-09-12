@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { formatBRL } from "@/lib/format";
 import { HorizontalBarChart } from "@/components/HorizontalBarChart";
 import { decodeXml, isZip, readZip } from "@/lib/zipReader";
+import { ScanNotePanel } from "@/components/ScanNotePanel";
 import { SIMPLES_NACIONAL_CEILING, SIMPLES_NACIONAL_SUBLIMIT } from "@/domain/simplesNacional";
 
 type Group = { key: string; label: string; notes: number; value: number; share: number };
@@ -536,6 +537,8 @@ export default function NotasFiscaisPage() {
           </p>
         )}
       </div>
+
+      <ScanNotePanel onChanged={reload} />
 
       {report.noteCount === 0 || !selected || !detail ? (
         <ImportPanel onImported={reload} compact={false} />
