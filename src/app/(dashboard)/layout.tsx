@@ -21,6 +21,7 @@ const navItems = [
   { href: "/vendas", label: "Vendas" },
   { href: "/notas-fiscais", label: "Notas Fiscais" },
   { href: "/conferencia-ncm", label: "Conferência de NCM" },
+  { href: "/notas-da-receita", label: "Notas da Receita" },
   { href: "/recebiveis-ml", label: "Recebíveis ML" },
   { href: "/dre", label: "DRE" },
   { href: "/relatorio-mensal", label: "Relatório Mensal" },

@@ -638,3 +638,46 @@ model ScannedNoteKey {
 
   @@map("scanned_note_keys")
 }
+
+/**
+ * Até que ponto a leitura da Distribuicao DF-e (Receita) ja chegou. O servico
+ * entrega os documentos por numero sequencial (NSU), entao basta guardar o
+ * ultimo lido para a proxima consulta continuar de onde parou.
+ */
+model SefazDistributionState {
+  id          String    @id @default("default")
+  lastNsu     String    @default("0")
+  maxNsu      String?
+  lastRunAt   DateTime?
+  lastStatus  String?
+  lastMessage String?
+
+  @@map("sefaz_distribution_state")
+}
+
+/**
+ * Documento entregue pela Receita contra o CNPJ da empresa: resumo de nota de
+ * fornecedor (sem itens), nota inteira (so depois da manifestacao) ou evento.
+ */
+model SefazDocument {
+  nsu            String    @id
+  schema         String
+  /** resumo, nota, evento ou outro. */
+  kind           String
+  accessKey      String?
+  issuerDocument String?
+  issuerName     String?
+  issuedAt       DateTime?
+  total          Decimal?  @db.Decimal(14, 2)
+  /** cSitNFe no resumo (1 autorizada, 2 cancelada, 3 denegada) ou tpEvento. */
+  situation      String?
+  /** XML ja descompactado; quando e nota inteira, e ele que vira FiscalNote. */
+  xml            String
+  /** Ja foi importado para fiscal_notes. */
+  imported       Boolean   @default(false)
+  fetchedAt      DateTime  @default(now())
+
+  @@index([accessKey])
+  @@index([kind])
+  @@map("sefaz_documents")
+}
