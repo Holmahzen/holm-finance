@@ -863,9 +863,9 @@ export default function NotasFiscaisPage() {
                           <td className="px-4 py-2 text-muted">{inv.providerCity}</td>
                           <td className="px-4 py-2 text-muted">{mlLabels.get(inv.category) ?? inv.category}</td>
                           <td className="px-4 py-2 text-muted">
-                            {inv.source === "NFSE_BARUERI"
-                              ? `NFS-e nº ${inv.documentNumber ?? "—"}`
-                              : "demonstrativo ML"}
+                            {inv.source === "ML_DEMONSTRATIVO"
+                              ? "demonstrativo ML"
+                              : `NFS-e nº ${inv.documentNumber ?? "—"}`}
                           </td>
                           <td className="px-4 py-2 text-right text-foreground tabular-nums">{formatBRL(inv.amount)}</td>
                           <td className="px-4 py-2">

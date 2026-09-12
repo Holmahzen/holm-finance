@@ -1,6 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { parseMlServiceStatementPdf } from "@/parsers/nfse/mlServiceStatementParser";
 import { parseBarueriNfsePdf } from "@/parsers/nfse/barueriNfseParser";
+import { parseDanfseNacionalPdf } from "@/parsers/nfse/danfseNacionalParser";
 import { mlServiceDedupeKey } from "@/domain/mlServices";
 import { mlServiceInvoiceRepository } from "@/repositories/mlServiceInvoiceRepository";
 
@@ -38,9 +39,14 @@ async function toInvoice(
       source: "ML_DEMONSTRATIVO",
     };
   } catch {
-    const nfse = await parseBarueriNfsePdf(buffer).catch(() => {
-      throw new Error("PDF não reconhecido: não é demonstrativo do Mercado Livre nem NFS-e de Barueri");
-    });
+    // NFS-e no modelo antigo da prefeitura ou no DANFSe do padrão nacional.
+    const nfse = await parseBarueriNfsePdf(buffer).catch(() =>
+      parseDanfseNacionalPdf(buffer).catch(() => {
+        throw new Error(
+          "PDF não reconhecido: não é demonstrativo do Mercado Livre, NFS-e de Barueri nem DANFSe do padrão nacional",
+        );
+      }),
+    );
     return {
       // O número da nota não se repete para o mesmo prestador.
       dedupeKey: `nfse-barueri|${nfse.providerDocument}|${nfse.documentNumber}`,
@@ -52,7 +58,7 @@ async function toInvoice(
       issuedOn: nfse.issuedOn,
       link: null,
       sourceFileName: fileName,
-      source: "NFSE_BARUERI",
+      source: "NFSE",
       documentNumber: nfse.documentNumber,
       verificationCode: nfse.verificationCode,
       serviceCode: nfse.serviceCode,

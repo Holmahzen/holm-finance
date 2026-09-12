@@ -380,8 +380,9 @@ model MlServiceInvoice {
   issuedOn         DateTime @db.Date
   link             String?
   sourceFileName   String
-  /** ML_DEMONSTRATIVO (folha de rosto do Mercado Livre) ou NFSE_BARUERI (a
-   * nota inteira da transportadora do Flex, que traz servico, aliquota e ISS). */
+  /** ML_DEMONSTRATIVO (folha de rosto do Mercado Livre) ou NFSE (a nota
+   * inteira de servico, que traz servico, aliquota e ISS — modelo da
+   * prefeitura ou DANFSe do padrao nacional). */
   source           String   @default("ML_DEMONSTRATIVO")
   documentNumber   String?
   verificationCode String?
