@@ -68,6 +68,8 @@ type Report = {
         issuedOn: string;
         link: string | null;
         category: string;
+        source: string;
+        documentNumber: string | null;
       }[];
     } | null;
   };
@@ -681,10 +683,10 @@ export default function NotasFiscaisPage() {
                     <th className="px-4 py-3 text-right font-medium">Faturamento</th>
                     <th className="px-4 py-3 text-right font-medium">SP</th>
                     <th className="px-4 py-3 text-right font-medium">Compras</th>
-                    <th className="px-4 py-3 text-right font-medium">Serviços ML</th>
+                    <th className="px-4 py-3 text-right font-medium">Serviços</th>
                     <th
                       className="px-4 py-3 text-right font-medium"
-                      title="Serviços ML (frete + Ebazar + Mercado Pago) dividido pelo faturamento do mês."
+                      title="Notas de serviço do mês (Mercado Livre e transportadora) dividido pelo faturamento."
                     >
                       % Faturamento
                     </th>
@@ -812,18 +814,18 @@ export default function NotasFiscaisPage() {
 
           <section className="flex flex-col gap-3">
             <h2 className="font-serif text-xl text-foreground">
-              Serviços do Mercado Livre de {monthLabel(detail.month)}
+              Notas de serviço de {monthLabel(detail.month)}
             </h2>
             {!mlDetail || mlDetail.count === 0 ? (
               <p className="max-w-prose text-sm text-muted">
-                Nenhuma nota de serviço do Mercado Livre importada para este mês. Importe o .zip com os PDFs
-                &quot;Demonstrativo de Nota Fiscal&quot; que o ML manda, pelo mesmo botão de importar.
+                Nenhuma nota de serviço importada para este mês. Pelo mesmo botão de importar entram os PDFs
+                &quot;Demonstrativo de Nota Fiscal&quot; do Mercado Livre e as NFS-e da transportadora do Flex.
               </p>
             ) : (
               <>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <StatCard
-                    label="Cobrado pelo grupo Mercado Livre"
+                    label="Total das notas de serviço"
                     value={formatBRL(mlDetail.total)}
                     note={`${int(mlDetail.count)} notas de serviço`}
                   />
@@ -832,7 +834,7 @@ export default function NotasFiscaisPage() {
                     value={selected.netSales > 0 ? pct(mlDetail.total / selected.netSales) : "—"}
                     note={
                       selected.netSales > 0
-                        ? "notas de serviço do ML ÷ faturamento pelas notas de venda"
+                        ? "notas de serviço ÷ faturamento pelas notas de venda"
                         : "as vendas deste mês ainda não foram importadas"
                     }
                     tone={selected.netSales > 0 ? "gold" : "pending"}
@@ -849,6 +851,7 @@ export default function NotasFiscaisPage() {
                         <th className="px-4 py-3 text-left font-medium">Prestador</th>
                         <th className="px-4 py-3 text-left font-medium">Cidade</th>
                         <th className="px-4 py-3 text-left font-medium">Tipo</th>
+                        <th className="px-4 py-3 text-left font-medium">Origem</th>
                         <th className="px-4 py-3 text-right font-medium">Valor</th>
                         <th className="px-4 py-3 text-left font-medium">Nota</th>
                       </tr>
@@ -859,6 +862,11 @@ export default function NotasFiscaisPage() {
                           <td className="px-4 py-2 text-foreground">{inv.providerName}</td>
                           <td className="px-4 py-2 text-muted">{inv.providerCity}</td>
                           <td className="px-4 py-2 text-muted">{mlLabels.get(inv.category) ?? inv.category}</td>
+                          <td className="px-4 py-2 text-muted">
+                            {inv.source === "NFSE_BARUERI"
+                              ? `NFS-e nº ${inv.documentNumber ?? "—"}`
+                              : "demonstrativo ML"}
+                          </td>
                           <td className="px-4 py-2 text-right text-foreground tabular-nums">{formatBRL(inv.amount)}</td>
                           <td className="px-4 py-2">
                             {inv.link && !/rps\.aspx$/i.test(inv.link) ? (
@@ -882,10 +890,11 @@ export default function NotasFiscaisPage() {
               </>
             )}
             <p className="max-w-prose text-xs text-muted">
-              Quase tudo isso o Mercado Livre já desconta de cada repasse: é custo do mês, não conta a pagar
+              O que o Mercado Livre cobra já sai descontado de cada repasse: é custo do mês, não conta a pagar
               (lançar como conta contaria o custo duas vezes). O ciclo do ML fecha por volta do dia 19, então a
-              nota de um mês cobre mais ou menos do dia 20 do mês anterior ao dia 19. O demonstrativo não diz
-              qual é o serviço, então o tipo sai do prestador: filiais &quot;ENVIOS&quot; são frete.
+              nota de um mês cobre mais ou menos do dia 20 do mês anterior ao dia 19. O demonstrativo do ML não
+              diz qual é o serviço, então o tipo sai do prestador: filiais &quot;ENVIOS&quot; são frete. A NFS-e
+              da transportadora do Flex vem completa, com serviço, alíquota e ISS, e costuma ser paga por boleto.
             </p>
           </section>
 

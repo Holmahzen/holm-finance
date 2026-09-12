@@ -380,6 +380,14 @@ model MlServiceInvoice {
   issuedOn         DateTime @db.Date
   link             String?
   sourceFileName   String
+  /** ML_DEMONSTRATIVO (folha de rosto do Mercado Livre) ou NFSE_BARUERI (a
+   * nota inteira da transportadora do Flex, que traz servico, aliquota e ISS). */
+  source           String   @default("ML_DEMONSTRATIVO")
+  documentNumber   String?
+  verificationCode String?
+  serviceCode      String?
+  issAmount        Decimal? @db.Decimal(14, 2)
+  issRate          Decimal? @db.Decimal(7, 4)
   importedAt       DateTime @default(now())
 
   @@index([referenceMonth])

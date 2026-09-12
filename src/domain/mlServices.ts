@@ -51,6 +51,9 @@ export type MlServiceRow = {
   /** "YYYY-MM-DD". */
   issuedOn: string;
   link: string | null;
+  /** ML_DEMONSTRATIVO (folha de rosto do ML) ou NFSE_BARUERI (nota inteira). */
+  source: string;
+  documentNumber: string | null;
 };
 
 export function mlServiceTotalsByMonth(rows: MlServiceRow[]): Record<string, number> {

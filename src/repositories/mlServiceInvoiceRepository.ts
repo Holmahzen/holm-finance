@@ -30,6 +30,8 @@ export const mlServiceInvoiceRepository = {
       amount: Number(r.amount),
       issuedOn: r.issuedOn.toISOString().slice(0, 10),
       link: r.link,
+      source: r.source,
+      documentNumber: r.documentNumber,
     }));
   },
 };

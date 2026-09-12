@@ -16,6 +16,8 @@ function row(overrides: Partial<MlServiceRow> = {}): MlServiceRow {
     amount: 100,
     issuedOn: "2026-08-19",
     link: "https://nfe.osasco.sp.gov.br/x?Id=1",
+    source: "ML_DEMONSTRATIVO",
+    documentNumber: null,
     ...overrides,
   };
 }
