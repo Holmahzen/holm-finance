@@ -700,3 +700,54 @@ model TipiRate {
 
   @@map("tipi_rates")
 }
+
+/**
+ * Apuracao do Simples Nacional lida do "Extrato do Simples Nacional" (PGDAS-D):
+ * o numero oficial do mes. Uma linha por periodo; importar de novo, ou a
+ * declaracao retificadora, substitui a anterior.
+ */
+model PgdasApuracao {
+  /** "YYYY-MM". */
+  period         String    @id
+  apuracaoNumber String
+  rectifying     Boolean
+  revenue        Decimal   @db.Decimal(14, 2)
+  rbt12          Decimal   @db.Decimal(14, 2)
+  rba            Decimal   @db.Decimal(14, 2)
+  rbaa           Decimal   @db.Decimal(14, 2)
+  sublimit       Decimal?  @db.Decimal(14, 2)
+  ceiling        Decimal?  @db.Decimal(14, 2)
+  /** "Impedido de recolher ICMS/ISS no DAS". */
+  icmsBlocked    Boolean?
+  irpj           Decimal   @db.Decimal(14, 2)
+  csll           Decimal   @db.Decimal(14, 2)
+  cofins         Decimal   @db.Decimal(14, 2)
+  pis            Decimal   @db.Decimal(14, 2)
+  cpp            Decimal   @db.Decimal(14, 2)
+  icms           Decimal   @db.Decimal(14, 2)
+  ipi            Decimal   @db.Decimal(14, 2)
+  iss            Decimal   @db.Decimal(14, 2)
+  total          Decimal   @db.Decimal(14, 2)
+  /** Receita e tributos de cada atividade (revenda, industrializacao...). */
+  activities     Json
+  dasNumber      String?
+  dasDueDate     DateTime? @db.Date
+  dasPaid        Boolean?
+  importedAt     DateTime  @default(now())
+
+  @@map("pgdas_apuracoes")
+}
+
+/**
+ * Faturamento mensal declarado no PGDAS-D. Cada extrato traz o proprio mes e
+ * os meses anteriores; fica o valor da declaracao mais recente de cada mes.
+ */
+model PgdasMonthlyRevenue {
+  month        String   @id
+  revenue      Decimal  @db.Decimal(14, 2)
+  /** Periodo do extrato de onde veio o valor. */
+  sourcePeriod String
+  updatedAt    DateTime @updatedAt
+
+  @@map("pgdas_monthly_revenues")
+}
