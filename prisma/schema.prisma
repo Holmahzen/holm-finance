@@ -682,3 +682,21 @@ model SefazDocument {
   @@index([kind])
   @@map("sefaz_documents")
 }
+
+/**
+ * TIPI: a tabela oficial da Receita com a aliquota de IPI de cada NCM.
+ * Guardamos so os itens de 8 digitos sem "EX" (as excecoes tem regra propria).
+ * `rate` fica como texto porque a tabela usa "NT" (nao tributado) ao lado dos
+ * numeros — "0" e "NT" dao o mesmo imposto, mas nao sao a mesma coisa.
+ */
+model TipiRate {
+  ncm         String   @id
+  description String
+  rate        String
+  numericRate Decimal? @db.Decimal(6, 2)
+  /** Versao da tabela, lida do cabecalho do arquivo. */
+  version     String?
+  importedAt  DateTime @default(now())
+
+  @@map("tipi_rates")
+}

@@ -79,7 +79,9 @@ export type NcmFlagCode =
   | "CAMISETA_FORA"
   | "JALECO_AVENTAL"
   | "TECIDO_PLANO_EM_MALHA"
-  | "MALHA_EM_TECIDO_PLANO";
+  | "MALHA_EM_TECIDO_PLANO"
+  | "NCM_FORA_DA_TIPI"
+  | "NCM_NAO_TRIBUTADO";
 
 export type NcmFlag = { code: NcmFlagCode; severity: "alta" | "conferir"; message: string };
 
@@ -175,6 +177,9 @@ export function ncmFlagsFor(name: string, ncm: string): NcmFlag[] {
 export type ProductNcmUse = {
   ncm: string;
   positionLabel: string;
+  /** Alíquota de IPI na TIPI ("NT", "0", "5"...); null sem TIPI ou com NCM fora dela. */
+  ipiRate: string | null;
+  tipiDescription: string | null;
   items: number;
   quantity: number;
   value: number;
@@ -194,6 +199,8 @@ export type ProductAudit = {
 export type NcmSummary = {
   ncm: string;
   positionLabel: string;
+  ipiRate: string | null;
+  tipiDescription: string | null;
   items: number;
   value: number;
   products: number;
@@ -211,10 +218,49 @@ export type NcmAudit = {
     ncms: number;
     firstSale: string | null;
     lastSale: string | null;
+    /** IPI que seria pago fora do Simples: valor vendido × alíquota da TIPI de cada NCM. */
+    ipiEstimate: number;
+    tipiLoaded: boolean;
+    ncmsOutsideTipi: number;
   };
 };
 
 type UseAcc = { items: number; quantity: number; value: number; skus: Set<string>; issuers: Set<string>; lastSeen: string };
+
+export type TipiLookup = {
+  /** A tabela foi importada? Sem ela, nada da TIPI é avaliado. */
+  loaded: boolean;
+  byNcm: ReadonlyMap<string, { rate: string; numericRate: number | null; description: string }>;
+};
+
+const NO_TIPI: TipiLookup = { loaded: false, byNcm: new Map() };
+
+/** Alertas que só a tabela oficial consegue dar: código inexistente e produto fora do IPI. */
+function tipiFlagsFor(ncm: string, tipi: TipiLookup): NcmFlag[] {
+  if (!tipi.loaded) return [];
+  const code = formatNcm(ncm);
+  const info = tipi.byNcm.get(ncm);
+  if (!info) {
+    return [
+      {
+        code: "NCM_FORA_DA_TIPI",
+        severity: "alta",
+        message: `${code} não existe na TIPI oficial: é um código inválido, e toda nota com ele sai com NCM errado.`,
+      },
+    ];
+  }
+  // A posição 6309 já tem alerta próprio (artigos usados).
+  if (info.rate === "NT" && !ncm.startsWith("6309")) {
+    return [
+      {
+        code: "NCM_NAO_TRIBUTADO",
+        severity: "conferir",
+        message: `${code} é "NT" na TIPI (fora do campo do IPI): ${info.description}. Confira se é mesmo este o produto.`,
+      },
+    ];
+  }
+  return [];
+}
 
 /** Ordem da lista: primeiro o que tem algo a revisar, depois o que é só a conferir. */
 function severityRank(p: ProductAudit): number {
@@ -222,7 +268,7 @@ function severityRank(p: ProductAudit): number {
   return p.flags.length > 0 ? 1 : 0;
 }
 
-export function buildNcmAudit(rows: NcmAuditRow[]): NcmAudit {
+export function buildNcmAudit(rows: NcmAuditRow[], tipi: TipiLookup = NO_TIPI): NcmAudit {
   const sales = rows.filter((r) => isSaleCfop(r.cfop));
   const byProduct = new Map<string, { items: number; value: number; ncms: Map<string, UseAcc> }>();
   let firstSale: string | null = null;
@@ -253,6 +299,8 @@ export function buildNcmAudit(rows: NcmAuditRow[]): NcmAudit {
         .map(([ncm, u]) => ({
           ncm,
           positionLabel: positionLabel(ncm),
+          ipiRate: tipi.byNcm.get(ncm)?.rate ?? null,
+          tipiDescription: tipi.byNcm.get(ncm)?.description ?? null,
           items: u.items,
           quantity: u.quantity,
           value: u.value,
@@ -269,7 +317,7 @@ export function buildNcmAudit(rows: NcmAuditRow[]): NcmAudit {
           message: `Sai com ${ncms.length} NCMs diferentes (${ncms.map((n) => formatNcm(n.ncm)).join(", ")}). O NCM é do produto e deveria ser um só.`,
         });
       }
-      for (const n of ncms) flags.push(...ncmFlagsFor(name, n.ncm));
+      for (const n of ncms) flags.push(...ncmFlagsFor(name, n.ncm), ...tipiFlagsFor(n.ncm, tipi));
       return { name, items: p.items, value: p.value, ncms, flags };
     })
     .sort((a, b) => severityRank(b) - severityRank(a) || b.value - a.value);
@@ -280,7 +328,16 @@ export function buildNcmAudit(rows: NcmAuditRow[]): NcmAudit {
       const s =
         ncmMap.get(n.ncm) ??
         ncmMap
-          .set(n.ncm, { ncm: n.ncm, positionLabel: n.positionLabel, items: 0, value: 0, products: 0, flaggedProducts: 0 })
+          .set(n.ncm, {
+            ncm: n.ncm,
+            positionLabel: n.positionLabel,
+            ipiRate: n.ipiRate,
+            tipiDescription: n.tipiDescription,
+            items: 0,
+            value: 0,
+            products: 0,
+            flaggedProducts: 0,
+          })
           .get(n.ncm)!;
       s.items += n.items;
       s.value += n.value;
@@ -290,6 +347,11 @@ export function buildNcmAudit(rows: NcmAuditRow[]): NcmAudit {
   }
 
   const flagged = products.filter((p) => p.flags.length > 0);
+  const ipiEstimate = products.reduce(
+    (sum, p) => sum + p.ncms.reduce((s, n) => s + (n.value * (tipi.byNcm.get(n.ncm)?.numericRate ?? 0)) / 100, 0),
+    0,
+  );
+  const ncmsOutsideTipi = tipi.loaded ? [...ncmMap.keys()].filter((ncm) => !tipi.byNcm.has(ncm)).length : 0;
   return {
     products,
     byNcm: [...ncmMap.values()].sort((a, b) => b.value - a.value),
@@ -301,6 +363,9 @@ export function buildNcmAudit(rows: NcmAuditRow[]): NcmAudit {
       ncms: ncmMap.size,
       firstSale,
       lastSale,
+      ipiEstimate,
+      tipiLoaded: tipi.loaded,
+      ncmsOutsideTipi,
     },
   };
 }
