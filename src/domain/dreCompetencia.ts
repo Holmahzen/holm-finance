@@ -1,4 +1,5 @@
 import type { DreGroup, DreLine, DreReport, DreSection } from "@/domain/dre";
+import type { FixedCostGap } from "@/domain/fixedCostGaps";
 
 /**
  * DRE por competência: o resultado do mês pela data das vendas, e não pela data
@@ -31,6 +32,8 @@ export type CompetenceInput = {
   soldGrossRevenue: number | null;
   /** Lançamentos pagos no mês que vêm da fatura do Mercado Livre (ver dreRepository). */
   marketplaceInvoiceEntries?: { group: DreGroup; category: string; description: string; amount: number }[];
+  /** Custos fixos cadastrados que não bateram com os lançamentos do mês (ver fixedCostGaps). */
+  fixedCostGaps?: FixedCostGap[];
 };
 
 /** Tipos de nota de serviço que trazem a fatura do Mercado Livre (tarifas, Ads, Full). */
@@ -84,6 +87,7 @@ export type CompetenceDre = {
   cashResult: number;
   /** Há custos ou despesas lançados no mês? Sem eles o "resultado" é só receita menos impostos. */
   hasCosts: boolean;
+  fixedCostGaps: FixedCostGap[];
   lines: CompetenceLine[];
   /** O que existe nos lançamentos mas foi trocado por outra fonte nesta visão. */
   replaced: { name: string; value: number; replacedBy: string }[];
@@ -149,7 +153,7 @@ export function buildCompetenceDre(input: CompetenceInput): CompetenceDre {
       month: input.month, available, revenueSource, receitaBruta: 0, devolucoes: 0, das: 0, dasSource: null,
       receitaLiquida: 0, cmv: 0, tarifas: 0, outrosVariaveis: 0, margemContribuicao: 0, despesasFixas: 0,
       resultadoOperacional: 0, resultadoFinanceiro: 0, resultadoNaoOperacional: 0, resultado: 0, cashResult,
-      hasCosts: false, lines: [], replaced: [], conferencia: null,
+      hasCosts: false, fixedCostGaps: [], lines: [], replaced: [], conferencia: null,
       warnings: ["Este mês não tem notas de venda importadas nem extrato do PGDAS-D."],
     };
   }
@@ -284,6 +288,22 @@ export function buildCompetenceDre(input: CompetenceInput): CompetenceDre {
       `Este mês tem poucos custos lançados (${share}% da receita): o resultado mostra quase só receita menos DAS e tarifas, e não é o lucro do mês.`,
     );
   }
+  const fixedCostGaps = input.fixedCostGaps ?? [];
+  if (fixedCostGaps.length > 0) {
+    const missing = fixedCostGaps.filter((g) => g.kind === "faltando" || g.kind === "abaixo");
+    const above = fixedCostGaps.filter((g) => g.kind === "acima");
+    const parts: string[] = [];
+    if (missing.length > 0) parts.push(`${missing.length} sem lançamento ou abaixo do cadastro (${missing.map((g) => g.category).join(", ")})`);
+    if (above.length > 0) parts.push(`${above.length} bem acima do cadastro (${above.map((g) => g.category).join(", ")}) — pode ter pagamento de outro mês junto`);
+    if (fixedCostGaps.some((g) => g.kind === "sem-categoria")) parts.push("custo fixo cadastrado sem categoria");
+    warnings.push(`Custos fixos cadastrados × lançados: ${parts.join("; ")}. Veja a lista abaixo.`);
+  }
+  if (sold && comparableRevenue > 0 && revenueSource === "notas" && sold > comparableRevenue * SALES_REPORT_TOLERANCE) {
+    const excess = (((sold - comparableRevenue) / comparableRevenue) * 100).toFixed(0);
+    warnings.push(
+      `As vendas importadas somam ${brl(sold)}, ${excess}% acima das notas de venda do mês: pode haver venda sem nota emitida ou nota que não foi importada. O custo das peças segue as vendas importadas.`,
+    );
+  }
   warnings.push("Custos e despesas vêm dos lançamentos: os que não têm data de competência entram pela data de pagamento.");
 
   const lines: CompetenceLine[] = [
@@ -345,6 +365,6 @@ export function buildCompetenceDre(input: CompetenceInput): CompetenceDre {
   return {
     month: input.month, available, revenueSource, receitaBruta, devolucoes, das, dasSource, receitaLiquida, cmv, tarifas,
     outrosVariaveis, margemContribuicao, despesasFixas, resultadoOperacional, resultadoFinanceiro, resultadoNaoOperacional,
-    resultado, cashResult, hasCosts, lines, replaced, conferencia, warnings,
+    resultado, cashResult, hasCosts, fixedCostGaps, lines, replaced, conferencia, warnings,
   };
 }

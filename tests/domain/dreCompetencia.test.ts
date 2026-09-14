@@ -138,6 +138,24 @@ describe("buildCompetenceDre", () => {
     expect(onlyFreight.lines.find((l) => l.key === "comercial")?.value).toBeCloseTo(-14074.13, 2);
   });
 
+  it("avisa quando as vendas importadas passam as notas e quando há custo fixo fora do cadastro", () => {
+    const dre = buildCompetenceDre(
+      input({
+        soldGrossRevenue: 539000,
+        fixedCostGaps: [
+          { kind: "faltando", category: "Pró-labore", expected: 4000, launched: 0, items: ["Pro Labore"] },
+          { kind: "acima", category: "Salarios", expected: 20700, launched: 42000, items: ["Max"] },
+        ],
+      }),
+    );
+    expect(dre.warnings.some((w) => w.includes("13% acima das notas"))).toBe(true);
+    const fixed = dre.warnings.find((w) => w.startsWith("Custos fixos cadastrados"));
+    expect(fixed).toContain("sem lançamento ou abaixo do cadastro (Pró-labore)");
+    expect(fixed).toContain("bem acima do cadastro (Salarios)");
+    expect(dre.fixedCostGaps).toHaveLength(2);
+    expect(buildCompetenceDre(input()).warnings.some((w) => w.includes("acima das notas"))).toBe(false);
+  });
+
   it("sem notas nem extrato, não monta a competência e só guarda o resultado de caixa", () => {
     const dre = buildCompetenceDre(input({ sales: null, pgdas: null }));
     expect(dre).toMatchObject({ available: false, lines: [], resultado: 0 });

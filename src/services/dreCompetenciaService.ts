@@ -6,6 +6,9 @@ import { mlServiceInvoiceRepository } from "@/repositories/mlServiceInvoiceRepos
 import { shiftMonth, summarizeMonths } from "@/domain/fiscalNotes";
 import { mlServiceDetailForMonth } from "@/domain/mlServices";
 import { buildCompetenceDre } from "@/domain/dreCompetencia";
+import { findFixedCostGaps } from "@/domain/fixedCostGaps";
+import { computeFixedCostDueDates } from "@/domain/fixedCostSchedule";
+import { fixedCostRepository } from "@/repositories/fixedCostRepository";
 
 /** Até dois anos de histórico; a tabela mês a mês mostra os 12 mais recentes. */
 const HISTORY_MONTHS = 24;
@@ -19,11 +22,13 @@ function currentMonth(): string {
 export const dreCompetenciaService = {
   async getReport(requestedMonth?: string) {
     const from = shiftMonth(currentMonth(), -(HISTORY_MONTHS - 1));
-    const [noteRows, apuracoes, services] = await Promise.all([
+    const [noteRows, apuracoes, services, fixedCosts] = await Promise.all([
       fiscalNoteRepository.findRowsSince(from),
       pgdasRepository.findApuracoes(from),
       mlServiceInvoiceRepository.findSince(from),
+      fixedCostRepository.findMany(),
     ]);
+    const activeFixedCosts = fixedCosts.filter((fc) => fc.isActive && fc.type === "PAYABLE");
 
     const summaries = summarizeMonths(noteRows);
     const salesByMonth = new Map(summaries.filter((s) => s.saleNotes > 0).map((s) => [s.month, s]));
@@ -49,6 +54,21 @@ export const dreCompetenciaService = {
         dreRepository.getSoldGrossRevenue(monthStart, monthEnd),
         dreRepository.getMarketplaceInvoiceEntries(monthStart, monthEnd),
       ]);
+      const launchedByCategory: Record<string, number> = {};
+      for (const section of [cash.pessoal, cash.administrativa, cash.comercial, cash.produtiva]) {
+        for (const line of section.lines) launchedByCategory[line.name] = (launchedByCategory[line.name] ?? 0) + line.total;
+      }
+      const fixedCostGaps = findFixedCostGaps(
+        activeFixedCosts.map((fc) => ({
+          description: fc.description,
+          category: fc.category?.name ?? null,
+          group: fc.category?.dreGroup ?? null,
+          amount: Number(fc.amount),
+          // No mês corrente só contam os vencimentos que já passaram.
+          occurrences: computeFixedCostDueDates(fc, year, monthNumber).filter((d) => d.getTime() <= Date.now()).length,
+        })),
+        launchedByCategory,
+      );
       const sale = salesByMonth.get(m);
       const pgdas = pgdasByMonth.get(m);
       const serviceDetail = mlServiceDetailForMonth(services, m);
@@ -70,6 +90,7 @@ export const dreCompetenciaService = {
           cash.cogsCoveragePercent !== null && cash.cogsCoveragePercent >= cash.cogsMinCoveragePercent,
         soldGrossRevenue: soldGrossRevenue > 0 ? soldGrossRevenue : null,
         marketplaceInvoiceEntries,
+        fixedCostGaps,
       });
     };
 

@@ -30,10 +30,26 @@ type Report = {
   resultado: number;
   cashResult: number;
   hasCosts: boolean;
+  fixedCostGaps: FixedCostGap[];
   lines: Line[];
   replaced: { name: string; value: number; replacedBy: string }[];
   conferencia: { notasLiquidas: number; pgdas: number; diferenca: number } | null;
   warnings: string[];
+};
+
+type FixedCostGap = {
+  kind: "faltando" | "abaixo" | "acima" | "sem-categoria";
+  category: string;
+  expected: number;
+  launched: number;
+  items: string[];
+};
+
+const GAP_CHIP: Record<FixedCostGap["kind"], { label: string; className: string }> = {
+  faltando: { label: "sem lançamento", className: "bg-red-500/15 text-red-300" },
+  abaixo: { label: "abaixo do cadastro", className: "bg-amber-400/15 text-amber-300" },
+  acima: { label: "acima do cadastro", className: "bg-sky-500/15 text-sky-300" },
+  "sem-categoria": { label: "sem categoria", className: "bg-surface-hover text-muted" },
 };
 
 type TrendRow = {
@@ -296,6 +312,46 @@ export default function DreCompetenciaPage() {
               </section>
             )}
           </div>
+
+          {report.fixedCostGaps.length > 0 && (
+            <section className="flex flex-col gap-3">
+              <h2 className="font-serif text-xl text-foreground">Custos fixos × lançados em {monthLabel(report.month)}</h2>
+              <p className="max-w-prose text-sm text-muted">
+                O que o cadastro de Custos fixos prevê para o mês, comparado com o lançado na mesma categoria. Sem
+                lançamento, o resultado fica maior do que o real; bem acima, pode haver pagamento de outro mês sem data de
+                competência.
+              </p>
+              <div className="overflow-x-auto rounded-lg border border-border">
+                <table className="w-full min-w-2xl text-sm">
+                  <thead className="bg-surface">
+                    <tr className="text-xs tracking-wide text-muted uppercase">
+                      <th className="px-4 py-3 text-left font-medium">Categoria</th>
+                      <th className="px-4 py-3 text-right font-medium">Previsto</th>
+                      <th className="px-4 py-3 text-right font-medium">Lançado</th>
+                      <th className="px-4 py-3 text-left font-medium">Situação</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {report.fixedCostGaps.map((g) => (
+                      <tr key={`${g.kind}-${g.category}-${g.items.join()}`} className="border-t border-border align-top">
+                        <td className="px-4 py-2">
+                          <div className="text-foreground">{g.category}</div>
+                          <div className="text-xs text-muted">{g.items.join(", ")}</div>
+                        </td>
+                        <td className="px-4 py-2 text-right text-foreground tabular-nums">{formatBRL(g.expected)}</td>
+                        <td className="px-4 py-2 text-right text-muted tabular-nums">{formatBRL(g.launched)}</td>
+                        <td className="px-4 py-2">
+                          <span className={`rounded-full px-2 py-0.5 text-xs ${GAP_CHIP[g.kind].className}`}>
+                            {GAP_CHIP[g.kind].label}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
 
           {data.trend.length > 1 && (
             <section className="flex flex-col gap-3">
