@@ -3,6 +3,17 @@ import { DRE_GROUP_ENTRY_TYPE } from "@/domain/dre";
 import { isExcludedSaleStatus } from "@/domain/salesAggregation";
 
 export const dreRepository = {
+  /** Faturamento bruto das mesmas vendas que dão as quantidades de getSoldQuantitiesBySku. */
+  async getSoldGrossRevenue(start: Date, end: Date) {
+    const sales = await prisma.marketplaceSale.findMany({
+      where: { saleDate: { gte: start, lt: end } },
+      select: { grossRevenue: true, status: true },
+    });
+    return sales
+      .filter((s) => !isExcludedSaleStatus(s.status))
+      .reduce((sum, s) => sum + Number(s.grossRevenue), 0);
+  },
+
   async getSoldQuantitiesBySku(start: Date, end: Date) {
     const sales = await prisma.marketplaceSale.findMany({
       where: { saleDate: { gte: start, lt: end } },

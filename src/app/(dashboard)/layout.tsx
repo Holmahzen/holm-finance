@@ -24,6 +24,7 @@ const navItems = [
   { href: "/notas-da-receita", label: "Notas da Receita" },
   { href: "/recebiveis-ml", label: "Recebíveis ML" },
   { href: "/dre", label: "DRE" },
+  { href: "/dre-competencia", label: "DRE por competência" },
   { href: "/relatorio-mensal", label: "Relatório Mensal" },
   { href: "/balanco-patrimonial", label: "Balanço Patrimonial" },
   { href: "/saude-financeira", label: "Saúde Financeira" },
