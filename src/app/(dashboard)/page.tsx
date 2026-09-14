@@ -416,12 +416,12 @@ export default function DashboardPage() {
             />
             <div className="grid grid-cols-1 gap-4">
               <HorizontalBarChart
-                title="Top 5 fornecedores"
+                title="Top 10 fornecedores"
                 data={summary.charts.topSuppliers}
                 tone="negative"
               />
               <HorizontalBarChart
-                title="Top 5 clientes"
+                title="Top 10 clientes"
                 data={summary.charts.topClients}
                 tone="positive"
               />
