@@ -8,12 +8,18 @@ function normalizeHeader(header: string): string {
 }
 
 const ALIASES = {
-  date: ["data", "date", "dt"],
-  description: ["descricao", "description", "memo", "historico", "detalhes"],
+  date: ["data", "date", "dt", "release date"],
+  description: ["descricao", "description", "memo", "historico", "detalhes", "transaction type"],
   externalId: ["id operacao", "id operacao", "id", "operacao", "referencia", "codigo"],
+  // No extrato do Mercado Pago o REFERENCE_ID se repete em várias linhas
+  // diferentes (ex.: liberação + retenção do mesmo pedido), então não serve
+  // como externalId direto (viraria falso "duplicado" ao gravar) — só reforça
+  // o hash sintético (data+descrição+valor) pra reduzir colisão entre linhas
+  // que por coincidência têm a mesma descrição e o mesmo valor no mesmo dia.
+  referenceHint: ["reference id"],
   entrada: ["entrada", "credito", "receita", "valor recebido"],
   saida: ["saida", "debito", "despesa", "valor pago"],
-  amount: ["valor", "amount", "valor r"],
+  amount: ["valor", "amount", "valor r", "transaction net amount"],
   type: ["tipo", "type"],
   counterparty: ["contraparte", "counterparty", "favorecido", "pagador", "beneficiario"],
 } as const;

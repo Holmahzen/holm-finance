@@ -215,8 +215,8 @@ export default function ImportsPage() {
 
       <UploadForm
         title="Planilha Excel"
-        description="Formato Mercado Pago (Data, Descrição, Entrada, Saída, Contraparte...) ou genérico (Data, Descrição, Valor, Tipo)."
-        accept=".xlsx,.xls"
+        description="Formato Mercado Pago (Data, Descrição, Entrada, Saída, Contraparte...), genérico (Data, Descrição, Valor, Tipo), ou extrato de conta exportado direto do Mercado Pago (.csv)."
+        accept=".xlsx,.xls,.csv"
         accounts={accounts}
         endpoint="/api/imports/excel"
         onImported={load}

@@ -17,7 +17,7 @@ export function parseAmountCell(value: unknown): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-const BR_DATE_RE = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/;
+const BR_DATE_RE = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/;
 
 export function parseDateCell(value: unknown): Date | null {
   if (value instanceof Date) return value;
