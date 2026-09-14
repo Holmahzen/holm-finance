@@ -1,4 +1,4 @@
-import type { DreLine, DreReport } from "@/domain/dre";
+import type { DreGroup, DreLine, DreReport, DreSection } from "@/domain/dre";
 
 /**
  * DRE por competência: o resultado do mês pela data das vendas, e não pela data
@@ -29,7 +29,12 @@ export type CompetenceInput = {
   cmvFromSoldPieces: boolean;
   /** Faturamento bruto das vendas importadas (relatório de vendas) cujas peças deram o custo. */
   soldGrossRevenue: number | null;
+  /** Lançamentos pagos no mês que vêm da fatura do Mercado Livre (ver dreRepository). */
+  marketplaceInvoiceEntries?: { group: DreGroup; category: string; description: string; amount: number }[];
 };
+
+/** Tipos de nota de serviço que trazem a fatura do Mercado Livre (tarifas, Ads, Full). */
+export const ML_INVOICE_NOTE_KINDS = ["EBAZAR", "MERCADO_PAGO"];
 
 /** Receita acima disso em relação às vendas importadas indica relatório de vendas incompleto. */
 export const SALES_REPORT_TOLERANCE = 1.05;
@@ -212,7 +217,37 @@ export function buildCompetenceDre(input: CompetenceInput): CompetenceDre {
   const hasServices = !!services && services.count > 0;
   const tarifas = hasServices ? services!.total : 0;
   const serviceKinds = new Set(hasServices ? services!.byCategory.filter((c) => c.value > 0).map((c) => c.key) : []);
-  const variableLines = cash.custoVariavel.lines.filter((l) => {
+  // Lançamentos da fatura do ML espalhados em outras categorias (Mercado Ads,
+  // "Fatura ML – Tarifas de envios Full" etc.): as notas do Ebazar/Mercado Pago
+  // já trazem esses valores, então saem daqui um a um.
+  const invoiceCovered = ML_INVOICE_NOTE_KINDS.some((kind) => serviceKinds.has(kind));
+  const removedByGroup = new Map<DreGroup, Map<string, number>>();
+  if (invoiceCovered) {
+    for (const entry of input.marketplaceInvoiceEntries ?? []) {
+      if (REPLACED_BY_SERVICE_NOTES[normalize(entry.category)]) continue; // a categoria inteira já sai abaixo
+      if (Math.abs(entry.amount) < 0.005) continue;
+      replaced.push({ name: `${entry.category} — ${entry.description}`, value: entry.amount, replacedBy: "notas de serviço do mês" });
+      const byCategory = removedByGroup.get(entry.group) ?? new Map<string, number>();
+      byCategory.set(entry.category, (byCategory.get(entry.category) ?? 0) + entry.amount);
+      removedByGroup.set(entry.group, byCategory);
+    }
+  }
+  const withoutInvoice = (section: DreSection, group: DreGroup): DreSection => {
+    const removed = removedByGroup.get(group);
+    if (!removed) return section;
+    const removedTotal = [...removed.values()].reduce((sum, v) => sum + v, 0);
+    return {
+      lines: section.lines.map((l) => ({ ...l, total: l.total - (removed.get(l.name) ?? 0) })),
+      total: section.total - removedTotal,
+    };
+  };
+  const custoVariavel = withoutInvoice(cash.custoVariavel, "CUSTO_VARIAVEL");
+  const pessoal = withoutInvoice(cash.pessoal, "DESPESA_PESSOAL");
+  const administrativa = withoutInvoice(cash.administrativa, "DESPESA_ADMINISTRATIVA");
+  const comercial = withoutInvoice(cash.comercial, "DESPESA_COMERCIAL");
+  const produtiva = withoutInvoice(cash.produtiva, "DESPESA_PRODUTIVA");
+
+  const variableLines = custoVariavel.lines.filter((l) => {
     const coveredBy = REPLACED_BY_SERVICE_NOTES[normalize(l.name)] ?? [];
     const isReplaced = coveredBy.some((kind) => serviceKinds.has(kind));
     if (isReplaced && Math.abs(l.total) >= 0.005) {
@@ -236,7 +271,7 @@ export function buildCompetenceDre(input: CompetenceInput): CompetenceDre {
   const margemContribuicao = receitaLiquida - cmv - tarifas - outrosVariaveis;
 
   // ---------- despesas e resultado ----------
-  const despesasFixas = cash.pessoal.total + cash.administrativa.total + cash.comercial.total + cash.produtiva.total;
+  const despesasFixas = pessoal.total + administrativa.total + comercial.total + produtiva.total;
   const resultadoOperacional = margemContribuicao - despesasFixas;
   const resultadoFinanceiro = cash.resultadoFinanceiro;
   const resultadoNaoOperacional = cash.resultadoNaoOperacional;
@@ -297,10 +332,10 @@ export function buildCompetenceDre(input: CompetenceInput): CompetenceDre {
       detail: detailOf(variableLines),
     },
     { key: "margem", label: "Margem de contribuição", value: margemContribuicao, kind: "subtotal", source: null },
-    { key: "pessoal", label: "(−) Despesas com pessoal", value: -cash.pessoal.total, kind: "custo", source: "lancamentos", detail: detailOf(cash.pessoal.lines) },
-    { key: "administrativa", label: "(−) Despesas administrativas", value: -cash.administrativa.total, kind: "custo", source: "lancamentos", detail: detailOf(cash.administrativa.lines) },
-    { key: "comercial", label: "(−) Despesas comerciais", value: -cash.comercial.total, kind: "custo", source: "lancamentos", detail: detailOf(cash.comercial.lines) },
-    { key: "produtiva", label: "(−) Despesas produtivas", value: -cash.produtiva.total, kind: "custo", source: "lancamentos", detail: detailOf(cash.produtiva.lines) },
+    { key: "pessoal", label: "(−) Despesas com pessoal", value: -pessoal.total, kind: "custo", source: "lancamentos", detail: detailOf(pessoal.lines) },
+    { key: "administrativa", label: "(−) Despesas administrativas", value: -administrativa.total, kind: "custo", source: "lancamentos", detail: detailOf(administrativa.lines) },
+    { key: "comercial", label: "(−) Despesas comerciais", value: -comercial.total, kind: "custo", source: "lancamentos", detail: detailOf(comercial.lines) },
+    { key: "produtiva", label: "(−) Despesas produtivas", value: -produtiva.total, kind: "custo", source: "lancamentos", detail: detailOf(produtiva.lines) },
     { key: "resultadoOperacional", label: "Resultado operacional", value: resultadoOperacional, kind: "subtotal", source: null },
     { key: "financeiro", label: "(±) Resultado financeiro", value: resultadoFinanceiro, kind: "custo", source: "lancamentos" },
     { key: "naoOperacional", label: "(±) Resultado não operacional", value: resultadoNaoOperacional, kind: "custo", source: "lancamentos" },

@@ -103,6 +103,41 @@ describe("buildCompetenceDre", () => {
     expect(buildCompetenceDre(input()).warnings.some((w) => w.includes("Ebazar"))).toBe(false);
   });
 
+  it("tira o Mercado Ads e os demais itens da fatura do ML quando o mês tem as notas do Ebazar", () => {
+    const base = cash({
+      CUSTO_VARIAVEL: [
+        line("v1", "Flex", 11000),
+        line("v2", "Faturamento ML", 5500),
+        line("v4", "Tarifas de venda dos marketplaces", 3137.7),
+      ],
+      DESPESA_COMERCIAL: [line("m1", "Marketing", 1350), line("m2", "Mercado Ads", 12724.13)],
+    });
+    const invoiceEntries = [
+      { group: "DESPESA_COMERCIAL" as const, category: "Mercado Ads", description: "Fatura ML - Tarifas por campanha de publicidade (Ads)", amount: 12724.13 },
+      { group: "CUSTO_VARIAVEL" as const, category: "Tarifas de venda dos marketplaces", description: "Fatura ML - Tarifas de envios Full", amount: 3090.93 },
+      // A categoria "Faturamento ML" já sai inteira; não pode ser descontada de novo.
+      { group: "CUSTO_VARIAVEL" as const, category: "Faturamento ML", description: "Fatura Mercado Livre (Ads/Coleta Full)", amount: 5500 },
+    ];
+
+    const dre = buildCompetenceDre(input({ cash: base, marketplaceInvoiceEntries: invoiceEntries }));
+    expect(dre.lines.find((l) => l.key === "comercial")?.value).toBeCloseTo(-1350, 2);
+    expect(dre.outrosVariaveis).toBeCloseTo(3137.7 - 3090.93, 2);
+    expect(dre.replaced.map((r) => r.name)).toEqual(
+      expect.arrayContaining(["Mercado Ads — Fatura ML - Tarifas por campanha de publicidade (Ads)", "Faturamento ML"]),
+    );
+    expect(dre.replaced.filter((r) => r.name.startsWith("Faturamento ML"))).toHaveLength(1);
+
+    // Sem as notas do ML (só frete), os lançamentos da fatura ficam.
+    const onlyFreight = buildCompetenceDre(
+      input({
+        cash: base,
+        marketplaceInvoiceEntries: invoiceEntries,
+        services: { total: 3477.79, count: 2, byCategory: [{ key: "FRETE", label: "Frete (envios)", value: 3477.79 }] },
+      }),
+    );
+    expect(onlyFreight.lines.find((l) => l.key === "comercial")?.value).toBeCloseTo(-14074.13, 2);
+  });
+
   it("sem notas nem extrato, não monta a competência e só guarda o resultado de caixa", () => {
     const dre = buildCompetenceDre(input({ sales: null, pgdas: null }));
     expect(dre).toMatchObject({ available: false, lines: [], resultado: 0 });

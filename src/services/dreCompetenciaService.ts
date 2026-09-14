@@ -42,9 +42,12 @@ export const dreCompetenciaService = {
 
     const build = async (m: string) => {
       const [year, monthNumber] = m.split("-").map(Number);
-      const [cash, soldGrossRevenue] = await Promise.all([
+      const monthStart = new Date(year, monthNumber - 1, 1);
+      const monthEnd = new Date(year, monthNumber, 1);
+      const [cash, soldGrossRevenue, marketplaceInvoiceEntries] = await Promise.all([
         dreService.getDRE(year, monthNumber),
-        dreRepository.getSoldGrossRevenue(new Date(year, monthNumber - 1, 1), new Date(year, monthNumber, 1)),
+        dreRepository.getSoldGrossRevenue(monthStart, monthEnd),
+        dreRepository.getMarketplaceInvoiceEntries(monthStart, monthEnd),
       ]);
       const sale = salesByMonth.get(m);
       const pgdas = pgdasByMonth.get(m);
@@ -66,6 +69,7 @@ export const dreCompetenciaService = {
         cmvFromSoldPieces:
           cash.cogsCoveragePercent !== null && cash.cogsCoveragePercent >= cash.cogsMinCoveragePercent,
         soldGrossRevenue: soldGrossRevenue > 0 ? soldGrossRevenue : null,
+        marketplaceInvoiceEntries,
       });
     };
 

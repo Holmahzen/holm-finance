@@ -38,6 +38,43 @@ export const dreRepository = {
     return Number(result._sum.paidAmount ?? 0);
   },
 
+  /**
+   * Lançamentos pagos que vêm da fatura do Mercado Livre: categoria "Mercado Ads"
+   * ou descrição começando por "Fatura ML" / "Fatura Mercado Livre". A DRE por
+   * competência tira esses valores quando o mês tem as notas de serviço.
+   */
+  async getMarketplaceInvoiceEntries(start: Date, end: Date) {
+    const entries = await prisma.entry.findMany({
+      where: {
+        status: "PAID",
+        type: "PAYABLE",
+        category: { dreGroup: { not: null } },
+        AND: [
+          {
+            OR: [
+              { competenceDate: { gte: start, lt: end } },
+              { competenceDate: null, paidAt: { gte: start, lt: end } },
+            ],
+          },
+          {
+            OR: [
+              { category: { name: { equals: "Mercado Ads", mode: "insensitive" } } },
+              { description: { startsWith: "Fatura ML", mode: "insensitive" } },
+              { description: { startsWith: "Fatura Mercado Livre", mode: "insensitive" } },
+            ],
+          },
+        ],
+      },
+      select: { description: true, paidAmount: true, category: { select: { name: true, dreGroup: true } } },
+    });
+    return entries.map((e) => ({
+      group: e.category!.dreGroup!,
+      category: e.category!.name,
+      description: e.description,
+      amount: Number(e.paidAmount ?? 0),
+    }));
+  },
+
   async getCategoryTotals(start: Date, end: Date) {
     // Entra no período pela data de competência quando ela foi informada
     // (ex.: cada compra de uma fatura de cartão, lançada com a data em que
