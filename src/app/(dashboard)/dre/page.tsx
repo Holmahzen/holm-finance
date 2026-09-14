@@ -36,6 +36,8 @@ type Dre = {
   naoOperacionalDespesa: DreSection;
   resultadoNaoOperacional: number;
   lucroLiquido: number;
+  ownerWithdrawals: number;
+  lucroLiquidoAposRetiradas: number;
 };
 
 const now = new Date();
@@ -434,6 +436,25 @@ export default function DrePage() {
           </div>
 
           <TotalRow number="11" label="Lucro ou Prejuízo Líquido" value={dre.lucroLiquido} emphasis />
+
+          {dre.ownerWithdrawals !== 0 && (
+            <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4">
+              <p className="text-xs text-muted">
+                Fora do resultado acima de propósito — retirada de sócio é distribuição do lucro, não
+                custo do negócio. Aqui só pra mostrar quanto desse lucro já saiu de fato.
+              </p>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted">(-) Retiradas de sócio no período</span>
+                <span className="text-foreground">{formatBRL(dre.ownerWithdrawals)}</span>
+              </div>
+              <div className="flex items-center justify-between border-t border-border/50 pt-2 text-sm font-medium">
+                <span className="text-foreground">= Sobra após retiradas</span>
+                <span className={dre.lucroLiquidoAposRetiradas >= 0 ? "text-emerald-400" : "text-red-400"}>
+                  {formatBRL(dre.lucroLiquidoAposRetiradas)}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -23,11 +23,12 @@ export const dreService = {
     const monthStart = new Date(y, m - 1, 1);
     const monthEnd = new Date(y, m, 1);
 
-    const [categoryTotals, soldQuantities, productCosts, loans] = await Promise.all([
+    const [categoryTotals, soldQuantities, productCosts, loans, ownerWithdrawals] = await Promise.all([
       dreRepository.getCategoryTotals(monthStart, monthEnd),
       dreRepository.getSoldQuantitiesBySku(monthStart, monthEnd),
       productRepository.getProductCostsBySku(),
       loanRepository.findActive(),
+      dreRepository.getOwnerWithdrawals(monthStart, monthEnd),
     ]);
 
     const byGroup: DreGroupTotals = {};
@@ -100,6 +101,10 @@ export const dreService = {
       cogsCoveragePercent: cogs.coveragePercent,
       cogsMinCoveragePercent: COGS_MIN_COVERAGE_PERCENT,
       ...report,
+      // Fora do resultado de propósito (retirada é distribuição do lucro, não
+      // custo) — informativo, só pra mostrar quanto do lucro já foi retirado.
+      ownerWithdrawals,
+      lucroLiquidoAposRetiradas: report.lucroLiquido - ownerWithdrawals,
     };
   },
 };

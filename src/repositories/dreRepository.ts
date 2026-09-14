@@ -75,6 +75,24 @@ export const dreRepository = {
     }));
   },
 
+  /**
+   * Soma de "Retirada Socio" pago no período — fora da DRE de propósito (é
+   * distribuição do lucro, não custo do negócio), mas devolvida à parte pra
+   * mostrar quanto do lucro já saiu de fato, sem misturar com o resultado.
+   */
+  async getOwnerWithdrawals(start: Date, end: Date) {
+    const result = await prisma.entry.aggregate({
+      where: {
+        status: "PAID",
+        paidAt: { gte: start, lt: end },
+        type: "PAYABLE",
+        category: { name: "Retirada Socio" },
+      },
+      _sum: { paidAmount: true },
+    });
+    return Number(result._sum.paidAmount ?? 0);
+  },
+
   async getCategoryTotals(start: Date, end: Date) {
     // Entra no período pela data de competência quando ela foi informada
     // (ex.: cada compra de uma fatura de cartão, lançada com a data em que
