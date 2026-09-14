@@ -22,9 +22,11 @@ type Contingency = {
 };
 
 type Tax = {
+  source: "pgdas" | "estimativa";
   ratePercent: number;
   referencePeriod: { year: number; month: number };
   monthlyRevenue: number;
+  dasPaid: boolean | null;
   target: number;
   saved: number;
   dueDay: number;
@@ -390,15 +392,52 @@ export default function CashReservePage() {
           <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="font-serif text-lg text-foreground">Impostos</h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="font-serif text-lg text-foreground">Impostos</h2>
+                  {report.tax.source === "pgdas" ? (
+                    <span
+                      className="rounded bg-gold/20 px-2 py-0.5 text-xs font-medium text-gold"
+                      title="Valor oficial do DAS, do extrato do PGDAS-D importado em Simples Nacional — não é estimativa."
+                    >
+                      oficial (PGDAS)
+                    </span>
+                  ) : (
+                    <span
+                      className="rounded bg-amber-400/15 px-2 py-0.5 text-xs font-medium text-amber-300"
+                      title="Sem extrato do PGDAS-D pra esse mês ainda — estimativa por %, importe o extrato em Simples Nacional pro valor oficial."
+                    >
+                      estimativa
+                    </span>
+                  )}
+                  {report.tax.dasPaid === false && (
+                    <span className="rounded bg-red-400/15 px-2 py-0.5 text-xs font-medium text-red-400">
+                      não pago
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs text-muted">
-                  {report.tax.ratePercent}% sobre o faturamento de{" "}
-                  {MONTHS[report.tax.referencePeriod.month - 1]}/{report.tax.referencePeriod.year} (
-                  {formatBRL(report.tax.monthlyRevenue)}) — DAS desse mês, ainda não vencido; reseta
-                  a cada novo mês, não acumula como 13º/férias.
+                  {report.tax.source === "pgdas" ? (
+                    <>
+                      DAS declarado no PGDAS-D de{" "}
+                      {MONTHS[report.tax.referencePeriod.month - 1]}/{report.tax.referencePeriod.year}, sobre o
+                      faturamento oficial de {formatBRL(report.tax.monthlyRevenue)}
+                    </>
+                  ) : (
+                    <>
+                      {report.tax.ratePercent}% sobre o faturamento de{" "}
+                      {MONTHS[report.tax.referencePeriod.month - 1]}/{report.tax.referencePeriod.year} (
+                      {formatBRL(report.tax.monthlyRevenue)})
+                    </>
+                  )}{" "}
+                  — DAS desse mês, ainda não vencido; reseta a cada novo mês, não acumula como 13º/férias.
                 </p>
               </div>
               <div className="no-print flex items-end gap-2">
+                {report.tax.source === "pgdas" && (
+                  <p className="mb-1.5 max-w-40 text-xs text-muted">
+                    Esses ajustes não valem pro mês atual — ele já usa o DAS oficial do PGDAS-D.
+                  </p>
+                )}
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-medium text-muted">Alíquota (%)</label>
                   <input
@@ -452,7 +491,7 @@ export default function CashReservePage() {
               </div>
               <div>
                 <span className="block text-xs font-medium tracking-wide text-muted uppercase">
-                  Imposto estimado do mês
+                  {report.tax.source === "pgdas" ? "DAS oficial do mês" : "Imposto estimado do mês"}
                 </span>
                 <span className="font-serif text-2xl text-foreground">
                   {formatBRL(report.tax.target)}

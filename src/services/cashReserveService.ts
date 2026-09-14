@@ -1,6 +1,7 @@
 import { fixedCostRepository } from "@/repositories/fixedCostRepository";
 import { reserveDepositRepository } from "@/repositories/reserveDepositRepository";
 import { dashboardRepository } from "@/repositories/dashboardRepository";
+import { pgdasRepository } from "@/repositories/pgdasRepository";
 import { computeFixedCostMonthlyAmount } from "@/domain/fixedCostSchedule";
 import {
   computeThirteenthProvision,
@@ -50,10 +51,13 @@ export const cashReserveService = {
     const taxRefMonthStart = new Date(taxRefYear, taxRefMonth - 1, 1);
     const taxRefMonthEnd = new Date(taxRefYear, taxRefMonth, 1);
 
-    const [fixedCosts, monthlyFlow, taxRefFlow] = await Promise.all([
+    const taxRefPeriod = `${taxRefYear}-${String(taxRefMonth).padStart(2, "0")}`;
+
+    const [fixedCosts, monthlyFlow, taxRefFlow, taxRefApuracao] = await Promise.all([
       fixedCostRepository.findMany(),
       dashboardRepository.getMonthlyFlow(monthStart, monthEnd),
       dashboardRepository.getMonthlyFlow(taxRefMonthStart, taxRefMonthEnd),
+      pgdasRepository.findApuracao(taxRefPeriod),
     ]);
     const active = fixedCosts.filter((fc) => fc.isActive && fc.type === "PAYABLE");
 
@@ -66,8 +70,16 @@ export const cashReserveService = {
     const vacation = computeVacationProvision(monthlySalaries, monthsElapsed);
     const contingencyTarget = computeContingencyTarget(totalMonthlyFixedCosts, contingencyMonths);
     const contingencyMonthlySaving = contingencyTarget / 12;
-    const taxTarget = computeTaxEstimate(taxRefRevenue, taxRatePercent);
-    const taxDueDate = computeTaxDueDate(taxRefYear, taxRefMonth, taxDueDay);
+
+    // Quando existe o extrato oficial do PGDAS-D pro mês de referência, o DAS
+    // de verdade (já calculado por faixa/atividade, sem ser uma estimativa
+    // linear de %) manda — é bem mais preciso que a conta de "% sobre o
+    // faturamento", que não capta mudança de faixa nem atividades diferentes
+    // (revenda vs industrialização, cada uma com ICMS/IPI próprios).
+    const taxTarget = taxRefApuracao ? taxRefApuracao.taxes.total : computeTaxEstimate(taxRefRevenue, taxRatePercent);
+    const taxDueDate = taxRefApuracao?.dasDueDate
+      ? new Date(`${taxRefApuracao.dasDueDate}T00:00:00.000Z`)
+      : computeTaxDueDate(taxRefYear, taxRefMonth, taxDueDay);
     const taxDaysUntilDue = computeDaysUntil(taxDueDate, now);
 
     // Meta diária: quanto guardar por dia, no ritmo do que resta do mês, pra
@@ -126,9 +138,11 @@ export const cashReserveService = {
         dailyGoal: contingencyDailyGoal,
       },
       tax: {
+        source: taxRefApuracao ? ("pgdas" as const) : ("estimativa" as const),
         ratePercent: taxRatePercent,
         referencePeriod: { year: taxRefYear, month: taxRefMonth },
-        monthlyRevenue: taxRefRevenue,
+        monthlyRevenue: taxRefApuracao ? taxRefApuracao.revenue : taxRefRevenue,
+        dasPaid: taxRefApuracao?.dasPaid ?? null,
         target: taxTarget,
         saved: taxSaved,
         dueDay: taxDueDay,
