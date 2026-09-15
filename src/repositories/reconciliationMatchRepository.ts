@@ -62,14 +62,39 @@ export const reconciliationMatchRepository = {
    * demais para rodar dentro da importação, que ainda tem o limite de tempo da
    * função do servidor para respeitar.
    */
-  findUnmatchedTransactions(importBatchId?: string) {
+  /**
+   * Sem limite, isso já devolveu 6,5 MB numa conta com extrato grande (o CSV
+   * do Mercado Pago tem milhares de linhas) — o navegador travava tentando
+   * desenhar uma tabela com uma dessas por linha. `limit`/`offset` paginam;
+   * o total vem à parte pra tela saber quanto ainda falta sem carregar tudo.
+   */
+  findUnmatchedTransactions(opts: {
+    importBatchId?: string;
+    bankAccountId?: string;
+    limit?: number;
+    offset?: number;
+  } = {}) {
+    const where = {
+      OR: [{ reconciliationMatch: null }, { reconciliationMatch: { status: "REJECTED" as const } }],
+      ...(opts.importBatchId ? { importBatchId: opts.importBatchId } : {}),
+      ...(opts.bankAccountId ? { bankAccountId: opts.bankAccountId } : {}),
+    };
     return prisma.importedTransaction.findMany({
-      where: {
-        OR: [{ reconciliationMatch: null }, { reconciliationMatch: { status: "REJECTED" } }],
-        ...(importBatchId ? { importBatchId } : {}),
-      },
+      where,
       include: { bankAccount: true },
       orderBy: { postedAt: "asc" },
+      take: opts.limit,
+      skip: opts.offset,
+    });
+  },
+
+  countUnmatchedTransactions(opts: { importBatchId?: string; bankAccountId?: string } = {}) {
+    return prisma.importedTransaction.count({
+      where: {
+        OR: [{ reconciliationMatch: null }, { reconciliationMatch: { status: "REJECTED" as const } }],
+        ...(opts.importBatchId ? { importBatchId: opts.importBatchId } : {}),
+        ...(opts.bankAccountId ? { bankAccountId: opts.bankAccountId } : {}),
+      },
     });
   },
 

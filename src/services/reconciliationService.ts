@@ -24,7 +24,7 @@ export const reconciliationService = {
   async runMatching(opts: { importBatchId?: string } = {}) {
     const [entries, transactions, rejectedPairRows] = await Promise.all([
       reconciliationMatchRepository.findUnmatchedEntries(),
-      reconciliationMatchRepository.findUnmatchedTransactions(opts.importBatchId),
+      reconciliationMatchRepository.findUnmatchedTransactions({ importBatchId: opts.importBatchId }),
       reconciliationMatchRepository.findAllRejectedPairs(),
     ]);
 
@@ -79,8 +79,12 @@ export const reconciliationService = {
     return reconciliationMatchRepository.findMany({ status: "SUGGESTED" });
   },
 
-  listUnmatchedTransactions() {
-    return reconciliationMatchRepository.findUnmatchedTransactions();
+  async listUnmatchedTransactions(opts: { bankAccountId?: string; limit?: number; offset?: number } = {}) {
+    const [transactions, total] = await Promise.all([
+      reconciliationMatchRepository.findUnmatchedTransactions(opts),
+      reconciliationMatchRepository.countUnmatchedTransactions(opts),
+    ]);
+    return { transactions, total };
   },
 
   async confirmMatch(id: string) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useRef, useState, type FormEvent } from "react";
 import { formatBRL } from "@/lib/format";
 
 type Match = {
@@ -32,6 +32,10 @@ type UnmatchedTransaction = {
 
 type CategoryOption = { id: string; name: string; parentId: string | null };
 
+type BankAccountOption = { id: string; name: string };
+
+const UNMATCHED_PAGE_SIZE = 200;
+
 type CategoryRule = {
   id: string;
   keyword: string;
@@ -48,6 +52,10 @@ type ApplyRulesResult = {
 export default function ReconciliationPage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [unmatched, setUnmatched] = useState<UnmatchedTransaction[]>([]);
+  const [unmatchedTotal, setUnmatchedTotal] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [bankAccounts, setBankAccounts] = useState<BankAccountOption[]>([]);
+  const [accountFilter, setAccountFilter] = useState("");
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [rules, setRules] = useState<CategoryRule[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Record<string, string>>({});
@@ -63,13 +71,33 @@ export default function ReconciliationPage() {
   const [applyingRules, setApplyingRules] = useState(false);
   const [applyResult, setApplyResult] = useState<ApplyRulesResult | null>(null);
 
+  function unmatchedUrl(offset: number) {
+    const params = new URLSearchParams({ limit: String(UNMATCHED_PAGE_SIZE), offset: String(offset) });
+    if (accountFilter) params.set("bankAccountId", accountFilter);
+    return `/api/reconciliation/transactions?${params}`;
+  }
+
+  // Sempre volta pra primeira página — um extrato grande (ex.: milhares de
+  // linhas do Mercado Pago) não pode ser recarregado inteiro a cada ação, só
+  // porque uma transação sumiu da lista.
   async function fetchMatchesAndUnmatched() {
     const [matchesRes, unmatchedRes] = await Promise.all([
       fetch("/api/reconciliation/matches"),
-      fetch("/api/reconciliation/transactions"),
+      fetch(unmatchedUrl(0)),
     ]);
     setMatches(await matchesRes.json());
-    setUnmatched(await unmatchedRes.json());
+    const { transactions, total } = await unmatchedRes.json();
+    setUnmatched(transactions);
+    setUnmatchedTotal(total);
+  }
+
+  async function loadMoreUnmatched() {
+    setLoadingMore(true);
+    const res = await fetch(unmatchedUrl(unmatched.length));
+    const { transactions, total } = await res.json();
+    setUnmatched((prev) => [...prev, ...transactions]);
+    setUnmatchedTotal(total);
+    setLoadingMore(false);
   }
 
   async function fetchRules() {
@@ -79,12 +107,14 @@ export default function ReconciliationPage() {
 
   async function load() {
     setLoading(true);
-    const [, categoriesRes] = await Promise.all([
+    const [, categoriesRes, accountsRes] = await Promise.all([
       fetchMatchesAndUnmatched(),
       fetch("/api/categories"),
+      fetch("/api/accounts"),
       fetchRules(),
     ]);
     setCategories(await categoriesRes.json());
+    setBankAccounts(await accountsRes.json());
     setLoading(false);
   }
 
@@ -109,6 +139,19 @@ export default function ReconciliationPage() {
   useEffect(() => {
     load();
   }, []);
+
+  // Refaz só a lista de transações sem par quando o filtro de conta muda —
+  // não precisa recarregar categorias/regras/sugestões de novo.
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    setRefreshing(true);
+    fetchMatchesAndUnmatched().then(() => setRefreshing(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountFilter]);
 
   // Auto-preenche a categoria de transações que batem com alguma regra,
   // sem sobrescrever o que já foi escolhido manualmente.
@@ -386,8 +429,26 @@ export default function ReconciliationPage() {
           </section>
 
           <section className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <h2 className="font-serif text-xl text-foreground">Transações sem par</h2>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="font-serif text-xl text-foreground">Transações sem par</h2>
+                <p className="text-xs text-muted">
+                  Mostrando {unmatched.length} de {unmatchedTotal}
+                  {unmatchedTotal > UNMATCHED_PAGE_SIZE && " — filtre por conta ou carregue mais abaixo"}.
+                </p>
+              </div>
+              <select
+                value={accountFilter}
+                onChange={(e) => setAccountFilter(e.target.value)}
+                className="rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
+              >
+                <option value="">Todas as contas</option>
+                {bankAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
               {withCategory.length > 0 && (
                 <button
                   onClick={handleCreateAllEntries}
@@ -458,6 +519,15 @@ export default function ReconciliationPage() {
                   ))}
                 </tbody>
               </table>
+            )}
+            {unmatched.length < unmatchedTotal && (
+              <button
+                onClick={loadMoreUnmatched}
+                disabled={loadingMore}
+                className="w-fit rounded border border-border bg-surface-hover px-4 py-1.5 text-sm font-medium text-foreground transition hover:border-gold disabled:opacity-50"
+              >
+                {loadingMore ? "Carregando..." : `Carregar mais (${unmatchedTotal - unmatched.length} restantes)`}
+              </button>
             )}
           </section>
         </>
