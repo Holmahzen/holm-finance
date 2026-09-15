@@ -61,6 +61,8 @@ describe("parseDanfseNacionalText", () => {
       providerDocument: "58556821000270",
       providerCity: "Barueri",
       recipientDocument: "49046940000100",
+      recipientName: "Regimar Souza Silva Ltda",
+      serviceDescription: "",
       amount: 4572.48,
       netAmount: 4572.48,
       issAmount: 91.45,

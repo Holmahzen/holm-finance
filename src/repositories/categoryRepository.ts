@@ -10,6 +10,10 @@ export const categoryRepository = {
     return prisma.category.findUnique({ where: { id } });
   },
 
+  findByName(name: string) {
+    return prisma.category.findFirst({ where: { name } });
+  },
+
   create(data: Prisma.CategoryUncheckedCreateInput) {
     return prisma.category.create({ data });
   },

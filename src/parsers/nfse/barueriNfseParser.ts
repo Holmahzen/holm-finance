@@ -12,6 +12,8 @@ export type ParsedNfse = {
   providerDocument: string;
   providerCity: string;
   recipientDocument: string;
+  recipientName: string;
+  serviceDescription: string;
   amount: number;
   netAmount: number;
   issAmount: number;
@@ -80,18 +82,27 @@ export function parseBarueriNfseText(text: string): ParsedNfse {
   const cityLine = [...providerBlock].reverse().find((line) => /\s{2,}|\t/.test(line) && /[A-Z]{2}\s*$/.test(line.trim()));
   const providerCity = cityLine ? cityLine.trim().split(/\s{2,}|\t/)[0].trim() : "";
 
-  const recipientDocument = digits(
-    field(text.slice(recipientIndex < 0 ? 0 : text.indexOf("Tomador")), /CPF\/CNPJ:\s*([\d./-]+)/),
-  );
+  const recipientBlock = text.slice(recipientIndex < 0 ? 0 : text.indexOf("Tomador"));
+  const recipientDocument = digits(field(recipientBlock, /CPF\/CNPJ:\s*([\d./-]+)/));
+  // Igual ao prestador: o nome do tomador vem na linha logo após a do CPF/CNPJ.
+  const recipientLines = recipientBlock.split(/\r?\n/);
+  const cpfCnpjIndex = recipientLines.findIndex((line) => /CPF\/CNPJ:/i.test(line));
+  const recipientName =
+    cpfCnpjIndex < 0
+      ? ""
+      : (recipientLines.slice(cpfCnpjIndex + 1).find((line) => line.trim() !== "")?.trim() ?? "");
 
   const serviceCode = field(text, /C[óo]digo do Servi[çc]o\s*\n\s*(\d+)/) ?? "";
   const serviceItem = field(text, /Lei complementar 116\/03\)\s*\n\s*([\d.]+)/) ?? "";
+  const serviceDescription = field(text, /Discrimina[çc][ãa]o dos Servi[çc]os\s*\n\s*(.+)/i) ?? "";
 
   return {
     providerName,
     providerDocument,
     providerCity,
     recipientDocument,
+    recipientName,
+    serviceDescription,
     amount: money(field(text, /Valor dos servi[çc]os\s*\t?\s*R\$\s*([\d.,]+)/i)),
     netAmount: money(field(text, /Valor L[íi]quido\s*\t?\s*R\$\s*([\d.,]+)/i)),
     issAmount: money(field(text, /\(=\)\s*Valor do ISS\s*\t?\s*R\$\s*([\d.,]+)/i)),

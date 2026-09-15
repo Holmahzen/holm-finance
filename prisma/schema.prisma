@@ -229,9 +229,41 @@ model Entry {
 
   reconciliationMatch ReconciliationMatch?
   rejectedMatchPairs  RejectedMatchPair[]
+  serviceInvoice      ServiceInvoice?
 
   @@index([status, dueDate])
   @@map("entries")
+}
+
+/**
+ * NFS-e do padrão nacional em que a Holm (CNPJ Regimar Souza Silva Ltda) é a
+ * tomadora — mão de obra de produção (corte, costura, facção) paga direto
+ * pela conta do Mercado Pago, sem nunca virar lançamento. Ao contrário da
+ * MlServiceInvoice (custo já descontado do repasse, nunca vira conta), esta é
+ * despesa de verdade que faltava — por isso toda nota importada aqui gera um
+ * Entry pago de verdade.
+ */
+model ServiceInvoice {
+  id                 String   @id @default(cuid())
+  /** Chave de acesso da NFS-e quando presente; senão prestador+numero+data+valor. */
+  dedupeKey          String   @unique
+  providerDocument   String
+  providerName       String
+  recipientDocument  String
+  recipientName      String
+  serviceDescription String
+  amount             Decimal  @db.Decimal(14, 2)
+  issuedOn           DateTime
+  /** "YYYY-MM" da competência do serviço. */
+  referenceMonth     String
+  documentNumber     String?
+  sourceFileName     String
+  entryId            String   @unique
+  entry              Entry    @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  importedAt         DateTime @default(now())
+
+  @@index([referenceMonth])
+  @@map("service_invoices")
 }
 
 model CreditCard {

@@ -54,6 +54,8 @@ export function parseDanfseNacionalText(text: string): ParsedNfse {
   const providerDocument = digits(belowFrom(lines, /^PRESTADOR \/ FORNECEDOR$/i, /^CNPJ \/ CPF \/ NIF$/i));
   const providerCity = belowFrom(lines, /^PRESTADOR \/ FORNECEDOR$/i, /^Munic[íi]pio \/ UF$/i).split("/")[0].trim();
   const recipientDocument = digits(belowFrom(lines, /^TOMADOR \/ ADQUIRENTE$/i, /^CNPJ \/ CPF \/ NIF$/i));
+  const recipientName = belowFrom(lines, /^TOMADOR \/ ADQUIRENTE$/i, /^Nome \/ Nome Empresarial$/i);
+  const serviceDescription = belowFrom(lines, /^SERVI[ÇC]O PRESTADO/i, /^Descri[çc][ãa]o do Servi[çc]o$/i);
 
   // "26.01 / 260101220": subitem da lista nacional e código do município.
   const codes = below(lines, /^C[óo]digo de Tributa[çc][ãa]o Nacional \/ Municipal$/i).split("/");
@@ -63,6 +65,8 @@ export function parseDanfseNacionalText(text: string): ParsedNfse {
     providerDocument,
     providerCity,
     recipientDocument,
+    recipientName,
+    serviceDescription,
     amount: money(belowFrom(lines, /^VALOR TOTAL DA NFS-E$/i, /^Valor do Servi[çc]o$/i)),
     netAmount: money(belowFrom(lines, /^VALOR TOTAL DA NFS-E$/i, /^Valor L[íi]quido da NFS-e$/i)),
     issAmount: money(below(lines, /^ISSQN Apurado$/i)),

@@ -20,6 +20,7 @@ const navItems = [
   { href: "/projecao-90-dias", label: "Projeção" },
   { href: "/vendas", label: "Vendas" },
   { href: "/notas-fiscais", label: "Notas Fiscais" },
+  { href: "/notas-producao", label: "Notas de Produção Terceirizada" },
   { href: "/conferencia-ncm", label: "Conferência de NCM" },
   { href: "/notas-da-receita", label: "Notas da Receita" },
   { href: "/recebiveis-ml", label: "Recebíveis ML" },

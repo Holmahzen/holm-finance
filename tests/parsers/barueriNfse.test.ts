@@ -47,6 +47,8 @@ describe("parseBarueriNfseText", () => {
       providerDocument: "58556821000270",
       providerCity: "Barueri",
       recipientDocument: "49046940000100",
+      recipientName: "REGIMAR SOUZA SILVA LTDA",
+      serviceDescription: "NFE",
       amount: 4130.82,
       netAmount: 4130.82,
       issAmount: 82.62,
