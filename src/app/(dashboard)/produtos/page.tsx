@@ -27,6 +27,17 @@ type ParsedProductRow = {
 type PreviewRow = ParsedProductRow & { action: "create" | "update" };
 type ParseError = { line: number; message: string };
 
+type SuspiciousProduct = {
+  id: string;
+  sku: string;
+  currentName: string;
+  suggestedName: string | null;
+  salePrice: number;
+  tecidoCost: number;
+  costuraCost: number;
+  aviamentosCost: number;
+};
+
 type Product = {
   id: string;
   name: string;
@@ -52,6 +63,9 @@ export default function ProductsPage() {
   const [priorityMonth, setPriorityMonth] = useState(now.getMonth() + 1);
   const [priorityList, setPriorityList] = useState<UncostedSku[]>([]);
   const [priorityLoading, setPriorityLoading] = useState(true);
+
+  const [suspiciousList, setSuspiciousList] = useState<SuspiciousProduct[]>([]);
+  const [suspiciousLoading, setSuspiciousLoading] = useState(true);
 
   const [pasteText, setPasteText] = useState("");
   const [previewRows, setPreviewRows] = useState<PreviewRow[] | null>(null);
@@ -101,10 +115,28 @@ export default function ProductsPage() {
     loadPriority();
   }, [priorityYear, priorityMonth]);
 
+  async function loadSuspicious() {
+    setSuspiciousLoading(true);
+    const res = await fetch("/api/products/suspicious");
+    setSuspiciousList(await res.json());
+    setSuspiciousLoading(false);
+  }
+
+  useEffect(() => {
+    loadSuspicious();
+  }, []);
+
   function fillFromPriority(item: UncostedSku) {
     setName(item.name);
     setSku(item.sku);
     setSalePrice((item.grossRevenue / item.quantity).toFixed(2));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function fillFromSuspicious(item: SuspiciousProduct) {
+    const product = products.find((p) => p.id === item.id);
+    if (product) startEdit(product);
+    if (item.suggestedName) setName(item.suggestedName);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -138,7 +170,7 @@ export default function ProductsPage() {
     setPasteText("");
     setPreviewRows(null);
     setPreviewErrors([]);
-    await Promise.all([load(), loadPriority()]);
+    await Promise.all([load(), loadPriority(), loadSuspicious()]);
   }
 
   function cancelPreview() {
@@ -245,7 +277,7 @@ export default function ProductsPage() {
       setError(typeof body.error === "string" ? body.error : "Não foi possível salvar.");
     } else {
       resetForm();
-      await Promise.all([load(), loadPriority()]);
+      await Promise.all([load(), loadPriority(), loadSuspicious()]);
     }
     setSubmitting(false);
   }
@@ -340,6 +372,61 @@ export default function ProductsPage() {
           </div>
         )}
       </div>
+
+      {(suspiciousLoading || suspiciousList.length > 0) && (
+        <div className="flex flex-col gap-3 rounded-lg border border-dashed border-red-400/50 bg-surface p-4">
+          <div>
+            <h2 className="font-serif text-lg text-red-400">Produtos suspeitos</h2>
+            <p className="text-sm text-muted">
+              O nome cadastrado desses produtos é só um número — sinal de que a coluna Nome faltou
+              numa colagem antiga e tudo deslizou uma casa (o preço virou nome, o tecido virou
+              preço...). Preço e custos abaixo estão errados; use o nome sugerido (achado no
+              histórico de vendas, quando existir) e digite os valores certos de novo.
+            </p>
+          </div>
+
+          {suspiciousLoading ? (
+            <p className="text-sm text-muted">Carregando...</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[700px] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-border text-muted">
+                    <th className="py-1.5 font-medium">SKU</th>
+                    <th className="py-1.5 font-medium">Nome atual (quebrado)</th>
+                    <th className="py-1.5 font-medium">Nome sugerido</th>
+                    <th className="py-1.5 font-medium">Valores atuais (não confiar)</th>
+                    <th className="py-1.5 font-medium"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {suspiciousList.map((item) => (
+                    <tr key={item.id} className="border-b border-border/50">
+                      <td className="py-1.5 text-muted">{item.sku}</td>
+                      <td className="py-1.5 text-red-400">{item.currentName}</td>
+                      <td className="py-1.5">
+                        {item.suggestedName ?? <span className="text-muted">— sem venda pra sugerir</span>}
+                      </td>
+                      <td className="py-1.5 text-xs text-muted">
+                        preço {formatBRL(item.salePrice)} · tecido {formatBRL(item.tecidoCost)} ·
+                        costura {formatBRL(item.costuraCost)} · aviamentos {formatBRL(item.aviamentosCost)}
+                      </td>
+                      <td className="py-1.5">
+                        <button
+                          onClick={() => fillFromSuspicious(item)}
+                          className="text-xs font-medium text-gold hover:text-gold-soft hover:underline"
+                        >
+                          Corrigir
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-col gap-3 rounded-lg border border-dashed border-gold/50 bg-surface p-4">
         <div>

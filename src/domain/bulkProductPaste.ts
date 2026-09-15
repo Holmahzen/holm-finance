@@ -9,6 +9,16 @@ export type ParsedProductRow = {
 
 export type ParseError = { line: number; message: string };
 
+/**
+ * Um nome de produto de verdade nunca é só um número — se for, é quase
+ * certo que uma coluna (geralmente o Nome) ficou de fora da colagem e tudo
+ * deslizou uma casa: o preço virou nome, o tecido virou preço, e por aí vai,
+ * sem nenhum erro visível na hora. Pega esse sintoma antes de gravar.
+ */
+export function looksLikeNumericName(name: string): boolean {
+  return /^[\d.,\s]+$/.test(name.trim());
+}
+
 export type ParseBulkProductPasteResult = {
   rows: ParsedProductRow[];
   errors: ParseError[];
@@ -71,6 +81,13 @@ export function parseBulkProductPaste(raw: string): ParseBulkProductPasteResult 
     }
     if (!name) {
       errors.push({ line: lineNumber, message: `SKU ${sku}: nome vazio.` });
+      return;
+    }
+    if (looksLikeNumericName(name)) {
+      errors.push({
+        line: lineNumber,
+        message: `SKU ${sku}: nome "${name}" parece um valor numérico, não um nome — confira se não faltou colar a coluna Nome (tudo desliza uma casa quando ela falta).`,
+      });
       return;
     }
     const salePrice = parseBrNumber(salePriceRaw);

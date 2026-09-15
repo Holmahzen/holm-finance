@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseBulkProductPaste } from "@/domain/bulkProductPaste";
+import { parseBulkProductPaste, looksLikeNumericName } from "@/domain/bulkProductPaste";
 
 describe("parseBulkProductPaste", () => {
   it("parses a well-formed tab-separated line", () => {
@@ -83,5 +83,32 @@ describe("parseBulkProductPaste", () => {
     const { rows, errors } = parseBulkProductPaste("");
     expect(rows).toEqual([]);
     expect(errors).toEqual([]);
+  });
+
+  it("rejects a row whose name is just a number (Nome column missing, everything shifted)", () => {
+    // Colagem sem a coluna Nome: SKU, Preço, Tecido, Costura, Aviamentos (5 colunas)
+    // em vez de SKU, Nome, Preço, Tecido, Costura, Aviamentos (6) — tudo desliza.
+    const { rows, errors } = parseBulkProductPaste("V-BAND1000\t2,37\t0,62\t0,70\t1,05");
+    expect(rows).toHaveLength(0);
+    expect(errors[0].message).toMatch(/parece um valor numérico/);
+  });
+
+  it("still accepts a name that has digits mixed with letters", () => {
+    const { rows, errors } = parseBulkProductPaste("A1\tJaleco G2\t100\t10\t5\t2");
+    expect(errors).toHaveLength(0);
+    expect(rows[0].name).toBe("Jaleco G2");
+  });
+});
+
+describe("looksLikeNumericName", () => {
+  it("flags a bare number, with or without Brazilian decimal comma", () => {
+    expect(looksLikeNumericName("2,37")).toBe(true);
+    expect(looksLikeNumericName("14")).toBe(true);
+    expect(looksLikeNumericName("  27,9  ")).toBe(true);
+  });
+
+  it("does not flag a real product name", () => {
+    expect(looksLikeNumericName("Calça Oxford")).toBe(false);
+    expect(looksLikeNumericName("Jaleco G2")).toBe(false);
   });
 });

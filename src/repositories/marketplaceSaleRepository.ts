@@ -33,6 +33,14 @@ export const marketplaceSaleRepository = {
     return { newCount: data.length - existingIds.size, updatedCount: existingIds.size };
   },
 
+  /** Nome do produto (como aparece no ML) em cada venda desses SKUs — pra sugerir o nome de verdade quando o cadastro foi corrompido. */
+  findProductNamesBySkus(skus: string[]) {
+    return prisma.marketplaceSale.findMany({
+      where: { sku: { in: skus } },
+      select: { sku: true, productName: true },
+    });
+  },
+
   findByPeriod(start: Date, end: Date) {
     return prisma.marketplaceSale.findMany({
       where: { saleDate: { gte: start, lt: end } },
