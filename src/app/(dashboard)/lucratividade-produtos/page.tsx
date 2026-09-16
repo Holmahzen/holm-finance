@@ -187,10 +187,11 @@ export default function ProductProfitabilityPage() {
               )}
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-left text-sm">
+              <table className="w-full min-w-[1000px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-border text-muted">
                     <th className="py-2 font-medium">Produto</th>
+                    <th className="py-2 font-medium">SKU</th>
                     <th className="py-2 font-medium">Classe</th>
                     <th className="py-2 font-medium">Receita</th>
                     <th className="py-2 font-medium">Qtd.</th>
@@ -204,8 +205,8 @@ export default function ProductProfitabilityPage() {
                     <tr key={r.sku} className="border-b border-border/50">
                       <td className="py-2 max-w-[280px] truncate" title={r.name}>
                         {r.name}
-                        <span className="ml-1 text-xs text-muted">({r.sku})</span>
                       </td>
+                      <td className="py-2 text-muted whitespace-nowrap">{r.sku}</td>
                       <td className="py-2 text-muted">{r.tier}</td>
                       <td className="py-2">{formatBRL(r.grossRevenue)}</td>
                       <td className="py-2">{r.quantity}</td>
