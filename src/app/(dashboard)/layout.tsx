@@ -17,6 +17,7 @@ const navItems = [
   { href: "/emprestimos", label: "Empréstimos" },
   { href: "/produtos", label: "Produtos" },
   { href: "/ponto-de-equilibrio", label: "Ponto de Equilíbrio" },
+  { href: "/lucratividade-produtos", label: "Lucratividade dos Produtos" },
   { href: "/projecao-90-dias", label: "Projeção" },
   { href: "/vendas", label: "Vendas" },
   { href: "/notas-fiscais", label: "Notas Fiscais" },
