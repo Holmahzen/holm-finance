@@ -23,7 +23,21 @@ type Row = {
   contribution: number;
 };
 
-type Report = { year: number; rows: Row[]; suggestedMarginThreshold: number };
+type PeriodResult = {
+  receitaLiquida: number;
+  margemContribuicao: number;
+  despesasFixasTotal: number;
+  resultadoOperacional: number;
+  lucroLiquido: number;
+};
+
+type Report = {
+  year: number;
+  month: number | null;
+  rows: Row[];
+  suggestedMarginThreshold: number;
+  periodResult: PeriodResult;
+};
 
 const QUADRANT_EMOJI: Record<ProfitabilityQuadrant, string> = {
   ESTRELA: "🌟",
@@ -49,6 +63,8 @@ const QUADRANT_ORDER: ProfitabilityQuadrant[] = [
   "SEM_CUSTO",
 ];
 
+const MONTH_NAMES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
 function pct(fraction: number): string {
   return `${(fraction * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
 }
@@ -56,6 +72,7 @@ function pct(fraction: number): string {
 export default function ProductProfitabilityPage() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState<number | null>(null); // null = ano inteiro
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
   const [marginThreshold, setMarginThreshold] = useState<number | null>(null);
@@ -63,14 +80,16 @@ export default function ProductProfitabilityPage() {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/products/profitability?year=${year}`)
+    const params = new URLSearchParams({ year: String(year) });
+    if (month) params.set("month", String(month));
+    fetch(`/api/products/profitability?${params}`)
       .then((r) => r.json())
       .then((body: Report) => {
         setReport(body);
         setMarginThreshold(body.suggestedMarginThreshold);
         setLoading(false);
       });
-  }, [year]);
+  }, [year, month]);
 
   const rows = useMemo(() => {
     if (!report || marginThreshold === null) return [];
@@ -124,6 +143,21 @@ export default function ProductProfitabilityPage() {
           </select>
         </div>
         <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-muted">Período</label>
+          <select
+            value={month ?? ""}
+            onChange={(e) => setMonth(e.target.value === "" ? null : Number(e.target.value))}
+            className="rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
+          >
+            <option value="">Ano inteiro</option>
+            {MONTH_NAMES.map((label, idx) => (
+              <option key={label} value={idx + 1}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-muted">
             Margem considerada &quot;boa&quot; (%)
           </label>
@@ -146,6 +180,55 @@ export default function ProductProfitabilityPage() {
         <p className="text-sm text-muted">Carregando...</p>
       ) : (
         <>
+          {report && (
+            <div className="flex flex-col gap-2 rounded-lg border border-gold/50 bg-surface p-4">
+              <h2 className="font-serif text-lg text-foreground">
+                Resultado do período — {month ? `${MONTH_NAMES[month - 1]}/${year}` : `${year} inteiro`}
+              </h2>
+              <p className="text-xs text-muted">
+                O número oficial da DRE (não a soma da contribuição por produto acima, que não inclui
+                despesa fixa) — é o que sobra depois de pagar aluguel, salário, e todo o resto do custo
+                fixo do período.
+              </p>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <div>
+                  <span className="text-xs font-medium tracking-wide text-muted uppercase">
+                    Receita líquida
+                  </span>
+                  <p className="font-serif text-xl text-foreground">
+                    {formatBRL(report.periodResult.receitaLiquida)}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-xs font-medium tracking-wide text-muted uppercase">
+                    Margem de contribuição
+                  </span>
+                  <p className="font-serif text-xl text-foreground">
+                    {formatBRL(report.periodResult.margemContribuicao)}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-xs font-medium tracking-wide text-muted uppercase">
+                    (−) Despesas fixas
+                  </span>
+                  <p className="font-serif text-xl text-red-400">
+                    {formatBRL(report.periodResult.despesasFixasTotal)}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-xs font-medium tracking-wide text-muted uppercase">
+                    Sobra após custos fixos
+                  </span>
+                  <p
+                    className={`font-serif text-xl ${report.periodResult.resultadoOperacional >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                  >
+                    {formatBRL(report.periodResult.resultadoOperacional)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {QUADRANT_ORDER.map((q) => {
               const s = summary.get(q)!;
