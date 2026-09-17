@@ -110,6 +110,16 @@ export default function EntriesPage() {
   const [editingPlannedId, setEditingPlannedId] = useState<string | null>(null);
   const [plannedDateValue, setPlannedDateValue] = useState("");
 
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  function toggleGroup(key: string) {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
   async function load() {
     setLoading(true);
     const [entriesRes, categoriesRes, counterpartiesRes, accountsRes, creditCardsRes] = await Promise.all([
@@ -320,6 +330,48 @@ export default function EntriesPage() {
   const allSelectableSelected =
     selectablePendingEntries.length > 0 && selectablePendingEntries.every((e) => selectedIds.has(e.id));
 
+  // Agrupa lançamentos pendentes do mesmo cartão com o mesmo vencimento numa
+  // linha só "Fatura {cartão}" — na vida real só sai um débito por fatura,
+  // não um por item. Só agrupa PENDING (pago/cancelado sempre aparece
+  // individual, é histórico) e só quando há 2+ itens (um só não ganha nada
+  // virando "Fatura X (1)").
+  type DisplayRow =
+    | { kind: "single"; entry: Entry }
+    | { kind: "group"; key: string; cardName: string; dueDate: string; entries: Entry[]; totalAmount: number };
+
+  const byCardDue = new Map<string, Entry[]>();
+  const singles: Entry[] = [];
+  for (const entry of visibleEntries) {
+    if (entry.status === "PENDING" && entry.creditCard) {
+      const key = `${entry.creditCard.id}-${entry.dueDate}`;
+      const list = byCardDue.get(key) ?? [];
+      list.push(entry);
+      byCardDue.set(key, list);
+    } else {
+      singles.push(entry);
+    }
+  }
+  const displayRows: DisplayRow[] = singles.map((entry) => ({ kind: "single", entry }));
+  for (const [key, group] of byCardDue) {
+    if (group.length === 1) {
+      displayRows.push({ kind: "single", entry: group[0] });
+    } else {
+      displayRows.push({
+        kind: "group",
+        key,
+        cardName: group[0].creditCard!.name,
+        dueDate: group[0].dueDate,
+        entries: group,
+        totalAmount: group.reduce((s, e) => s + Number(e.amount), 0),
+      });
+    }
+  }
+  displayRows.sort((a, b) => {
+    const dateA = a.kind === "single" ? a.entry.dueDate : a.dueDate;
+    const dateB = b.kind === "single" ? b.entry.dueDate : b.dueDate;
+    return dateA.localeCompare(dateB);
+  });
+
   function toggleSelected(id: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -359,6 +411,120 @@ export default function EntriesPage() {
     setBulkPayAccountId("");
     setBulkPayDate("");
     await load();
+  }
+
+  function renderEntryRow(entry: Entry, indented = false) {
+    const paymentStatus = paymentStatusMeta[getPaymentStatus(entry)];
+    return (
+      <tr key={entry.id} className={`border-b border-border/50 ${indented ? "bg-background/40" : ""}`}>
+        <td className={`no-print py-2 ${indented ? "pl-6" : ""}`}>
+          {entry.status === "PENDING" && (
+            <input
+              type="checkbox"
+              checked={selectedIds.has(entry.id)}
+              onChange={() => toggleSelected(entry.id)}
+              className="h-4 w-4"
+            />
+          )}
+        </td>
+        <td className="py-2">
+          {entry.description}
+          {entry.creditCard && (
+            <span className="ml-1.5 rounded-full border border-border px-1.5 py-0.5 text-xs text-muted">
+              {entry.creditCard.name}
+            </span>
+          )}
+        </td>
+        <td className="py-2">{formatBRL(entry.amount)}</td>
+        <td className="py-2">{formatDate(entry.dueDate)}</td>
+        <td className="py-2">
+          {editingPlannedId === entry.id ? (
+            <div className="flex items-center gap-1">
+              <input
+                type="date"
+                value={plannedDateValue}
+                onChange={(e) => setPlannedDateValue(e.target.value)}
+                className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+              />
+              <button
+                onClick={() => savePlannedDate(entry.id)}
+                className="text-xs font-medium text-gold hover:text-gold-soft"
+              >
+                Salvar
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                setEditingPlannedId(entry.id);
+                setPlannedDateValue(entry.plannedPaymentDate ? entry.plannedPaymentDate.slice(0, 10) : "");
+              }}
+              className="text-muted hover:text-gold"
+            >
+              {entry.plannedPaymentDate ? formatDate(entry.plannedPaymentDate) : "—"}
+            </button>
+          )}
+        </td>
+        <td className="py-2 text-muted">{entry.competenceDate ? formatDate(entry.competenceDate) : "—"}</td>
+        <td className="py-2 text-muted">{entry.paidAt ? formatDate(entry.paidAt) : "—"}</td>
+        <td className="py-2">{entry.category?.name ?? "—"}</td>
+        <td className="py-2">
+          <span className={`text-xs font-semibold ${paymentStatus.className}`}>{paymentStatus.label}</span>
+        </td>
+        <td className="no-print py-2">
+          {entry.status === "PENDING" &&
+            (payingId === entry.id ? (
+              <div className="flex items-center gap-2">
+                <select
+                  value={payAccountId}
+                  onChange={(e) => setPayAccountId(e.target.value)}
+                  className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+                >
+                  <option value="">Conta...</option>
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="date"
+                  value={payDate}
+                  onChange={(e) => setPayDate(e.target.value)}
+                  className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+                />
+                <button
+                  onClick={() => handlePay(entry.id)}
+                  className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white transition hover:bg-emerald-500"
+                >
+                  Confirmar
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setPayingId(entry.id);
+                  setPayDate(todayLocalDateString());
+                }}
+                className="text-xs font-medium text-gold hover:text-gold-soft hover:underline"
+              >
+                Marcar como pago
+              </button>
+            ))}
+        </td>
+        <td className="no-print py-2 whitespace-nowrap">
+          <button
+            onClick={() => startEdit(entry)}
+            className="mr-3 text-xs font-medium text-gold hover:text-gold-soft hover:underline"
+          >
+            Editar
+          </button>
+          <button onClick={() => handleDelete(entry)} className="text-xs font-medium text-red-400 hover:underline">
+            Excluir
+          </button>
+        </td>
+      </tr>
+    );
   }
 
   return (
@@ -790,130 +956,44 @@ export default function EntriesPage() {
             </tr>
           </thead>
           <tbody>
-            {visibleEntries.map((entry) => {
-              const paymentStatus = paymentStatusMeta[getPaymentStatus(entry)];
+            {displayRows.map((row) => {
+              if (row.kind === "single") return renderEntryRow(row.entry);
+              const isOpen = expandedGroups.has(row.key);
+              const allGroupSelected = row.entries.every((e) => selectedIds.has(e.id));
               return (
-                <tr key={entry.id} className="border-b border-border/50">
-                  <td className="no-print py-2">
-                    {entry.status === "PENDING" && (
+                <Fragment key={row.key}>
+                  <tr className="border-b border-border/50 bg-surface/60">
+                    <td className="no-print py-2">
                       <input
                         type="checkbox"
-                        checked={selectedIds.has(entry.id)}
-                        onChange={() => toggleSelected(entry.id)}
+                        checked={allGroupSelected}
+                        onChange={() =>
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev);
+                            for (const e of row.entries) {
+                              if (allGroupSelected) next.delete(e.id);
+                              else next.add(e.id);
+                            }
+                            return next;
+                          })
+                        }
                         className="h-4 w-4"
                       />
-                    )}
-                  </td>
-                  <td className="py-2">
-                    {entry.description}
-                    {entry.creditCard && (
-                      <span className="ml-1.5 rounded-full border border-border px-1.5 py-0.5 text-xs text-muted">
-                        {entry.creditCard.name}
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-2">{formatBRL(entry.amount)}</td>
-                  <td className="py-2">{formatDate(entry.dueDate)}</td>
-                  <td className="py-2">
-                    {editingPlannedId === entry.id ? (
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="date"
-                          value={plannedDateValue}
-                          onChange={(e) => setPlannedDateValue(e.target.value)}
-                          className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
-                        />
-                        <button
-                          onClick={() => savePlannedDate(entry.id)}
-                          className="text-xs font-medium text-gold hover:text-gold-soft"
-                        >
-                          Salvar
-                        </button>
-                      </div>
-                    ) : (
+                    </td>
+                    <td className="py-2" colSpan={8}>
                       <button
-                        onClick={() => {
-                          setEditingPlannedId(entry.id);
-                          setPlannedDateValue(
-                            entry.plannedPaymentDate
-                              ? entry.plannedPaymentDate.slice(0, 10)
-                              : "",
-                          );
-                        }}
-                        className="text-muted hover:text-gold"
+                        type="button"
+                        onClick={() => toggleGroup(row.key)}
+                        className="text-left font-medium text-foreground hover:underline"
                       >
-                        {entry.plannedPaymentDate ? formatDate(entry.plannedPaymentDate) : "—"}
+                        {isOpen ? "▾" : "▸"} Fatura {row.cardName} ({row.entries.length} itens) —{" "}
+                        {formatBRL(row.totalAmount)} — vence {formatDate(row.dueDate)}
                       </button>
-                    )}
-                  </td>
-                  <td className="py-2 text-muted">
-                    {entry.competenceDate ? formatDate(entry.competenceDate) : "—"}
-                  </td>
-                  <td className="py-2 text-muted">
-                    {entry.paidAt ? formatDate(entry.paidAt) : "—"}
-                  </td>
-                  <td className="py-2">{entry.category?.name ?? "—"}</td>
-                  <td className="py-2">
-                    <span className={`text-xs font-semibold ${paymentStatus.className}`}>
-                      {paymentStatus.label}
-                    </span>
-                  </td>
-                  <td className="no-print py-2">
-                    {entry.status === "PENDING" &&
-                      (payingId === entry.id ? (
-                        <div className="flex items-center gap-2">
-                          <select
-                            value={payAccountId}
-                            onChange={(e) => setPayAccountId(e.target.value)}
-                            className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
-                          >
-                            <option value="">Conta...</option>
-                            {accounts.map((a) => (
-                              <option key={a.id} value={a.id}>
-                                {a.name}
-                              </option>
-                            ))}
-                          </select>
-                          <input
-                            type="date"
-                            value={payDate}
-                            onChange={(e) => setPayDate(e.target.value)}
-                            className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
-                          />
-                          <button
-                            onClick={() => handlePay(entry.id)}
-                            className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white transition hover:bg-emerald-500"
-                          >
-                            Confirmar
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => {
-                            setPayingId(entry.id);
-                            setPayDate(todayLocalDateString());
-                          }}
-                          className="text-xs font-medium text-gold hover:text-gold-soft hover:underline"
-                        >
-                          Marcar como pago
-                        </button>
-                      ))}
-                  </td>
-                  <td className="no-print py-2 whitespace-nowrap">
-                    <button
-                      onClick={() => startEdit(entry)}
-                      className="mr-3 text-xs font-medium text-gold hover:text-gold-soft hover:underline"
-                    >
-                      Editar
-                    </button>
-                    <button
-                      onClick={() => handleDelete(entry)}
-                      className="text-xs font-medium text-red-400 hover:underline"
-                    >
-                      Excluir
-                    </button>
-                  </td>
-                </tr>
+                    </td>
+                    <td className="no-print py-2" colSpan={2} />
+                  </tr>
+                  {isOpen && row.entries.map((entry) => renderEntryRow(entry, true))}
+                </Fragment>
               );
             })}
           </tbody>
