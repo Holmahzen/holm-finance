@@ -13,7 +13,13 @@ export const createEntrySchema = z.object({
   notes: z.string().optional(),
 });
 
-export const updateEntrySchema = createEntrySchema.partial();
+export const updateEntrySchema = createEntrySchema.partial().extend({
+  // Não fazem parte da criação normal (ligados por baixo pela geração de
+  // custo fixo / compra parcelada), mas precisam ser editáveis pra corrigir
+  // um lançamento avulso que devia ter nascido vinculado e não nasceu.
+  fixedCostId: z.string().nullable().optional(),
+  creditCardPurchaseId: z.string().nullable().optional(),
+});
 
 export const payEntrySchema = z.object({
   bankAccountId: z.string().min(1, "Conta é obrigatória"),
