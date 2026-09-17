@@ -19,6 +19,14 @@ type Sale = {
   status: string;
 };
 
+type ModalityBreakdown = {
+  modality: string;
+  count: number;
+  quantity: number;
+  grossRevenue: number;
+  netRevenue: number;
+};
+
 type SalesReport = {
   period: { year: number; month: number };
   totalGrossRevenue: number;
@@ -27,6 +35,33 @@ type SalesReport = {
   salesCount: number;
   sales: Sale[];
 };
+
+type ModalityReport = {
+  totalGrossRevenue: number;
+  totalNetRevenue: number;
+  totalQuantity: number;
+  salesCount: number;
+  byModality: ModalityBreakdown[];
+  flexExpectedInvoice: number;
+};
+
+const FLEX_COST_PER_PACKAGE = 12.99;
+
+function toDateInputValue(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+/** Quinzena corrente: 01-15 ou 16-fim do mês, conforme o dia de hoje — mesmo
+ * corte que a transportadora usa pra fechar a fatura do Flex. */
+function currentFortnight(): { from: string; to: string } {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  if (now.getDate() <= 15) {
+    return { from: toDateInputValue(new Date(y, m, 1)), to: toDateInputValue(new Date(y, m, 15)) };
+  }
+  return { from: toDateInputValue(new Date(y, m, 16)), to: toDateInputValue(new Date(y, m + 1, 0)) };
+}
 
 type ImportBatch = {
   id: string;
@@ -66,6 +101,24 @@ export default function VendasPage() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const defaultFortnight = currentFortnight();
+  const [modalityFrom, setModalityFrom] = useState(defaultFortnight.from);
+  const [modalityTo, setModalityTo] = useState(defaultFortnight.to);
+  const [modalityFilter, setModalityFilter] = useState("all");
+  const [modalityReport, setModalityReport] = useState<ModalityReport | null>(null);
+  const [modalityLoading, setModalityLoading] = useState(true);
+
+  useEffect(() => {
+    if (!modalityFrom || !modalityTo) return;
+    setModalityLoading(true);
+    fetch(`/api/sales?from=${modalityFrom}&to=${modalityTo}`)
+      .then((r) => r.json())
+      .then((body: ModalityReport) => {
+        setModalityReport(body);
+        setModalityLoading(false);
+      });
+  }, [modalityFrom, modalityTo]);
 
   async function load() {
     setLoading(true);
@@ -239,6 +292,102 @@ export default function VendasPage() {
           </div>
         </>
       )}
+
+      <div className="flex flex-col gap-4 rounded-lg border border-border bg-surface p-4">
+        <div>
+          <h2 className="font-serif text-lg text-foreground">Conferência por modalidade de envio</h2>
+          <p className="text-sm text-muted">
+            Filtra as vendas por período exato e por modalidade (Flex, Full, me2, Shopee Xpress...) —
+            útil pra bater o número de pedidos Flex do período com a fatura que a transportadora cobra
+            à parte (R$12,99/pacote, fora do que o Mercado Turbo já desconta).
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted">De</label>
+            <input
+              type="date"
+              value={modalityFrom}
+              onChange={(e) => setModalityFrom(e.target.value)}
+              className="rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted">Até</label>
+            <input
+              type="date"
+              value={modalityTo}
+              onChange={(e) => setModalityTo(e.target.value)}
+              className="rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted">Modalidade</label>
+            <select
+              value={modalityFilter}
+              onChange={(e) => setModalityFilter(e.target.value)}
+              className="rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
+            >
+              <option value="all">Todas</option>
+              {(modalityReport?.byModality ?? []).map((b) => (
+                <option key={b.modality} value={b.modality}>
+                  {b.modality}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {modalityLoading || !modalityReport ? (
+          <p className="text-sm text-muted">Carregando...</p>
+        ) : modalityReport.byModality.length === 0 ? (
+          <p className="text-sm text-muted">Nenhuma venda nesse período.</p>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[560px] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-border text-muted">
+                    <th className="py-1.5 font-medium">Modalidade</th>
+                    <th className="py-1.5 font-medium">Pedidos</th>
+                    <th className="py-1.5 font-medium">Qtd.</th>
+                    <th className="py-1.5 font-medium">Receita bruta</th>
+                    <th className="py-1.5 font-medium">Receita líquida</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {modalityReport.byModality
+                    .filter((b) => modalityFilter === "all" || b.modality === modalityFilter)
+                    .map((b) => (
+                      <tr key={b.modality} className="border-b border-border/50">
+                        <td className="py-1.5">{b.modality}</td>
+                        <td className="py-1.5">{b.count}</td>
+                        <td className="py-1.5">{b.quantity}</td>
+                        <td className="py-1.5">{formatBRL(b.grossRevenue)}</td>
+                        <td className="py-1.5">{formatBRL(b.netRevenue)}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+
+            {modalityReport.byModality.some((b) => b.modality === "Flex") && (
+              <div className="flex flex-col gap-1 rounded-lg border border-gold/50 bg-background p-3 text-sm">
+                <span className="font-medium text-foreground">
+                  Fatura Flex esperada nesse período: {formatBRL(modalityReport.flexExpectedInvoice)}
+                </span>
+                <span className="text-xs text-muted">
+                  {modalityReport.byModality.find((b) => b.modality === "Flex")?.count ?? 0} pedidos Flex ×{" "}
+                  {formatBRL(FLEX_COST_PER_PACKAGE)} — compare com o valor real da fatura da transportadora
+                  quando ela chegar (pode haver uma pequena diferença se algum pedido do último dia entrar
+                  na próxima quinzena, ou se algum pedido do período foi cancelado depois).
+                </span>
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
       {batches.length > 0 && (
         <div className="flex flex-col gap-3">

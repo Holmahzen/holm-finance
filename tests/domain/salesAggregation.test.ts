@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { aggregateSalesBySku, isExcludedSaleStatus, computeRevenueInTransit } from "@/domain/salesAggregation";
+import {
+  aggregateSalesBySku,
+  isExcludedSaleStatus,
+  computeRevenueInTransit,
+  groupSalesByModality,
+} from "@/domain/salesAggregation";
 
 const utcDay = (day: number) => new Date(Date.UTC(2026, 7, day));
 
@@ -94,6 +99,31 @@ describe("aggregateSalesBySku", () => {
   it("defaults flexOrderCount to zero when shippingModality is absent", () => {
     const result = aggregateSalesBySku([sale({ sku: "SKU-1" })]);
     expect(result[0].flexOrderCount).toBe(0);
+  });
+});
+
+describe("groupSalesByModality", () => {
+  it("sums count, quantity and revenue per modality", () => {
+    const result = groupSalesByModality([
+      { shippingModality: "Flex", quantity: 1, grossRevenue: 100, netRevenue: 30 },
+      { shippingModality: "Flex", quantity: 2, grossRevenue: 200, netRevenue: 60 },
+      { shippingModality: "Full", quantity: 1, grossRevenue: 50, netRevenue: 10 },
+    ]);
+    const flex = result.find((b) => b.modality === "Flex");
+    expect(flex).toMatchObject({ count: 2, quantity: 3, grossRevenue: 300, netRevenue: 90 });
+    const full = result.find((b) => b.modality === "Full");
+    expect(full).toMatchObject({ count: 1, quantity: 1, grossRevenue: 50, netRevenue: 10 });
+  });
+
+  it("buckets missing modality as 'Sem modalidade'", () => {
+    const result = groupSalesByModality([
+      { shippingModality: null, quantity: 1, grossRevenue: 100, netRevenue: 30 },
+    ]);
+    expect(result[0].modality).toBe("Sem modalidade");
+  });
+
+  it("returns an empty array for no sales", () => {
+    expect(groupSalesByModality([])).toEqual([]);
   });
 });
 

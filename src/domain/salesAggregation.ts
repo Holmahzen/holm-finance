@@ -76,6 +76,52 @@ export function aggregateSalesBySku(
   return Array.from(bySku.values());
 }
 
+export type SaleForModalityBreakdown = {
+  shippingModality?: string | null;
+  quantity: number;
+  grossRevenue: number;
+  netRevenue: number;
+};
+
+export type ModalityBreakdown = {
+  modality: string;
+  count: number;
+  quantity: number;
+  grossRevenue: number;
+  netRevenue: number;
+};
+
+/**
+ * Agrupa vendas por modalidade de envio (Flex/Full/me2/Shopee Xpress/etc.) —
+ * base pra comparar o número de pedidos Flex do período com a fatura real
+ * que a transportadora cobra à parte (R$12,99/pacote, fora do que o
+ * Mercado Turbo já desconta).
+ */
+export function groupSalesByModality(sales: SaleForModalityBreakdown[]): ModalityBreakdown[] {
+  const byModality = new Map<string, ModalityBreakdown>();
+
+  for (const sale of sales) {
+    const modality = sale.shippingModality || "Sem modalidade";
+    const existing = byModality.get(modality);
+    if (existing) {
+      existing.count += 1;
+      existing.quantity += sale.quantity;
+      existing.grossRevenue += sale.grossRevenue;
+      existing.netRevenue += sale.netRevenue;
+    } else {
+      byModality.set(modality, {
+        modality,
+        count: 1,
+        quantity: sale.quantity,
+        grossRevenue: sale.grossRevenue,
+        netRevenue: sale.netRevenue,
+      });
+    }
+  }
+
+  return Array.from(byModality.values()).sort((a, b) => b.grossRevenue - a.grossRevenue);
+}
+
 export type SaleDateRevenue = { saleDate: Date; grossRevenue: number; netRevenue: number; status: string };
 
 export type RevenueInTransit = {
