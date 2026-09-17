@@ -81,6 +81,20 @@ describe("aggregateSalesBySku", () => {
     ]);
     expect(result[0].name).toBe("Nome Original");
   });
+
+  it("counts orders shipped via Flex per SKU", () => {
+    const result = aggregateSalesBySku([
+      sale({ sku: "SKU-1", shippingModality: "Flex" }),
+      sale({ sku: "SKU-1", shippingModality: "Full" }),
+      sale({ sku: "SKU-1", shippingModality: "Flex" }),
+    ]);
+    expect(result[0].flexOrderCount).toBe(2);
+  });
+
+  it("defaults flexOrderCount to zero when shippingModality is absent", () => {
+    const result = aggregateSalesBySku([sale({ sku: "SKU-1" })]);
+    expect(result[0].flexOrderCount).toBe(0);
+  });
 });
 
 describe("isExcludedSaleStatus", () => {

@@ -9,6 +9,7 @@ function sku(overrides: Partial<Parameters<typeof rankUncostedProducts>[0][numbe
     grossRevenue: 100,
     netRevenue: 30,
     marketplaceCost: 0,
+    flexOrderCount: 0,
     ...overrides,
   };
 }

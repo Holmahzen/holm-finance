@@ -50,6 +50,7 @@ export const breakEvenService = {
         netRevenue: Number(s.netRevenue),
         marketplaceCost: Number(s.marketplaceCost),
         status: s.status,
+        shippingModality: s.shippingModality,
       })),
     );
 

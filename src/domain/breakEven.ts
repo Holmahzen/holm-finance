@@ -48,7 +48,15 @@ export type SkuSalesInput = {
    * vezes — uma pelo Mercado Turbo (com um valor que pode estar
    * desatualizado) e outra pelo Holm Finance (com o valor atual). */
   marketplaceCost: number;
+  /** Pedidos desse SKU enviados por Flex no período — custo cobrado direto
+   * pela transportadora, fora do que o Mercado Turbo desconta. */
+  flexOrderCount: number;
 };
+
+/** Cobrado pela transportadora por pacote enviado via Mercado Envios Flex,
+ * independente do frete que o comprador pagou — nunca aparece no netRevenue
+ * importado do Mercado Turbo, por isso é descontado à parte aqui. */
+export const FLEX_COST_PER_PACKAGE = 12.99;
 
 export type ProductionCost = {
   tecidoCost: number;
@@ -72,7 +80,8 @@ export function computeSalesBasedMargin(
   const productionCostPerUnit = productionCost
     ? productionCost.tecidoCost + productionCost.costuraCost + productionCost.aviamentosCost
     : 0;
-  const netRevenueBeforeProductionCost = sale.netRevenue + sale.marketplaceCost;
+  const flexShippingCost = sale.flexOrderCount * FLEX_COST_PER_PACKAGE;
+  const netRevenueBeforeProductionCost = sale.netRevenue + sale.marketplaceCost - flexShippingCost;
   const marginValue =
     sale.quantity > 0 ? netRevenueBeforeProductionCost / sale.quantity - productionCostPerUnit : 0;
   const marginPercent = salePrice > 0 ? marginValue / salePrice : 0;

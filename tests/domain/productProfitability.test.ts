@@ -10,7 +10,16 @@ import type { SkuSalesAggregate } from "@/domain/salesAggregation";
 import type { ProductInput } from "@/domain/breakEven";
 
 function sku(overrides: Partial<SkuSalesAggregate> = {}): SkuSalesAggregate {
-  return { sku: "A1", name: "Produto A", quantity: 1, grossRevenue: 100, netRevenue: 80, marketplaceCost: 20, ...overrides };
+  return {
+    sku: "A1",
+    name: "Produto A",
+    quantity: 1,
+    grossRevenue: 100,
+    netRevenue: 80,
+    marketplaceCost: 20,
+    flexOrderCount: 0,
+    ...overrides,
+  };
 }
 
 function product(overrides: Partial<ProductInput> = {}): ProductInput {

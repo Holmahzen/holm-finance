@@ -76,7 +76,7 @@ describe("computeSalesBasedMargin", () => {
     // salePrice = 1000/10 = 100; netRevenue/unit = 800/10 = 80 (já líquido de comissão ML)
     // custo de produção = 20+8+2 = 30 por peça
     const result = computeSalesBasedMargin(
-      { quantity: 10, grossRevenue: 1000, netRevenue: 800, marketplaceCost: 0 },
+      { quantity: 10, grossRevenue: 1000, netRevenue: 800, marketplaceCost: 0, flexOrderCount: 0 },
       { tecidoCost: 20, costuraCost: 8, aviamentosCost: 2 },
     );
     expect(result.marginValue).toBeCloseTo(50); // 80 - 30
@@ -94,7 +94,7 @@ describe("computeSalesBasedMargin", () => {
     // netRevenue + marketplaceCost = 800 + 300 = 1100 (base antes de QUALQUER custo de produto)
     // por unidade: 1100/10 = 110; custo de produção real = 20+8+2 = 30/un
     const result = computeSalesBasedMargin(
-      { quantity: 10, grossRevenue: 1000, netRevenue: 800, marketplaceCost: 300 },
+      { quantity: 10, grossRevenue: 1000, netRevenue: 800, marketplaceCost: 300, flexOrderCount: 0 },
       { tecidoCost: 20, costuraCost: 8, aviamentosCost: 2 },
     );
     expect(result.marginValue).toBeCloseTo(80); // 110 - 30
@@ -102,7 +102,7 @@ describe("computeSalesBasedMargin", () => {
 
   it("falls back to the marketplace's net margin when there's no registered production cost", () => {
     const result = computeSalesBasedMargin(
-      { quantity: 10, grossRevenue: 1000, netRevenue: 800, marketplaceCost: 0 },
+      { quantity: 10, grossRevenue: 1000, netRevenue: 800, marketplaceCost: 0, flexOrderCount: 0 },
       null,
     );
     expect(result.marginValue).toBeCloseTo(80);
@@ -111,7 +111,7 @@ describe("computeSalesBasedMargin", () => {
 
   it("can go negative when production cost exceeds the marketplace's net revenue", () => {
     const result = computeSalesBasedMargin(
-      { quantity: 1, grossRevenue: 100, netRevenue: 70, marketplaceCost: 0 },
+      { quantity: 1, grossRevenue: 100, netRevenue: 70, marketplaceCost: 0, flexOrderCount: 0 },
       { tecidoCost: 50, costuraCost: 20, aviamentosCost: 10 },
     );
     expect(result.marginValue).toBeCloseTo(-10); // 70 - 80
@@ -120,11 +120,21 @@ describe("computeSalesBasedMargin", () => {
 
   it("returns zero margin when quantity is zero", () => {
     const result = computeSalesBasedMargin(
-      { quantity: 0, grossRevenue: 0, netRevenue: 0, marketplaceCost: 0 },
+      { quantity: 0, grossRevenue: 0, netRevenue: 0, marketplaceCost: 0, flexOrderCount: 0 },
       { tecidoCost: 10, costuraCost: 0, aviamentosCost: 0 },
     );
     expect(result.marginValue).toBe(0);
     expect(result.marginPercent).toBe(0);
+  });
+
+  it("subtracts R$12.99 per Flex order from the pool before splitting per unit", () => {
+    // netRevenue/unit sem Flex seria 800/10=80; 2 pedidos Flex custam 2*12.99=25.98 no total,
+    // diluídos pelas 10 unidades = 2.598/un a menos.
+    const result = computeSalesBasedMargin(
+      { quantity: 10, grossRevenue: 1000, netRevenue: 800, marketplaceCost: 0, flexOrderCount: 2 },
+      null,
+    );
+    expect(result.marginValue).toBeCloseTo(80 - 25.98 / 10);
   });
 });
 

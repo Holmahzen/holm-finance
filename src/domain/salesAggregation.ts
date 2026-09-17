@@ -6,6 +6,7 @@ export type SaleForAggregation = {
   netRevenue: number;
   marketplaceCost: number;
   status: string;
+  shippingModality?: string | null;
 };
 
 export type SkuSalesAggregate = {
@@ -15,6 +16,10 @@ export type SkuSalesAggregate = {
   grossRevenue: number;
   netRevenue: number;
   marketplaceCost: number;
+  /** Quantos pedidos desse SKU foram enviados por Flex — cada um cobrado à
+   * parte pela transportadora (R$12,99/pacote), fora do que o Mercado Turbo
+   * já desconta em netRevenue. */
+  flexOrderCount: number;
 };
 
 /**
@@ -47,12 +52,14 @@ export function aggregateSalesBySku(
   for (const sale of sales) {
     if (isExcludedSaleStatus(sale.status, excludedStatuses)) continue;
 
+    const isFlex = sale.shippingModality === "Flex";
     const existing = bySku.get(sale.sku);
     if (existing) {
       existing.quantity += sale.quantity;
       existing.grossRevenue += sale.grossRevenue;
       existing.netRevenue += sale.netRevenue;
       existing.marketplaceCost += sale.marketplaceCost;
+      existing.flexOrderCount += isFlex ? 1 : 0;
     } else {
       bySku.set(sale.sku, {
         sku: sale.sku,
@@ -61,6 +68,7 @@ export function aggregateSalesBySku(
         grossRevenue: sale.grossRevenue,
         netRevenue: sale.netRevenue,
         marketplaceCost: sale.marketplaceCost,
+        flexOrderCount: isFlex ? 1 : 0,
       });
     }
   }
