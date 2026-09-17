@@ -77,6 +77,7 @@ export default function ProductProfitabilityPage() {
   const [loading, setLoading] = useState(true);
   const [marginThreshold, setMarginThreshold] = useState<number | null>(null);
   const [activeQuadrant, setActiveQuadrant] = useState<ProfitabilityQuadrant | null>(null);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     setLoading(true);
@@ -112,7 +113,13 @@ export default function ProductProfitabilityPage() {
   }, [rows]);
 
   const visibleRows = useMemo(() => {
-    const filtered = activeQuadrant ? rows.filter((r) => r.quadrant === activeQuadrant) : rows;
+    let filtered = activeQuadrant ? rows.filter((r) => r.quadrant === activeQuadrant) : rows;
+    const term = search.trim().toLowerCase();
+    if (term) {
+      filtered = filtered.filter(
+        (r) => r.sku.toLowerCase().includes(term) || r.name.toLowerCase().includes(term),
+      );
+    }
     return [...filtered].sort((a, b) => b.contribution - a.contribution);
   }, [rows, activeQuadrant]);
 
@@ -256,18 +263,27 @@ export default function ProductProfitabilityPage() {
           </div>
 
           <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="font-serif text-xl text-foreground">
                 {activeQuadrant ? QUADRANT_LABEL[activeQuadrant] : "Todos os produtos"}
               </h2>
-              {activeQuadrant && (
-                <button
-                  onClick={() => setActiveQuadrant(null)}
-                  className="text-xs font-medium text-gold hover:text-gold-soft hover:underline"
-                >
-                  Limpar filtro
-                </button>
-              )}
+              <div className="flex items-center gap-3">
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Buscar por SKU ou nome..."
+                  className="w-64 rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
+                />
+                {activeQuadrant && (
+                  <button
+                    onClick={() => setActiveQuadrant(null)}
+                    className="text-xs font-medium text-gold hover:text-gold-soft hover:underline"
+                  >
+                    Limpar filtro
+                  </button>
+                )}
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1000px] text-left text-sm">
