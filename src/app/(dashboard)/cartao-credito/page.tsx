@@ -32,6 +32,23 @@ type Purchase = {
 
 type AverageRevenue = { averageRevenue: number; revenueMonthsBack: number };
 
+type SubscriptionFixedCost = {
+  id: string;
+  description: string;
+  amount: string;
+  creditCardId: string | null;
+  creditCard: { id: string; name: string } | null;
+};
+
+type EntryLite = {
+  id: string;
+  description: string;
+  amount: string;
+  dueDate: string;
+  status: "PENDING" | "PAID" | "CANCELED";
+  fixedCostId: string | null;
+};
+
 const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
 function commitmentTone(percent: number | null) {
@@ -65,6 +82,8 @@ export default function CreditCardPage() {
   const [expandedCommitmentMonth, setExpandedCommitmentMonth] = useState<string | null>(null);
   const [cardFilter, setCardFilter] = useState("");
   const [averageRevenue, setAverageRevenue] = useState<AverageRevenue | null>(null);
+  const [subscriptionFixedCosts, setSubscriptionFixedCosts] = useState<SubscriptionFixedCost[]>([]);
+  const [entries, setEntries] = useState<EntryLite[]>([]);
 
   const [newCardName, setNewCardName] = useState("");
   const [addingCard, setAddingCard] = useState(false);
@@ -91,18 +110,24 @@ export default function CreditCardPage() {
 
   async function load() {
     setLoading(true);
-    const [cardsRes, purchasesRes, categoriesRes, counterpartiesRes, revenueRes] = await Promise.all([
-      fetch("/api/credit-cards"),
-      fetch("/api/credit-card-purchases"),
-      fetch("/api/categories"),
-      fetch("/api/counterparties"),
-      fetch("/api/credit-card-purchases/average-revenue"),
-    ]);
+    const [cardsRes, purchasesRes, categoriesRes, counterpartiesRes, revenueRes, fixedCostsRes, entriesRes] =
+      await Promise.all([
+        fetch("/api/credit-cards"),
+        fetch("/api/credit-card-purchases"),
+        fetch("/api/categories"),
+        fetch("/api/counterparties"),
+        fetch("/api/credit-card-purchases/average-revenue"),
+        fetch("/api/fixed-costs"),
+        fetch("/api/entries"),
+      ]);
     setCards(await cardsRes.json());
     setPurchases(await purchasesRes.json());
     setCategories(await categoriesRes.json());
     setCounterparties(await counterpartiesRes.json());
     setAverageRevenue(await revenueRes.json());
+    const allFixedCosts: SubscriptionFixedCost[] = await fixedCostsRes.json();
+    setSubscriptionFixedCosts(allFixedCosts.filter((fc) => fc.creditCardId));
+    setEntries(await entriesRes.json());
     setLoading(false);
   }
 
@@ -224,30 +249,52 @@ export default function CreditCardPage() {
     ? purchases.filter((p) => p.creditCard.id === cardFilter)
     : purchases;
 
+  // Assinaturas: custo fixo recorrente vinculado a um cartão (ex.: Claude,
+  // Vercel, Google) — mesmo não sendo uma "compra parcelada", o valor sai
+  // desse cartão todo mês, então entra na mesma conta de comprometimento.
+  const visibleSubscriptions = cardFilter
+    ? subscriptionFixedCosts.filter((fc) => fc.creditCardId === cardFilter)
+    : subscriptionFixedCosts;
+  const visibleSubscriptionIds = new Set(visibleSubscriptions.map((fc) => fc.id));
+  const subscriptionCardName = new Map(subscriptionFixedCosts.map((fc) => [fc.id, fc.creditCard?.name ?? ""]));
+  const subscriptionEntries = entries.filter(
+    (e) => e.status === "PENDING" && e.fixedCostId && visibleSubscriptionIds.has(e.fixedCostId),
+  );
+
   const totalPending = visiblePurchases.reduce((sum, p) => {
     const pendingInPurchase = p.generatedEntries
       .filter((e) => e.status === "PENDING")
       .reduce((s, e) => s + Number(e.amount), 0);
     return sum + pendingInPurchase;
-  }, 0);
+  }, subscriptionEntries.reduce((s, e) => s + Number(e.amount), 0));
 
   const monthlyTotalPending = visiblePurchases.reduce((sum, p) => {
     const dueThisMonth = p.generatedEntries
       .filter((e) => e.status === "PENDING" && isSameUTCMonth(e.dueDate, now.getFullYear(), now.getMonth() + 1))
       .reduce((s, e) => s + Number(e.amount), 0);
     return sum + dueThisMonth;
-  }, 0);
+  }, subscriptionEntries
+    .filter((e) => isSameUTCMonth(e.dueDate, now.getFullYear(), now.getMonth() + 1))
+    .reduce((s, e) => s + Number(e.amount), 0));
 
-  const pendingInstallmentsDetailed = visiblePurchases.flatMap((p) =>
-    p.generatedEntries
-      .filter((e) => e.status === "PENDING")
-      .map((e) => ({
-        amount: Number(e.amount),
-        dueDate: new Date(e.dueDate),
-        description: e.description,
-        cardName: p.creditCard.name,
-      })),
-  );
+  const pendingInstallmentsDetailed = [
+    ...visiblePurchases.flatMap((p) =>
+      p.generatedEntries
+        .filter((e) => e.status === "PENDING")
+        .map((e) => ({
+          amount: Number(e.amount),
+          dueDate: new Date(e.dueDate),
+          description: e.description,
+          cardName: p.creditCard.name,
+        })),
+    ),
+    ...subscriptionEntries.map((e) => ({
+      amount: Number(e.amount),
+      dueDate: new Date(e.dueDate),
+      description: `${e.description} (assinatura)`,
+      cardName: subscriptionCardName.get(e.fixedCostId!) ?? "",
+    })),
+  ];
   const pendingInstallments = pendingInstallmentsDetailed.map((e) => ({
     amount: e.amount,
     dueDate: e.dueDate,
@@ -269,7 +316,8 @@ export default function CreditCardPage() {
           <h1 className="font-serif text-3xl text-foreground">Cartão de Crédito</h1>
           <p className="no-print text-sm text-muted">
             Controle das compras parceladas — cada parcela vira um lançamento normal em Lançamentos,
-            já datado certinho pra vencer no mês certo.
+            já datado certinho pra vencer no mês certo. Assinaturas recorrentes (Claude, Vercel, Google...)
+            são cadastradas como custo fixo vinculado ao cartão, não como compra parcelada.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-6">
@@ -351,6 +399,32 @@ export default function CreditCardPage() {
                 </div>
               );
             })()}
+        </div>
+      )}
+
+      {visibleSubscriptions.length > 0 && (
+        <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4">
+          <div>
+            <h2 className="font-serif text-lg text-foreground">Assinaturas vinculadas a cartão</h2>
+            <p className="text-xs text-muted">
+              Custos fixos recorrentes (sem parcela fixa) que saem de um cartão — cadastradas em{" "}
+              <a href="/custos-fixos" className="text-gold hover:underline">
+                Custos fixos
+              </a>
+              , escolhendo o cartão no formulário. Já entram no comprometimento acima.
+            </p>
+          </div>
+          <ul className="flex flex-col gap-1 text-sm">
+            {visibleSubscriptions.map((fc) => (
+              <li key={fc.id} className="flex items-center justify-between gap-3 border-b border-border/50 py-1.5">
+                <span className="text-foreground">{fc.description}</span>
+                <span className="flex items-center gap-3">
+                  {!cardFilter && <span className="text-xs text-muted">{fc.creditCard?.name}</span>}
+                  <span className="whitespace-nowrap text-gold">{formatBRL(Number(fc.amount))}/mês</span>
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
