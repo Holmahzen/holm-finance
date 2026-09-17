@@ -58,7 +58,8 @@ export const cashFlowService = {
       if (effectiveDate >= windowEnd) continue;
 
       const amount = e.type === "RECEIVABLE" ? Number(e.amount) : -Number(e.amount);
-      movements.push({ date: effectiveDate, amount, label: e.description });
+      const cardName = e.creditCardPurchase?.creditCard?.name ?? e.fixedCost?.creditCard?.name ?? null;
+      movements.push({ date: effectiveDate, amount, label: e.description, cardName });
     }
 
     // Recebimentos do Mercado Livre "a liberar" (informado manualmente em

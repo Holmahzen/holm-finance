@@ -6,6 +6,10 @@ export type CashFlowMovement = {
   /** Positivo = entrada, negativo = saída. */
   amount: number;
   label: string;
+  /** Nome do cartão de crédito, quando o lançamento vem de uma compra
+   * parcelada ou assinatura vinculada a cartão — usado só pra agrupar a
+   * exibição numa linha "Fatura {cartão}" em vez de uma por item. */
+  cardName?: string | null;
 };
 
 export type CashFlowDay = {

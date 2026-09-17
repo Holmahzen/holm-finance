@@ -5,7 +5,7 @@ import { formatBRL } from "@/lib/format";
 import { SaldoPorConta, type ContaSaldo } from "@/components/SaldoPorConta";
 import { PrintButton } from "@/components/PrintButton";
 
-type Movement = { date: string; amount: number; label: string };
+type Movement = { date: string; amount: number; label: string; cardName?: string | null };
 type CashFlowDay = {
   date: string;
   inflow: number;
@@ -187,20 +187,101 @@ function BalanceChart({ days }: { days: CashFlowDay[] }) {
   );
 }
 
+type DisplayItem =
+  | { kind: "single"; movement: Movement }
+  | { kind: "group"; cardName: string; amount: number; items: Movement[] };
+
+/** Agrupa itens do mesmo dia que vêm do mesmo cartão (compra parcelada ou
+ * assinatura vinculada) numa linha só "Fatura {cartão}" — na vida real só
+ * sai um débito da conta por fatura, não um por item. Um cartão com um único
+ * item nesse dia não forma grupo (não ganha nada em virar "Fatura X (1)"). */
+function groupByCard(movements: Movement[]): DisplayItem[] {
+  const byCard = new Map<string, Movement[]>();
+  const singles: Movement[] = [];
+
+  for (const m of movements) {
+    if (m.cardName) {
+      const list = byCard.get(m.cardName) ?? [];
+      list.push(m);
+      byCard.set(m.cardName, list);
+    } else {
+      singles.push(m);
+    }
+  }
+
+  const items: DisplayItem[] = singles.map((movement) => ({ kind: "single", movement }));
+  for (const [cardName, group] of byCard) {
+    if (group.length === 1) {
+      items.push({ kind: "single", movement: group[0] });
+    } else {
+      items.push({
+        kind: "group",
+        cardName,
+        amount: group.reduce((s, m) => s + m.amount, 0),
+        items: group,
+      });
+    }
+  }
+
+  return items;
+}
+
 function MovementsList({ movements }: { movements: Movement[] }) {
   const [expanded, setExpanded] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const LIMIT = 8;
-  const visible = expanded ? movements : movements.slice(0, LIMIT);
-  const hidden = movements.length - visible.length;
+
+  const displayItems = groupByCard(movements);
+  const visible = expanded ? displayItems : displayItems.slice(0, LIMIT);
+  const hidden = displayItems.length - visible.length;
+
+  function toggleGroup(key: string) {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   return (
     <ul className="flex flex-col gap-0.5">
-      {visible.map((m, idx) => (
-        <li key={idx} className={m.amount >= 0 ? "text-emerald-400" : "text-red-400"}>
-          {m.label} ({m.amount >= 0 ? "+" : ""}
-          {formatBRL(m.amount)})
-        </li>
-      ))}
+      {visible.map((item, idx) => {
+        if (item.kind === "single") {
+          const m = item.movement;
+          return (
+            <li key={idx} className={m.amount >= 0 ? "text-emerald-400" : "text-red-400"}>
+              {m.label} ({m.amount >= 0 ? "+" : ""}
+              {formatBRL(m.amount)})
+            </li>
+          );
+        }
+        const key = `${idx}-${item.cardName}`;
+        const isOpen = expandedGroups.has(key);
+        return (
+          <li key={idx} className={item.amount >= 0 ? "text-emerald-400" : "text-red-400"}>
+            <button
+              type="button"
+              onClick={() => toggleGroup(key)}
+              className="text-left hover:underline"
+              title="Ver itens dessa fatura"
+            >
+              {isOpen ? "▾" : "▸"} Fatura {item.cardName} ({item.items.length} itens) ({item.amount >= 0 ? "+" : ""}
+              {formatBRL(item.amount)})
+            </button>
+            {isOpen && (
+              <ul className="ml-4 flex flex-col gap-0.5 text-muted">
+                {item.items.map((m, i) => (
+                  <li key={i}>
+                    {m.label} ({m.amount >= 0 ? "+" : ""}
+                    {formatBRL(m.amount)})
+                  </li>
+                ))}
+              </ul>
+            )}
+          </li>
+        );
+      })}
       {hidden > 0 && (
         <li>
           <button
