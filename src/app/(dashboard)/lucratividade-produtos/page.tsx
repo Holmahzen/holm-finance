@@ -121,7 +121,7 @@ export default function ProductProfitabilityPage() {
       );
     }
     return [...filtered].sort((a, b) => b.contribution - a.contribution);
-  }, [rows, activeQuadrant]);
+  }, [rows, activeQuadrant, search]);
 
   return (
     <div className="flex flex-col gap-8">
