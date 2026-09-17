@@ -114,13 +114,14 @@ export const cashReserveService = {
     // Impostos usa o mês de REFERÊNCIA calculado acima, não o mês corrente —
     // mesma razão do taxTarget: perto da virada do mês, o que já foi guardado
     // continua contando pro DAS que está prestes a vencer.
+    //
+    // O intervalo vai do início do mês de referência até a data de
+    // vencimento (não só o mês calendário da referência): um depósito feito
+    // HOJE, com a data de hoje, pouco antes do DAS vencer, tem que contar —
+    // sem isso, um depósito de setembro pro DAS de agosto (que só vence em
+    // 21/09) sumia do card até a data ser corrigida na mão.
     const taxSaved = deposits
-      .filter(
-        (d) =>
-          d.category === "TAX" &&
-          d.date.getFullYear() === taxRefYear &&
-          d.date.getMonth() + 1 === taxRefMonth,
-      )
+      .filter((d) => d.category === "TAX" && d.date >= taxRefMonthStart && d.date <= taxDueDate)
       .reduce((sum, d) => sum + Number(d.amount), 0);
 
     return {
