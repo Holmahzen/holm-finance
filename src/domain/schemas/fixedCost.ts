@@ -21,7 +21,23 @@ export const createFixedCostSchema = z.object({
   laborProvisionEligible: z.boolean().optional(),
 });
 
-export const updateFixedCostSchema = createFixedCostSchema.partial().extend({
+// Não usa createFixedCostSchema.partial(): "frequency" lá tem um valor padrão
+// ("MONTHLY"), e em atualizações parciais isso mascara a frequência real do
+// registro (ex.: editar um custo semanal sem reenviar "frequency" fazia a
+// validação tratar como mensal e exigir "dueDay", que custo semanal não tem).
+export const updateFixedCostSchema = z.object({
+  type: entryTypeSchema.optional(),
+  description: z.string().min(1, "Descrição é obrigatória").optional(),
+  amount: z.union([z.string(), z.number()]).optional(),
+  frequency: fixedCostFrequencySchema.optional(),
+  dueDay: z.coerce.number().int().min(1, "Dia inválido").max(31, "Dia inválido").optional(),
+  secondDueDay: z.coerce.number().int().min(1, "Dia inválido").max(31, "Dia inválido").optional(),
+  weekday: z.coerce.number().int().min(0, "Dia da semana inválido").max(6, "Dia da semana inválido").optional(),
+  anchorDate: z.coerce.date().optional(),
+  categoryId: z.string().optional(),
+  counterpartyId: z.string().optional(),
+  creditCardId: z.string().optional(),
+  laborProvisionEligible: z.boolean().optional(),
   isActive: z.boolean().optional(),
 });
 
