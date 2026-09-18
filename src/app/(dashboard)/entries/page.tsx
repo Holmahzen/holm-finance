@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useState, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
 import { formatBRL } from "@/lib/format";
 import { PeriodFilter } from "@/components/PeriodFilter";
 import { PrintButton } from "@/components/PrintButton";
@@ -65,17 +66,24 @@ function formatDate(value: string) {
 const now = new Date();
 
 export default function EntriesPage() {
+  // Chegar aqui com ?type=&search= (ex.: clicando numa barra de "Top
+  // fornecedores/clientes" no Início) já abre filtrado, sem precisar digitar
+  // de novo o que a outra tela já sabia.
+  const searchParams = useSearchParams();
+  const initialType = searchParams.get("type") === "RECEIVABLE" ? "RECEIVABLE" : "PAYABLE";
+  const initialSearch = searchParams.get("search") ?? "";
+
   const [entries, setEntries] = useState<Entry[]>([]);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [counterparties, setCounterparties] = useState<Option[]>([]);
   const [accounts, setAccounts] = useState<Option[]>([]);
   const [creditCards, setCreditCards] = useState<Option[]>([]);
   const [loading, setLoading] = useState(true);
-  const [viewType, setViewType] = useState<"PAYABLE" | "RECEIVABLE">("PAYABLE");
+  const [viewType, setViewType] = useState<"PAYABLE" | "RECEIVABLE">(initialType);
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [statusFilter, setStatusFilter] = useState<PaymentStatus | null>(null);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
   const [cardFilter, setCardFilter] = useState<string | null>(null);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());

@@ -419,11 +419,21 @@ export default function DashboardPage() {
                 title="Top 10 fornecedores"
                 data={summary.charts.topSuppliers}
                 tone="negative"
+                getHref={(d) =>
+                  d.name === "Sem contraparte"
+                    ? null
+                    : `/entries?type=PAYABLE&search=${encodeURIComponent(d.name)}`
+                }
               />
               <HorizontalBarChart
                 title="Top 10 clientes"
                 data={summary.charts.topClients}
                 tone="positive"
+                getHref={(d) =>
+                  d.name === "Sem contraparte"
+                    ? null
+                    : `/entries?type=RECEIVABLE&search=${encodeURIComponent(d.name)}`
+                }
               />
             </div>
           </div>

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { formatBRL } from "@/lib/format";
 
 type BarDatum = { name: string; total: string | number };
@@ -7,11 +8,16 @@ export function HorizontalBarChart({
   data,
   tone = "gold",
   emptyLabel = "Sem dados no período.",
+  getHref,
 }: {
   title: string;
   data: BarDatum[];
   tone?: "gold" | "positive" | "negative";
   emptyLabel?: string;
+  /** Quando informado, cada barra vira um link pra essa URL (ex.: os
+   * lançamentos daquele fornecedor/cliente) — retornar `null` deixa a barra
+   * dessa linha sem clique (ex.: "Sem contraparte", que não tem pra onde ir). */
+  getHref?: (d: BarDatum) => string | null;
 }) {
   const barColor =
     tone === "positive" ? "bg-emerald-500" : tone === "negative" ? "bg-red-400" : "bg-gold";
@@ -27,8 +33,9 @@ export function HorizontalBarChart({
         <div className="flex flex-col gap-0.5">
           {data.map((d) => {
             const pct = Math.max(2, (Math.abs(Number(d.total)) / max) * 100);
-            return (
-              <div key={d.name} className="flex items-center gap-3">
+            const href = getHref?.(d) ?? null;
+            const row = (
+              <div className="flex items-center gap-3">
                 <span className="w-32 shrink-0 truncate text-xs text-muted" title={d.name}>
                   {d.name}
                 </span>
@@ -45,6 +52,13 @@ export function HorizontalBarChart({
                   </span>
                 </div>
               </div>
+            );
+            return href ? (
+              <Link key={d.name} href={href} className="rounded transition hover:bg-surface-hover">
+                {row}
+              </Link>
+            ) : (
+              <div key={d.name}>{row}</div>
             );
           })}
         </div>
