@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { formatBRL } from "@/lib/format";
 import {
   classifyQuadrant,
@@ -80,6 +80,37 @@ export default function ProductProfitabilityPage() {
   const [marginThreshold, setMarginThreshold] = useState<number | null>(null);
   const [activeQuadrant, setActiveQuadrant] = useState<ProfitabilityQuadrant | null>(null);
   const [search, setSearch] = useState("");
+
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const tableResizeObserver = useRef<ResizeObserver | null>(null);
+  const [tableWidth, setTableWidth] = useState(0);
+  const syncingScroll = useRef(false);
+
+  // Callback ref (em vez de useEffect com dep vazia) porque a tabela só monta
+  // depois que `loading` vira false — um effect de dep [] rodaria antes dela existir.
+  function tableRef(node: HTMLTableElement | null) {
+    tableResizeObserver.current?.disconnect();
+    if (!node) return;
+    setTableWidth(node.scrollWidth);
+    const observer = new ResizeObserver(() => setTableWidth(node.scrollWidth));
+    observer.observe(node);
+    tableResizeObserver.current = observer;
+  }
+
+  function handleTopScroll() {
+    if (syncingScroll.current || !topScrollRef.current || !tableScrollRef.current) return;
+    syncingScroll.current = true;
+    tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+    syncingScroll.current = false;
+  }
+
+  function handleTableScroll() {
+    if (syncingScroll.current || !topScrollRef.current || !tableScrollRef.current) return;
+    syncingScroll.current = true;
+    topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+    syncingScroll.current = false;
+  }
 
   useEffect(() => {
     setLoading(true);
@@ -287,8 +318,11 @@ export default function ProductProfitabilityPage() {
                 )}
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1200px] text-left text-sm">
+            <div ref={topScrollRef} onScroll={handleTopScroll} className="overflow-x-auto">
+              <div style={{ width: tableWidth || "100%", height: 1 }} />
+            </div>
+            <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto">
+              <table ref={tableRef} className="w-full min-w-[1200px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-border text-muted">
                     <th className="py-2 font-medium">Produto</th>
