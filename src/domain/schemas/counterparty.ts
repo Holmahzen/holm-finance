@@ -12,10 +12,13 @@ export const createCounterpartySchema = z.object({
     .string()
     .optional()
     .transform((v) => (v === "" ? undefined : v)),
-  type: counterpartyTypeSchema.default("OUTRO"),
-  aliases: z.array(z.string()).default([]),
+  // Sem `.default()` aqui de propósito: o Prisma já tem @default(OUTRO)/@default([])/@default(false)
+  // no schema, então isso não muda a criação — mas evita que `.partial()` (usado no update)
+  // reponha esses valores-padrão em cima de campos que o caller nem quis tocar.
+  type: counterpartyTypeSchema.optional(),
+  aliases: z.array(z.string()).optional(),
   defaultCategoryId: z.string().optional(),
-  isOwnEntity: z.boolean().default(false),
+  isOwnEntity: z.boolean().optional(),
 });
 
 export const updateCounterpartySchema = createCounterpartySchema
