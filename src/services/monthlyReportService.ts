@@ -2,7 +2,9 @@ import { dreService } from "@/services/dreService";
 import { salesService } from "@/services/salesService";
 import { companyProjectionService } from "@/services/companyProjectionService";
 import { percentChange } from "@/domain/health";
-import { aggregateSalesBySku, computeRevenueInTransit } from "@/domain/salesAggregation";
+import { aggregateSalesBySku, computeRevenueInTransit, isExcludedSaleStatus } from "@/domain/salesAggregation";
+import { computeAverageTicket } from "@/domain/monthlyReport";
+import { marketplaceSaleRepository } from "@/repositories/marketplaceSaleRepository";
 import { todayUTCInBrazil } from "@/lib/today";
 
 // Vendas feitas a partir desse dia do mês têm mais chance de o Mercado Livre
@@ -28,12 +30,23 @@ export const monthlyReportService = {
     const nextMonth = (nextIdx % 12) + 1;
     const daysInNextMonth = new Date(nextMonthYear, nextMonth, 0).getDate();
 
-    const [dre, previousDre, sales, projection] = await Promise.all([
+    const monthStart = new Date(y, m - 1, 1);
+    const monthEnd = new Date(y, m, 1);
+
+    const [dre, previousDre, sales, projection, customerRows] = await Promise.all([
       dreService.getDRE(y, m),
       dreService.getDRE(prevYear, prevMonth),
       salesService.getReport(y, m),
       companyProjectionService.getReport(daysInNextMonth),
+      marketplaceSaleRepository.findCustomerNamesByPeriod(monthStart, monthEnd),
     ]);
+
+    const uniqueCustomers = new Set(
+      customerRows
+        .filter((r) => !isExcludedSaleStatus(r.status))
+        .map((r) => r.customerName!.trim().toLowerCase()),
+    ).size;
+    const averageTicket = computeAverageTicket(sales.totalGrossRevenue, sales.salesCount);
 
     const growth = {
       receitaBruta: {
@@ -81,6 +94,8 @@ export const monthlyReportService = {
         totalNetRevenue: sales.totalNetRevenue,
         totalQuantity: sales.totalQuantity,
         salesCount: sales.salesCount,
+        averageTicket,
+        uniqueCustomers,
         topProducts,
       },
       revenueInTransit,

@@ -20,6 +20,8 @@ type MonthlyReport = {
     totalNetRevenue: number;
     totalQuantity: number;
     salesCount: number;
+    averageTicket: number | null;
+    uniqueCustomers: number;
     topProducts: TopProduct[];
   };
   nextMonthProjection: {
@@ -132,6 +134,24 @@ export default function RelatorioMensalPage() {
                   Nº de vendas
                 </span>
                 <p className="font-serif text-xl text-foreground">{report.salesSummary.salesCount}</p>
+              </div>
+              <div className="rounded-lg border border-border bg-surface p-4">
+                <span className="text-xs font-medium tracking-wide text-muted uppercase">
+                  Ticket médio
+                </span>
+                <p className="font-serif text-xl text-foreground">
+                  {report.salesSummary.averageTicket !== null
+                    ? formatBRL(report.salesSummary.averageTicket)
+                    : "—"}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border bg-surface p-4">
+                <span className="text-xs font-medium tracking-wide text-muted uppercase">
+                  Clientes únicos
+                </span>
+                <p className="font-serif text-xl text-foreground">
+                  {report.salesSummary.uniqueCustomers}
+                </p>
               </div>
             </div>
 

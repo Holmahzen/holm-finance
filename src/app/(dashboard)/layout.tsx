@@ -9,7 +9,6 @@ const navGroups = [
     items: [
       { href: "/", label: "Início" },
       { href: "/alertas", label: "Alertas" },
-      { href: "/executivo", label: "Dashboard Executivo" },
       { href: "/saude-financeira", label: "Saúde Financeira" },
       { href: "/relatorio-mensal", label: "Relatório Mensal" },
     ],
@@ -80,7 +79,7 @@ export default function DashboardLayout({
         <nav className="flex flex-col gap-4 text-sm">
           {navGroups.map((group) => (
             <div key={group.title} className="flex flex-col gap-0.5">
-              <span className="px-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted/70">
+              <span className="px-3 pb-1 text-[11px] font-bold uppercase tracking-wide text-gold-soft">
                 {group.title}
               </span>
               {group.items.map((item) => {
