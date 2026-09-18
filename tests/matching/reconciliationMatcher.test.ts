@@ -101,4 +101,31 @@ describe("matchEntriesToTransactions", () => {
     const similarity = nameSimilarity("Regimar Souza Silva LTDA", "REGIMAR SOUZA SILVA");
     expect(similarity).toBeGreaterThan(0.9);
   });
+
+  it("prefere o lancamento com documento batendo, mesmo com a data um pouco mais longe, em vez de um lancamento de outra pessoa que so coincidiu a data (caso real: Leonardo x Richard Marx, 18/09/2026)", () => {
+    const leonardoEntry = entry({
+      id: "entry-leonardo",
+      dueDate: new Date("2026-09-20T00:00:00Z"), // 2 dias depois do pagamento
+      counterpartyName: "LEONARDO APARECIDO DE SANTANA",
+      counterpartyDocument: "33374080871",
+    });
+    const richardEntry = entry({
+      id: "entry-richard",
+      dueDate: new Date("2026-09-18T00:00:00Z"), // mesma data do pagamento do Leonardo, por coincidencia
+      counterpartyName: "RICHARD MARX DE OLIVEIRA SILVA",
+      counterpartyDocument: "39849105844",
+    });
+    const leonardoPayment = transaction({
+      id: "tx-leonardo",
+      postedAt: new Date("2026-09-18T00:00:00Z"),
+      parsedDocument: "33374080871",
+      parsedCounterpartyName: "LEONARDO APARECIDO DE SANTANA",
+    });
+
+    const result = matchEntriesToTransactions([leonardoEntry, richardEntry], [leonardoPayment]);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].entryId).toBe("entry-leonardo");
+    expect(result[0].importedTransactionId).toBe("tx-leonardo");
+  });
 });

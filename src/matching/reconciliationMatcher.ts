@@ -3,6 +3,7 @@ import {
   counterpartyBonus,
   dateProximityScore,
   daysBetween,
+  DOCUMENT_MATCH_RANK_PRIORITY,
 } from "./matchScoring";
 import type { MatchableEntry, MatchableTransaction, MatchCandidate } from "./types";
 
@@ -40,7 +41,7 @@ export function matchEntriesToTransactions(
   transactions: MatchableTransaction[],
   rejectedPairs: ReadonlySet<string> = new Set(),
 ): MatchCandidate[] {
-  const candidates: MatchCandidate[] = [];
+  const candidates: (MatchCandidate & { rankScore: number })[] = [];
 
   for (const transaction of transactions) {
     for (const entry of entries) {
@@ -64,16 +65,23 @@ export function matchEntriesToTransactions(
       if (matched === "document") reasons.push("counterparty_exact");
       if (matched === "name") reasons.push("counterparty_similar");
 
+      // rankScore só decide a ordem de atribuição greedy (nunca é salvo) —
+      // documento batendo exato pesa muito mais que proximidade de data,
+      // pra não perder pro "coincidiu a data" quando duas pessoas diferentes
+      // têm lançamento/pagamento do mesmo valor na mesma janela.
+      const rankScore = dateScore + (matched === "document" ? DOCUMENT_MATCH_RANK_PRIORITY : bonus);
+
       candidates.push({
         entryId: entry.id,
         importedTransactionId: transaction.id,
         score,
         reasons,
+        rankScore,
       });
     }
   }
 
-  candidates.sort((a, b) => b.score - a.score);
+  candidates.sort((a, b) => b.rankScore - a.rankScore);
 
   const usedEntries = new Set<string>();
   const usedTransactions = new Set<string>();
