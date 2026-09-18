@@ -59,7 +59,7 @@ export const cashFlowService = {
 
       const amount = e.type === "RECEIVABLE" ? Number(e.amount) : -Number(e.amount);
       const cardName = e.creditCardPurchase?.creditCard?.name ?? e.fixedCost?.creditCard?.name ?? null;
-      movements.push({ date: effectiveDate, amount, label: e.description, cardName });
+      movements.push({ date: effectiveDate, amount, label: e.description, cardName, categoryName: e.category?.name ?? null });
     }
 
     // Recebimentos do Mercado Livre "a liberar" (informado manualmente em
@@ -156,6 +156,8 @@ export const cashFlowService = {
       date: todayUTC,
       amount: e.type === "RECEIVABLE" ? Number(e.paidAmount ?? e.amount) : -Number(e.paidAmount ?? e.amount),
       label: e.description,
+      cardName: e.creditCardPurchase?.creditCard?.name ?? e.fixedCost?.creditCard?.name ?? null,
+      categoryName: e.category?.name ?? null,
     }));
     const realizedToday = {
       inflow: realizedTodayMovements.filter((m) => m.amount > 0).reduce((s, m) => s + m.amount, 0),

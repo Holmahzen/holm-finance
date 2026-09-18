@@ -10,6 +10,10 @@ export type CashFlowMovement = {
    * parcelada ou assinatura vinculada a cartão — usado só pra agrupar a
    * exibição numa linha "Fatura {cartão}" em vez de uma por item. */
   cardName?: string | null;
+  /** Nome da categoria — usado pra agrupar, do mesmo jeito que cardName,
+   * quando vários lançamentos sem cartão do mesmo dia caem na mesma
+   * categoria (ex.: "Materiais de Consumo"), em vez de uma linha por item. */
+  categoryName?: string | null;
 };
 
 export type CashFlowDay = {

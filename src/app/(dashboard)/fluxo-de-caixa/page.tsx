@@ -5,7 +5,13 @@ import { formatBRL } from "@/lib/format";
 import { SaldoPorConta, type ContaSaldo } from "@/components/SaldoPorConta";
 import { PrintButton } from "@/components/PrintButton";
 
-type Movement = { date: string; amount: number; label: string; cardName?: string | null };
+type Movement = {
+  date: string;
+  amount: number;
+  label: string;
+  cardName?: string | null;
+  categoryName?: string | null;
+};
 type CashFlowDay = {
   date: string;
   inflow: number;
@@ -189,14 +195,17 @@ function BalanceChart({ days }: { days: CashFlowDay[] }) {
 
 type DisplayItem =
   | { kind: "single"; movement: Movement }
-  | { kind: "group"; cardName: string; amount: number; items: Movement[] };
+  | { kind: "group"; label: string; amount: number; items: Movement[] };
 
 /** Agrupa itens do mesmo dia que vêm do mesmo cartão (compra parcelada ou
  * assinatura vinculada) numa linha só "Fatura {cartão}" — na vida real só
- * sai um débito da conta por fatura, não um por item. Um cartão com um único
- * item nesse dia não forma grupo (não ganha nada em virar "Fatura X (1)"). */
-function groupByCard(movements: Movement[]): DisplayItem[] {
+ * sai um débito da conta por fatura, não um por item. Sem cartão, agrupa
+ * pela categoria (ex.: vários lançamentos de "Materiais de Consumo" no
+ * mesmo dia viram uma linha só). Um grupo com um único item não se forma
+ * (não ganha nada em virar "X (1)"). */
+function groupMovements(movements: Movement[]): DisplayItem[] {
   const byCard = new Map<string, Movement[]>();
+  const byCategory = new Map<string, Movement[]>();
   const singles: Movement[] = [];
 
   for (const m of movements) {
@@ -204,19 +213,37 @@ function groupByCard(movements: Movement[]): DisplayItem[] {
       const list = byCard.get(m.cardName) ?? [];
       list.push(m);
       byCard.set(m.cardName, list);
+    } else if (m.categoryName) {
+      const list = byCategory.get(m.categoryName) ?? [];
+      list.push(m);
+      byCategory.set(m.categoryName, list);
     } else {
       singles.push(m);
     }
   }
 
   const items: DisplayItem[] = singles.map((movement) => ({ kind: "single", movement }));
+
   for (const [cardName, group] of byCard) {
     if (group.length === 1) {
       items.push({ kind: "single", movement: group[0] });
     } else {
       items.push({
         kind: "group",
-        cardName,
+        label: `Fatura ${cardName}`,
+        amount: group.reduce((s, m) => s + m.amount, 0),
+        items: group,
+      });
+    }
+  }
+
+  for (const [categoryName, group] of byCategory) {
+    if (group.length === 1) {
+      items.push({ kind: "single", movement: group[0] });
+    } else {
+      items.push({
+        kind: "group",
+        label: categoryName,
         amount: group.reduce((s, m) => s + m.amount, 0),
         items: group,
       });
@@ -231,7 +258,7 @@ function MovementsList({ movements }: { movements: Movement[] }) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const LIMIT = 8;
 
-  const displayItems = groupByCard(movements);
+  const displayItems = groupMovements(movements);
   const visible = expanded ? displayItems : displayItems.slice(0, LIMIT);
   const hidden = displayItems.length - visible.length;
 
@@ -256,7 +283,7 @@ function MovementsList({ movements }: { movements: Movement[] }) {
             </li>
           );
         }
-        const key = `${idx}-${item.cardName}`;
+        const key = `${idx}-${item.label}`;
         const isOpen = expandedGroups.has(key);
         return (
           <li key={idx} className={item.amount >= 0 ? "text-emerald-400" : "text-red-400"}>
@@ -264,9 +291,9 @@ function MovementsList({ movements }: { movements: Movement[] }) {
               type="button"
               onClick={() => toggleGroup(key)}
               className="text-left hover:underline"
-              title="Ver itens dessa fatura"
+              title="Ver itens desse grupo"
             >
-              {isOpen ? "▾" : "▸"} Fatura {item.cardName} ({item.items.length} itens) ({item.amount >= 0 ? "+" : ""}
+              {isOpen ? "▾" : "▸"} {item.label} ({item.items.length} itens) ({item.amount >= 0 ? "+" : ""}
               {formatBRL(item.amount)})
             </button>
             {isOpen && (
