@@ -68,7 +68,7 @@ export function findFixedCostGaps(
     if (gap < MIN_GAP) continue;
     let kind: FixedCostGapKind | null = null;
     if (launched < 0.005) kind = "faltando";
-    else if (launched < expected * BELOW_SHARE) kind = "abaixo";
+    else if (launched <= expected * BELOW_SHARE) kind = "abaixo";
     else if (launched > expected * ABOVE_MULTIPLE) kind = "acima";
     if (kind) gaps.push({ kind, category, expected, launched, items });
   }

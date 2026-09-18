@@ -31,6 +31,14 @@ describe("findFixedCostGaps", () => {
     expect(gaps.find((g) => g.category === "Salarios")?.expected).toBe(8500);
   });
 
+  it("aponta abaixo quando o lançado é exatamente metade do esperado (ex.: só uma de duas parcelas quinzenais)", () => {
+    const gaps = findFixedCostGaps(
+      [fc("Regimar", "Pró-labore", 4000, 2, "DESPESA_PESSOAL")],
+      { "Pró-labore": 4000 },
+    );
+    expect(gaps).toEqual([{ kind: "abaixo", category: "Pró-labore", expected: 8000, launched: 4000, items: ["Regimar"] }]);
+  });
+
   it("ignora diferença pequena, grupos fora das despesas e avisa custo fixo sem categoria", () => {
     const gaps = findFixedCostGaps(
       [
