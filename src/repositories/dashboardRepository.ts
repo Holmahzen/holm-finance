@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
+import { todayUTCInBrazil } from "@/lib/today";
 
 export const dashboardRepository = {
   async getAccountBalances() {
@@ -76,7 +77,7 @@ export const dashboardRepository = {
   },
 
   async getPendingEntriesSummary() {
-    const now = new Date();
+    const now = todayUTCInBrazil();
 
     const [payablePending, payableOverdue, receivablePending, receivableOverdue] =
       await Promise.all([

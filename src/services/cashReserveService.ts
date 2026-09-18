@@ -13,6 +13,7 @@ import {
   computeDaysRemainingInMonth,
   computeDailyGoal,
 } from "@/domain/cashReserve";
+import { todayUTCInBrazil } from "@/lib/today";
 
 function monthlyAmount(
   fc: {
@@ -31,9 +32,9 @@ function monthlyAmount(
 
 export const cashReserveService = {
   async getReport(contingencyMonths = 3, taxRatePercent = 14, taxDueDay = 20) {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
+    const now = todayUTCInBrazil();
+    const year = now.getUTCFullYear();
+    const month = now.getUTCMonth() + 1;
     const monthsElapsed = month;
     const monthStart = new Date(year, month - 1, 1);
     const monthEnd = new Date(year, month, 1);
@@ -45,7 +46,7 @@ export const cashReserveService = {
     // mês corrente assim que o calendário vira, mesmo antes do DAS do mês
     // anterior vencer, "escondendo" o que já foi guardado pra essa obrigação.
     const taxRefDate =
-      now.getDate() < taxDueDay ? new Date(year, month - 2, 1) : new Date(year, month - 1, 1);
+      now.getUTCDate() < taxDueDay ? new Date(year, month - 2, 1) : new Date(year, month - 1, 1);
     const taxRefYear = taxRefDate.getFullYear();
     const taxRefMonth = taxRefDate.getMonth() + 1;
     const taxRefMonthStart = new Date(taxRefYear, taxRefMonth - 1, 1);
@@ -84,7 +85,7 @@ export const cashReserveService = {
 
     // Meta diária: quanto guardar por dia, no ritmo do que resta do mês, pra
     // bater cada meta mensal até o fim do mês corrente.
-    const daysRemainingInMonth = computeDaysRemainingInMonth(year, month, now.getDate());
+    const daysRemainingInMonth = computeDaysRemainingInMonth(year, month, now.getUTCDate());
     const thirteenthDailyGoal = computeDailyGoal(thirteenth.monthlyAccrual, daysRemainingInMonth);
     const vacationDailyGoal = computeDailyGoal(vacation.monthlyAccrual, daysRemainingInMonth);
     const contingencyDailyGoal = computeDailyGoal(contingencyMonthlySaving, daysRemainingInMonth);

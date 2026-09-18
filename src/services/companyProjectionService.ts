@@ -1,6 +1,7 @@
 import { breakEvenService } from "@/services/breakEvenService";
 import { cashFlowService } from "@/services/cashFlowService";
 import { computeRevenueProfitProjection } from "@/domain/companyProjection";
+import { todayUTCInBrazil } from "@/lib/today";
 
 export const companyProjectionService = {
   async getReport(days = 90) {
@@ -9,8 +10,8 @@ export const companyProjectionService = {
       cashFlowService.getProjection(days),
     ]);
 
-    const now = new Date();
-    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const now = todayUTCInBrazil();
+    const daysInMonth = new Date(now.getUTCFullYear(), now.getUTCMonth() + 1, 0).getDate();
 
     // Ritmo diário de faturamento vem da mesma projeção de fechamento do mês
     // já calculada em Ponto de Equilíbrio (faturamento acumulado / dias

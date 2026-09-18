@@ -4,6 +4,7 @@ import { loanRepository } from "@/repositories/loanRepository";
 import { computeDre, type DreGroup, type DreGroupTotals, type DreLine } from "@/domain/dre";
 import { computeCogsBySku } from "@/domain/cogs";
 import { computeLoanInterestForPeriod } from "@/domain/loanAmortization";
+import { todayUTCInBrazil } from "@/lib/today";
 
 const COGS_LINE_NAMES = ["Tecido", "Costura", "Aviamentos"] as const;
 type CogsLineName = (typeof COGS_LINE_NAMES)[number];
@@ -17,9 +18,9 @@ const COGS_MIN_COVERAGE_PERCENT = 80;
 
 export const dreService = {
   async getDRE(year?: number, month?: number) {
-    const now = new Date();
-    const y = year ?? now.getFullYear();
-    const m = month ?? now.getMonth() + 1;
+    const now = todayUTCInBrazil();
+    const y = year ?? now.getUTCFullYear();
+    const m = month ?? now.getUTCMonth() + 1;
     const monthStart = new Date(y, m - 1, 1);
     const monthEnd = new Date(y, m, 1);
 

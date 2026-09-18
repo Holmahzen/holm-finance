@@ -3,14 +3,15 @@ import { dashboardRepository } from "@/repositories/dashboardRepository";
 import { dreService } from "@/services/dreService";
 import { cashFlowService } from "@/services/cashFlowService";
 import { healthService } from "@/services/healthService";
+import { todayUTCInBrazil } from "@/lib/today";
 
 const RELEVANT_SEVERITIES = new Set(["critical", "warning"]);
 
 export const dashboardService = {
   async getSummary(year?: number, month?: number) {
-    const now = new Date();
-    const y = year ?? now.getFullYear();
-    const m = month ?? now.getMonth() + 1;
+    const now = todayUTCInBrazil();
+    const y = year ?? now.getUTCFullYear();
+    const m = month ?? now.getUTCMonth() + 1;
     const monthStart = new Date(y, m - 1, 1);
     const monthEnd = new Date(y, m, 1);
 

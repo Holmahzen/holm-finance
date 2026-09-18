@@ -8,6 +8,7 @@ import type {
   CreateCreditCardPurchaseInput,
   UpdateCreditCardPurchaseInput,
 } from "@/domain/schemas/creditCardPurchase";
+import { todayUTCInBrazil } from "@/lib/today";
 
 export const creditCardPurchaseService = {
   list() {
@@ -109,11 +110,11 @@ export const creditCardPurchaseService = {
   // comprometimento por cartão é agrupado no cliente a partir da lista de
   // compras, que já é filtrável.
   async getAverageRevenue(monthsBack = 3) {
-    const now = new Date();
+    const now = todayUTCInBrazil();
     let totalRevenue = 0;
     for (let i = 1; i <= monthsBack; i++) {
-      const idx = now.getMonth() - i;
-      const year = now.getFullYear() + Math.floor(idx / 12);
+      const idx = now.getUTCMonth() - i;
+      const year = now.getUTCFullYear() + Math.floor(idx / 12);
       const month = ((idx % 12) + 12) % 12 + 1;
       const start = new Date(year, month - 1, 1);
       const end = new Date(year, month, 1);

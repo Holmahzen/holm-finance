@@ -9,14 +9,15 @@ import {
   SIMPLES_NACIONAL_CEILING,
   SIMPLES_NACIONAL_SUBLIMIT,
 } from "@/domain/simplesNacional";
+import { todayUTCInBrazil } from "@/lib/today";
 
 const monthKey = (year: number, month: number) => `${year}-${String(month).padStart(2, "0")}`;
 
 export const simplesNacionalService = {
   async getReport() {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
+    const now = todayUTCInBrazil();
+    const year = now.getUTCFullYear();
+    const month = now.getUTCMonth() + 1;
 
     const months = computeTrailingMonths(year, month, 12);
     const fromMonth = monthKey(months[0].year, months[0].month);

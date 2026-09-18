@@ -9,14 +9,15 @@ import { buildCompetenceDre } from "@/domain/dreCompetencia";
 import { findFixedCostGaps } from "@/domain/fixedCostGaps";
 import { computeFixedCostDueDates } from "@/domain/fixedCostSchedule";
 import { fixedCostRepository } from "@/repositories/fixedCostRepository";
+import { todayUTCInBrazil } from "@/lib/today";
 
 /** Até dois anos de histórico; a tabela mês a mês mostra os 12 mais recentes. */
 const HISTORY_MONTHS = 24;
 const TREND_MONTHS = 12;
 
 function currentMonth(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const now = todayUTCInBrazil();
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
 export const dreCompetenciaService = {

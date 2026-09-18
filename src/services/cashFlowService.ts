@@ -11,21 +11,21 @@ import {
 } from "@/domain/cashFlow";
 import { aggregateSalesBySku, isExcludedSaleStatus } from "@/domain/salesAggregation";
 import { computeCogsBySku, computeMaterialSpendSplit } from "@/domain/cogs";
+import { todayUTCInBrazil } from "@/lib/today";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const MATERIAL_SPLIT_MIN_COVERAGE_PERCENT = 80;
 
 export const cashFlowService = {
   async getProjection(range: number | "month" = 30) {
-    const now = new Date();
-    const todayUTC = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    const todayUTC = todayUTCInBrazil();
 
     // "month" = até o fim do mês vigente, em vez de N dias corridos a partir
     // de hoje — evita que o alerta de "não sobra nada" misture contas do mês
     // que vem junto com as do mês atual.
     const windowEnd =
       range === "month"
-        ? new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 1))
+        ? new Date(Date.UTC(todayUTC.getUTCFullYear(), todayUTC.getUTCMonth() + 1, 1))
         : new Date(todayUTC.getTime() + range * MS_PER_DAY);
     const days = Math.round((windowEnd.getTime() - todayUTC.getTime()) / MS_PER_DAY);
 

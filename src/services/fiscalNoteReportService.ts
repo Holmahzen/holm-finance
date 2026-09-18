@@ -3,13 +3,14 @@ import { mlServiceInvoiceRepository } from "@/repositories/mlServiceInvoiceRepos
 import { computeRbt12, detailForMonth, emptyMonth, shiftMonth, summarizeMonths } from "@/domain/fiscalNotes";
 import { mlServiceDetailForMonth, mlServiceTotalsByMonth } from "@/domain/mlServices";
 import { codeBreakdown } from "@/domain/fiscalCodes";
+import { todayUTCInBrazil } from "@/lib/today";
 
 /** A tela mostra até dois anos — o bastante pra RBT12 do mês mais antigo visível. */
 const HISTORY_MONTHS = 24;
 
 function currentMonth(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const now = todayUTCInBrazil();
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
 export const fiscalNoteReportService = {

@@ -3,6 +3,7 @@ import { salesService } from "@/services/salesService";
 import { companyProjectionService } from "@/services/companyProjectionService";
 import { percentChange } from "@/domain/health";
 import { aggregateSalesBySku, computeRevenueInTransit } from "@/domain/salesAggregation";
+import { todayUTCInBrazil } from "@/lib/today";
 
 // Vendas feitas a partir desse dia do mês têm mais chance de o Mercado Livre
 // só liberar o dinheiro no mês seguinte — não é uma regra exata da
@@ -11,9 +12,9 @@ const REVENUE_IN_TRANSIT_FROM_DAY = 20;
 
 export const monthlyReportService = {
   async getReport(year?: number, month?: number) {
-    const now = new Date();
-    const y = year ?? now.getFullYear();
-    const m = month ?? now.getMonth() + 1;
+    const now = todayUTCInBrazil();
+    const y = year ?? now.getUTCFullYear();
+    const m = month ?? now.getUTCMonth() + 1;
 
     const prevIdx = m - 1 - 1;
     const prevYear = y + Math.floor(prevIdx / 12);
@@ -22,8 +23,8 @@ export const monthlyReportService = {
     // Projeção do mês que vem parte sempre de hoje (o ritmo diário real só
     // existe pro mês corrente) — independente de qual período está sendo
     // visto no resto do relatório.
-    const nextIdx = now.getMonth() + 1;
-    const nextMonthYear = now.getFullYear() + Math.floor(nextIdx / 12);
+    const nextIdx = now.getUTCMonth() + 1;
+    const nextMonthYear = now.getUTCFullYear() + Math.floor(nextIdx / 12);
     const nextMonth = (nextIdx % 12) + 1;
     const daysInNextMonth = new Date(nextMonthYear, nextMonth, 0).getDate();
 

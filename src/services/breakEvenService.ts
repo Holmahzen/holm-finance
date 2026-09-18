@@ -14,12 +14,13 @@ import { computeInsights } from "@/domain/insights";
 import { aggregateSalesBySku } from "@/domain/salesAggregation";
 import { computeDaysRemainingInMonth, computeDailyGoal } from "@/domain/cashReserve";
 import { computeFixedCostMonthlyAmount } from "@/domain/fixedCostSchedule";
+import { todayUTCInBrazil } from "@/lib/today";
 
 export const breakEvenService = {
   async getReport(year?: number, month?: number) {
-    const now = new Date();
-    const y = year ?? now.getFullYear();
-    const m = month ?? now.getMonth() + 1;
+    const now = todayUTCInBrazil();
+    const y = year ?? now.getUTCFullYear();
+    const m = month ?? now.getUTCMonth() + 1;
     const monthStart = new Date(y, m - 1, 1);
     const monthEnd = new Date(y, m, 1);
 
@@ -121,9 +122,9 @@ export const breakEvenService = {
       .filter((p) => p.marginValue < 0)
       .map((p) => ({ name: p.name }));
 
-    const isCurrentPeriod = y === now.getFullYear() && m === now.getMonth() + 1;
+    const isCurrentPeriod = y === now.getUTCFullYear() && m === now.getUTCMonth() + 1;
     const daysInMonth = new Date(y, m, 0).getDate();
-    const daysElapsed = isCurrentPeriod ? now.getDate() : 0;
+    const daysElapsed = isCurrentPeriod ? now.getUTCDate() : 0;
 
     const projection = isCurrentPeriod
       ? computeMonthRevenueProjection(actualRevenueThisMonth, daysElapsed, daysInMonth)
@@ -137,7 +138,7 @@ export const breakEvenService = {
     // equilíbrio, dividido pelos dias que restam no mês corrente. Só faz
     // sentido pro período atual (mês fechado não tem "dias restantes").
     const daysRemainingInMonth = isCurrentPeriod
-      ? computeDaysRemainingInMonth(y, m, now.getDate())
+      ? computeDaysRemainingInMonth(y, m, now.getUTCDate())
       : null;
     const remainingToBreakEven =
       breakEven.breakEvenRevenue !== null

@@ -1,6 +1,7 @@
 import { dreService } from "@/services/dreService";
 import { healthRepository } from "@/repositories/healthRepository";
 import { computeHealthSignals, type HealthMonth } from "@/domain/health";
+import { todayUTCInBrazil } from "@/lib/today";
 
 function lastNMonths(count: number, referenceYear: number, referenceMonth: number) {
   const result: { year: number; month: number }[] = [];
@@ -13,9 +14,9 @@ function lastNMonths(count: number, referenceYear: number, referenceMonth: numbe
 
 export const healthService = {
   async getReport(months = 12, year?: number, month?: number) {
-    const now = new Date();
-    const refYear = year ?? now.getFullYear();
-    const refMonth = month ?? now.getMonth() + 1;
+    const now = todayUTCInBrazil();
+    const refYear = year ?? now.getUTCFullYear();
+    const refMonth = month ?? now.getUTCMonth() + 1;
 
     const periods = lastNMonths(months, refYear, refMonth);
 

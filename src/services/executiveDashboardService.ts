@@ -13,12 +13,13 @@ import {
   computeAverageTicket,
   computeCashGeneration,
 } from "@/domain/executiveDashboard";
+import { todayUTCInBrazil } from "@/lib/today";
 
 export const executiveDashboardService = {
   async getSummary(year?: number, month?: number) {
-    const now = new Date();
-    const y = year ?? now.getFullYear();
-    const m = month ?? now.getMonth() + 1;
+    const now = todayUTCInBrazil();
+    const y = year ?? now.getUTCFullYear();
+    const m = month ?? now.getUTCMonth() + 1;
     const monthStart = new Date(y, m - 1, 1);
     const monthEnd = new Date(y, m, 1);
 

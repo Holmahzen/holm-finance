@@ -9,6 +9,7 @@ import {
   type ReleaseBuckets,
   type ReleaseSchedule,
 } from "@/domain/mercadoLivreReleases";
+import { todayUTCInBrazil } from "@/lib/today";
 
 /**
  * De onde veio o calendário.
@@ -201,7 +202,7 @@ export const mercadoLivreReleaseService = {
    * hub não estiver configurado ou não responder. O relatório sempre diz qual
    * das duas foi usada — a diferença entre elas é de semanas.
    */
-  async getReport(today: Date = new Date()): Promise<ReleaseReport> {
+  async getReport(today: Date = todayUTCInBrazil()): Promise<ReleaseReport> {
     const [hub, saved] = await Promise.all([buscarRecebiveisDoHub(), buckesSalvos()]);
 
     if (hub.ok) return montarDoHub(hub.dados, today, saved);
@@ -221,7 +222,7 @@ export const mercadoLivreReleaseService = {
    * não um efeito colateral da importação: quem confere os números decide
    * quando eles passam a valer.
    */
-  async syncToReceivable(today: Date = new Date()) {
+  async syncToReceivable(today: Date = todayUTCInBrazil()) {
     const report = await this.getReport(today);
     await mercadoLivreReceivableService.update({
       today: report.buckets.today,
