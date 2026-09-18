@@ -154,4 +154,21 @@ describe("buildProfitabilityReport", () => {
     expect(rows[0].adSpend).toBe(0);
     expect(rows[0].contributionAfterAds).toBeCloseTo(rows[0].contribution);
   });
+
+  it("calcula adSharePercent como a fracao da contribuicao comida pelo Ads", () => {
+    const skus = [sku({ sku: "A1", grossRevenue: 1000, quantity: 10 })];
+    const products = new Map([["A1", product({ salePrice: 100, tecidoCost: 20, costuraCost: 10, aviamentosCost: 5, marketplaceFee: 19 })]]);
+    const adSpendBySku = new Map([["A1", 230]]); // metade da contribuicao de 460
+    const { rows } = buildProfitabilityReport(skus, products, 0.3, adSpendBySku);
+    expect(rows[0].adSharePercent).toBeCloseTo(0.5);
+  });
+
+  it("adSharePercent fica null quando a contribuicao nao e positiva (produto ja deficitario sem contar Ads)", () => {
+    const skus = [sku({ sku: "A1", grossRevenue: 1000, quantity: 10 })];
+    const products = new Map([["A1", product({ salePrice: 100, tecidoCost: 90, costuraCost: 10, aviamentosCost: 5, marketplaceFee: 19 })]]); // margem negativa
+    const adSpendBySku = new Map([["A1", 50]]);
+    const { rows } = buildProfitabilityReport(skus, products, 0.3, adSpendBySku);
+    expect(rows[0].contribution).toBeLessThanOrEqual(0);
+    expect(rows[0].adSharePercent).toBeNull();
+  });
 });

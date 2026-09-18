@@ -79,6 +79,11 @@ export type SkuProfitability = SkuAbc & {
   /** `contribution` já descontando o Ads do período — o número que
    * realmente importa pra saber se o produto dá lucro de verdade. */
   contributionAfterAds: number;
+  /** Fração da contribuição que o Ads comeu (`adSpend / contribution`) — a
+   * régua de "eficiência de Ads" por SKU. `null` quando não dá pra calcular
+   * de forma útil (contribuição zero ou negativa: o produto já é
+   * deficitário sem nem contar Ads, um problema diferente). */
+  adSharePercent: number | null;
   quadrant: ProfitabilityQuadrant;
 };
 
@@ -123,6 +128,7 @@ export function buildProfitabilityReport(
       contribution,
       adSpend,
       contributionAfterAds: contribution - adSpend,
+      adSharePercent: contribution > 0 ? adSpend / contribution : null,
       quadrant: classifyQuadrant(s.tier, marginPercent, hasCost, threshold),
     };
   });

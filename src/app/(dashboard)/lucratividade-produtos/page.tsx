@@ -23,6 +23,7 @@ type Row = {
   contribution: number;
   adSpend: number;
   contributionAfterAds: number;
+  adSharePercent: number | null;
 };
 
 type PeriodResult = {
@@ -66,6 +67,15 @@ const QUADRANT_ORDER: ProfitabilityQuadrant[] = [
 ];
 
 const MONTH_NAMES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+const AD_SHARE_HIGH = 0.4;
+const AD_SHARE_LOW = 0.15;
+
+function adShareColor(fraction: number): string {
+  if (fraction >= AD_SHARE_HIGH) return "text-red-400";
+  if (fraction >= AD_SHARE_LOW) return "text-amber-400";
+  return "text-emerald-400";
+}
 
 function pct(fraction: number): string {
   return `${(fraction * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
@@ -155,6 +165,12 @@ export default function ProductProfitabilityPage() {
     }
     return [...filtered].sort((a, b) => b.contribution - a.contribution);
   }, [rows, activeQuadrant, search]);
+
+  const adEfficiencyRows = useMemo(() => {
+    return rows
+      .filter((r) => r.adSpend > 0 && r.adSharePercent !== null)
+      .sort((a, b) => (b.adSharePercent ?? 0) - (a.adSharePercent ?? 0));
+  }, [rows]);
 
   return (
     <div className="flex flex-col gap-8">
@@ -294,6 +310,46 @@ export default function ProductProfitabilityPage() {
               );
             })}
           </div>
+
+          {adEfficiencyRows.length > 0 && (
+            <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4">
+              <h2 className="font-serif text-lg text-foreground">Eficiência de Ads por SKU</h2>
+              <p className="max-w-prose text-xs text-muted">
+                Ordenado pela fatia da contribuição que o Ads comeu no período —{" "}
+                <span className="text-red-400">vermelho</span> ({pct(AD_SHARE_HIGH)}+) é candidato a
+                pausar ou reduzir o investimento; <span className="text-emerald-400">verde</span> (abaixo
+                de {pct(AD_SHARE_LOW)}) converte bem gastando pouco e aguenta mais verba.
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[700px] text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-muted">
+                      <th className="py-2 font-medium">Produto</th>
+                      <th className="py-2 font-medium">SKU</th>
+                      <th className="py-2 font-medium">Contribuição</th>
+                      <th className="py-2 font-medium">Ads</th>
+                      <th className="py-2 font-medium">% da contribuição</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {adEfficiencyRows.map((r) => (
+                      <tr key={r.sku} className="border-b border-border/50">
+                        <td className="py-2 max-w-[280px] truncate" title={r.name}>
+                          {r.name}
+                        </td>
+                        <td className="py-2 text-muted whitespace-nowrap">{r.sku}</td>
+                        <td className="py-2">{formatBRL(r.contribution)}</td>
+                        <td className="py-2 text-muted">{formatBRL(r.adSpend)}</td>
+                        <td className={`py-2 font-medium ${adShareColor(r.adSharePercent!)}`}>
+                          {pct(r.adSharePercent!)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center justify-between gap-3">
