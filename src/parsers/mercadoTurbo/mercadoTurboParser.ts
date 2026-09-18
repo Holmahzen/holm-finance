@@ -17,6 +17,10 @@ export type MercadoTurboSaleRow = {
   marketplaceCost: number;
   customerName: string | null;
   status: string;
+  /** "Código" — o código do anúncio (MLB...). É o único lugar que traz SKU e
+   * código do anúncio juntos, por isso é a ponte pra cruzar com o gasto de
+   * Ads (que só vem com o código, nunca com o SKU). */
+  listingCode: string | null;
 };
 
 export type MercadoTurboParseResult = {
@@ -89,6 +93,7 @@ export function parseMercadoTurboWorkbook(buffer: Buffer): MercadoTurboParseResu
       marketplaceCost: parseAmountCell(row["Custo (-)"]),
       customerName: cellString(row, "Nome do Comprador") || null,
       status: cellString(row, "Status Pedido"),
+      listingCode: cellString(row, "Código") || null,
     });
   }
 

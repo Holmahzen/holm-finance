@@ -79,6 +79,7 @@ export const salesImportService = {
             marketplaceCost: r.marketplaceCost,
             customerName: r.customerName,
             status: r.status,
+            listingCode: r.listingCode,
             importBatchId: batch.id,
           })),
           tx,

@@ -136,4 +136,22 @@ describe("buildProfitabilityReport", () => {
     const result: SkuAbc[] = classifyAbc([sku()]);
     expect(result[0].tier).toBe("A");
   });
+
+  it("desconta o investimento em Ads da contribuicao quando o SKU tem gasto no periodo", () => {
+    const skus = [sku({ sku: "A1", grossRevenue: 1000, quantity: 10 })];
+    const products = new Map([["A1", product({ salePrice: 100, tecidoCost: 20, costuraCost: 10, aviamentosCost: 5, marketplaceFee: 19 })]]);
+    const adSpendBySku = new Map([["A1", 150]]);
+    const { rows } = buildProfitabilityReport(skus, products, 0.3, adSpendBySku);
+    expect(rows[0].contribution).toBeCloseTo(460); // 46 * 10, sem desconto de Ads
+    expect(rows[0].adSpend).toBe(150);
+    expect(rows[0].contributionAfterAds).toBeCloseTo(310); // 460 - 150
+  });
+
+  it("adSpend e contributionAfterAds ficam zero/iguais a contribution quando nao ha gasto de Ads pro SKU", () => {
+    const skus = [sku({ sku: "A1", grossRevenue: 1000, quantity: 10 })];
+    const products = new Map([["A1", product({ salePrice: 100, tecidoCost: 20, costuraCost: 10, aviamentosCost: 5, marketplaceFee: 19 })]]);
+    const { rows } = buildProfitabilityReport(skus, products, 0.3);
+    expect(rows[0].adSpend).toBe(0);
+    expect(rows[0].contributionAfterAds).toBeCloseTo(rows[0].contribution);
+  });
 });

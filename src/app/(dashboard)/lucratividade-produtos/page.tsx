@@ -21,6 +21,8 @@ type Row = {
   marginValue: number;
   marginPercent: number;
   contribution: number;
+  adSpend: number;
+  contributionAfterAds: number;
 };
 
 type PeriodResult = {
@@ -286,7 +288,7 @@ export default function ProductProfitabilityPage() {
               </div>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1000px] text-left text-sm">
+              <table className="w-full min-w-[1200px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-border text-muted">
                     <th className="py-2 font-medium">Produto</th>
@@ -296,6 +298,8 @@ export default function ProductProfitabilityPage() {
                     <th className="py-2 font-medium">Qtd.</th>
                     <th className="py-2 font-medium">Margem</th>
                     <th className="py-2 font-medium">Contribuição</th>
+                    <th className="py-2 font-medium">Ads</th>
+                    <th className="py-2 font-medium">Contrib. após Ads</th>
                     <th className="py-2 font-medium">Grupo</th>
                   </tr>
                 </thead>
@@ -314,6 +318,14 @@ export default function ProductProfitabilityPage() {
                         className={`py-2 ${r.hasCost ? (r.contribution >= 0 ? "text-emerald-400" : "text-red-400") : "text-muted"}`}
                       >
                         {r.hasCost ? formatBRL(r.contribution) : "—"}
+                      </td>
+                      <td className="py-2 text-muted">
+                        {r.adSpend > 0 ? formatBRL(r.adSpend) : "—"}
+                      </td>
+                      <td
+                        className={`py-2 ${r.hasCost ? (r.contributionAfterAds >= 0 ? "text-emerald-400" : "text-red-400") : "text-muted"}`}
+                      >
+                        {r.hasCost ? formatBRL(r.contributionAfterAds) : "—"}
                       </td>
                       <td className="py-2">
                         {QUADRANT_EMOJI[r.quadrant]} {QUADRANT_LABEL[r.quadrant]}

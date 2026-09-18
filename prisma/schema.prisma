@@ -462,9 +462,40 @@ model MarketplaceSale {
   importBatchId    String?
   importBatch      SalesImportBatch? @relation(fields: [importBatchId], references: [id])
   createdAt        DateTime          @default(now())
+  /** Código do anúncio (ex.: MLB123...) — vem da coluna "Código" do Mercado
+   * Turbo. Sempre null pra Shopee (o relatório dela não traz isso). É o que
+   * cruza uma venda com o gasto de Ads daquele anúncio em MlAdSpend, já que
+   * nenhum relatório de venda traz SKU e investimento em Ads juntos. */
+  listingCode      String?
 
   @@index([saleDate])
+  @@index([listingCode])
   @@map("marketplace_sales")
+}
+
+/**
+ * Investimento em Mercado Ads por anúncio/período, do relatório "Anúncios
+ * patrocinados" que o Mercado Livre exporta — nunca vem com SKU, só o
+ * código do anúncio (MLB...), por isso cruza com MarketplaceSale.listingCode
+ * pra descobrir de qual produto é.
+ */
+model MlAdSpend {
+  id           String   @id @default(cuid())
+  listingCode  String
+  adTitle      String
+  campaignName String
+  periodStart  DateTime
+  periodEnd    DateTime
+  investimento Decimal  @db.Decimal(14, 2)
+  receita      Decimal  @default(0) @db.Decimal(14, 2)
+  cliques      Int      @default(0)
+  impressoes   Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@unique([listingCode, campaignName, periodStart, periodEnd])
+  @@index([listingCode])
+  @@index([periodStart, periodEnd])
+  @@map("ml_ad_spend")
 }
 
 /**

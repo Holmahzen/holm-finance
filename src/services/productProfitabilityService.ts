@@ -1,5 +1,6 @@
 import { marketplaceSaleRepository } from "@/repositories/marketplaceSaleRepository";
 import { productRepository } from "@/repositories/productRepository";
+import { mlAdSpendRepository } from "@/repositories/mlAdSpendRepository";
 import { dreService } from "@/services/dreService";
 import { aggregateSalesBySku } from "@/domain/salesAggregation";
 import { buildProfitabilityReport } from "@/domain/productProfitability";
@@ -86,7 +87,22 @@ export const productProfitabilityService = {
       products.filter((p) => p.sku).map((p) => [p.sku!, p]),
     );
 
-    const { rows, suggestedMarginThreshold } = buildProfitabilityReport(skus, productBySku, marginThreshold);
+    const skuByListingCode = new Map<string, string>();
+    for (const s of sales) {
+      if (s.listingCode) skuByListingCode.set(s.listingCode, s.sku);
+    }
+    const listingCodes = [...skuByListingCode.keys()];
+    const adSpendRows = listingCodes.length
+      ? await mlAdSpendRepository.findByListingCodesAndPeriod(listingCodes, start, end)
+      : [];
+    const adSpendBySku = new Map<string, number>();
+    for (const row of adSpendRows) {
+      const sku = skuByListingCode.get(row.listingCode);
+      if (!sku) continue;
+      adSpendBySku.set(sku, (adSpendBySku.get(sku) ?? 0) + Number(row.investimento));
+    }
+
+    const { rows, suggestedMarginThreshold } = buildProfitabilityReport(skus, productBySku, marginThreshold, adSpendBySku);
 
     return { year, month: month ?? null, rows, suggestedMarginThreshold, periodResult };
   },

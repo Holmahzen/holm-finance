@@ -79,6 +79,13 @@ type ImportResult = {
   updatedSales: number;
 };
 
+type AdsImportResult = {
+  totalRows: number;
+  skippedRows: number;
+  newRows: number;
+  updatedRows: number;
+};
+
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-1 rounded-lg border border-border bg-surface p-4">
@@ -101,6 +108,11 @@ export default function VendasPage() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [adsFile, setAdsFile] = useState<File | null>(null);
+  const [adsSubmitting, setAdsSubmitting] = useState(false);
+  const [adsResult, setAdsResult] = useState<AdsImportResult | null>(null);
+  const [adsError, setAdsError] = useState<string | null>(null);
 
   const defaultFortnight = currentFortnight();
   const [modalityFrom, setModalityFrom] = useState(defaultFortnight.from);
@@ -168,6 +180,37 @@ export default function VendasPage() {
     setSubmitting(false);
   }
 
+  async function handleAdsUpload(e: FormEvent) {
+    e.preventDefault();
+    if (!adsFile) return;
+    setAdsSubmitting(true);
+    setAdsError(null);
+    setAdsResult(null);
+
+    const formData = new FormData();
+    formData.append("file", adsFile);
+
+    const res = await fetch("/api/imports/ml-ads", { method: "POST", body: formData });
+    let body: unknown = null;
+    try {
+      body = await res.json();
+    } catch {
+      body = null;
+    }
+
+    if (!res.ok) {
+      const message =
+        body && typeof body === "object" && "error" in body && typeof (body as { error: unknown }).error === "string"
+          ? (body as { error: string }).error
+          : `Falha ao importar (HTTP ${res.status}). Tente novamente.`;
+      setAdsError(message);
+    } else {
+      setAdsResult(body as AdsImportResult);
+      setAdsFile(null);
+    }
+    setAdsSubmitting(false);
+  }
+
   return (
     <div className="flex flex-col gap-8">
       <div>
@@ -216,6 +259,54 @@ export default function VendasPage() {
             )}
             <li className="text-emerald-400">Vendas novas importadas: {result.newSales}</li>
             <li>Já existentes, atualizadas com os valores desta planilha: {result.updatedSales}</li>
+          </ul>
+        </div>
+      )}
+
+      <div>
+        <h2 className="font-serif text-xl text-foreground">Investimento em Ads</h2>
+        <p className="text-sm text-muted">
+          Importe o relatório "Anúncios patrocinados" do Mercado Livre (com a coluna
+          Investimento — não o de "Anúncios vendidos") pra cruzar o gasto de publicidade com
+          cada SKU, via código do anúncio.
+        </p>
+      </div>
+
+      <form
+        onSubmit={handleAdsUpload}
+        className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-surface p-4"
+      >
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-muted">
+            Relatório de Anúncios patrocinados do Mercado Livre (.xlsx)
+          </label>
+          <input
+            required
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={(e) => setAdsFile(e.target.files?.[0] ?? null)}
+            className="text-sm text-foreground file:mr-2 file:rounded file:border-0 file:bg-gold file:px-3 file:py-1 file:text-black"
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={adsSubmitting}
+          className="rounded bg-gold px-4 py-1.5 text-sm font-medium text-black transition hover:bg-gold-soft disabled:opacity-50"
+        >
+          {adsSubmitting ? "Importando..." : "Importar"}
+        </button>
+      </form>
+
+      {adsError && <p className="text-sm text-red-400">{adsError}</p>}
+      {adsResult && (
+        <div className="rounded-lg border border-border bg-surface p-4 text-sm">
+          <ul className="flex flex-col gap-1">
+            <li>Linhas na planilha: {adsResult.totalRows}</li>
+            {adsResult.skippedRows > 0 && (
+              <li>Ignoradas por falta de dado essencial: {adsResult.skippedRows}</li>
+            )}
+            <li className="text-emerald-400">Registros novos: {adsResult.newRows}</li>
+            <li>Já existentes, atualizados com os valores desta planilha: {adsResult.updatedRows}</li>
           </ul>
         </div>
       )}

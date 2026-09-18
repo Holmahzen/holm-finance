@@ -16,6 +16,8 @@ export type ShopeeSaleRow = {
   marketplaceCost: number;
   customerName: string | null;
   status: string;
+  /** Shopee não traz código de anúncio — sempre null aqui, só o Mercado Turbo tem. */
+  listingCode: null;
 };
 
 export type ShopeeParseResult = {
@@ -114,6 +116,7 @@ export function parseShopeeWorkbook(buffer: Buffer): ShopeeParseResult {
       marketplaceCost: 0,
       customerName: null,
       status: DEFAULT_STATUS,
+      listingCode: null,
     });
   }
 

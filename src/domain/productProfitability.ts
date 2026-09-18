@@ -72,6 +72,13 @@ export type SkuProfitability = SkuAbc & {
   marginValue: number;
   marginPercent: number;
   contribution: number;
+  /** Investimento em Mercado Ads atribuído a esse SKU no período (soma de
+   * todos os anúncios/MLB que venderam esse SKU) — 0 quando não há relatório
+   * de Ads importado pro período, ou o SKU nunca apareceu em anúncio nenhum. */
+  adSpend: number;
+  /** `contribution` já descontando o Ads do período — o número que
+   * realmente importa pra saber se o produto dá lucro de verdade. */
+  contributionAfterAds: number;
   quadrant: ProfitabilityQuadrant;
 };
 
@@ -87,6 +94,7 @@ export function buildProfitabilityReport(
   skus: SkuSalesAggregate[],
   productBySku: Map<string, ProductInput>,
   marginThreshold?: number,
+  adSpendBySku: Map<string, number> = new Map(),
 ): { rows: SkuProfitability[]; suggestedMarginThreshold: number } {
   const abc = classifyAbc(skus);
 
@@ -105,12 +113,16 @@ export function buildProfitabilityReport(
     const hasCost = margin !== null;
     const marginValue = margin?.marginValue ?? 0;
     const marginPercent = margin?.marginPercent ?? 0;
+    const contribution = marginValue * s.quantity;
+    const adSpend = adSpendBySku.get(s.sku) ?? 0;
     return {
       ...s,
       hasCost,
       marginValue,
       marginPercent,
-      contribution: marginValue * s.quantity,
+      contribution,
+      adSpend,
+      contributionAfterAds: contribution - adSpend,
       quadrant: classifyQuadrant(s.tier, marginPercent, hasCost, threshold),
     };
   });
