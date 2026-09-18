@@ -126,6 +126,31 @@ describe("parseExcel", () => {
     expect(() => parseExcel(buffer)).toThrow(/formato/i);
   });
 
+  it("skips the Mercado Pago balance summary preamble in a real .xlsx binary file", () => {
+    // O extrato de conta do Mercado Pago baixado como .xlsx de verdade (não
+    // CSV renomeado) abre com uma linha de resumo de saldo antes da tabela
+    // real — reproduz esse formato pra garantir que o parser acha a linha
+    // RELEASE_DATE como cabeçalho em vez de usar o resumo por engano.
+    const aoa = [
+      ["INITIAL_BALANCE", "CREDITS", "DEBITS", "FINAL_BALANCE", ""],
+      ["668,18", "303.700,06", "-304.368,24", "0,00", ""],
+      ["", "", "", "", ""],
+      ["RELEASE_DATE", "TRANSACTION_TYPE", "REFERENCE_ID", "TRANSACTION_NET_AMOUNT", "PARTIAL_BALANCE"],
+      ["01-04-2026", "Liberação de dinheiro", "150643208497", "22,72", "690,90"],
+      ["02-04-2026", "Pagamento com Código QR Pix Fulano", "150643208498", "-40,11", "650,79"],
+    ];
+    const sheet = XLSX.utils.aoa_to_sheet(aoa);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "sheet0");
+    const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
+
+    const result = parseExcel(buffer);
+    expect(result.format).toBe("generic");
+    expect(result.transactions).toHaveLength(2);
+    expect(result.transactions[0]).toMatchObject({ trnType: "CREDIT", amount: "22.72" });
+    expect(result.transactions[1]).toMatchObject({ trnType: "DEBIT", amount: "-40.11" });
+  });
+
   it("skips rows with no date or empty description", () => {
     const buffer = buildWorkbookBuffer([
       { Data: null, Descrição: "Sem data", Valor: 10, Tipo: "Entrada" },

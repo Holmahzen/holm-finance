@@ -31,30 +31,45 @@ function isBinarySpreadsheet(buffer: Buffer): boolean {
  * o formato do número e da data são parseAmountCell/parseDateCell, que já
  * leem o padrão brasileiro corretamente.
  */
+/**
+ * O extrato de conta do Mercado Pago abre com um resumo de saldo
+ * (INITIAL_BALANCE;CREDITS;DEBITS;FINAL_BALANCE) antes da tabela de
+ * transações de verdade — em ambos os formatos que o Mercado Pago entrega
+ * (CSV cru ou .xlsx binário de verdade). Acha a linha RELEASE_DATE, o
+ * cabeçalho real; sem ela (planilha comum, sem esse resumo), usa a primeira
+ * linha como cabeçalho, igual sempre foi.
+ */
+function findHeaderRowIndex(rows: unknown[][]): number {
+  const idx = rows.findIndex((row) => String(row[0] ?? "").trim().toUpperCase() === "RELEASE_DATE");
+  return idx >= 0 ? idx : 0;
+}
+
+function matrixToRows(matrix: unknown[][], trimCells: boolean): Record<string, unknown>[] {
+  if (matrix.length === 0) return [];
+  const headerIndex = findHeaderRowIndex(matrix);
+  const headerCells = (matrix[headerIndex] ?? []).map((c) => String(c ?? "").trim());
+
+  const rows: Record<string, unknown>[] = [];
+  for (let i = headerIndex + 1; i < matrix.length; i++) {
+    const cells = matrix[i];
+    const row: Record<string, unknown> = {};
+    headerCells.forEach((h, idx) => {
+      const raw = cells[idx];
+      row[h] = raw === undefined ? null : trimCells && typeof raw === "string" ? raw.trim() : raw;
+    });
+    rows.push(row);
+  }
+  return rows;
+}
+
 function csvBufferToRows(buffer: Buffer): Record<string, unknown>[] {
   const text = buffer.toString("utf-8").replace(/^﻿/, "");
   const lines = text.split(/\r\n|\n|\r/).filter((l) => l.trim() !== "");
   if (lines.length === 0) return [];
 
   const delimiter = lines[0].includes(";") ? ";" : ",";
-
-  // O extrato de conta do Mercado Pago abre com um resumo de saldo
-  // (INITIAL_BALANCE;CREDITS;DEBITS;FINAL_BALANCE) antes da tabela de
-  // transações de verdade — pula até a linha RELEASE_DATE, o cabeçalho real.
-  const mlHeaderIndex = lines.findIndex((l) => l.toUpperCase().startsWith("RELEASE_DATE"));
-  const headerLineIndex = mlHeaderIndex >= 0 ? mlHeaderIndex : 0;
-
-  const headerCells = lines[headerLineIndex].split(delimiter).map((c) => c.trim());
-  const rows: Record<string, unknown>[] = [];
-  for (let i = headerLineIndex + 1; i < lines.length; i++) {
-    const cells = lines[i].split(delimiter);
-    const row: Record<string, unknown> = {};
-    headerCells.forEach((h, idx) => {
-      row[h] = cells[idx] !== undefined ? cells[idx].trim() : null;
-    });
-    rows.push(row);
-  }
-  return rows;
+  const matrix = lines.map((l) => l.split(delimiter));
+  return matrixToRows(matrix, true);
 }
 
 function externalIdFrom(row: Record<string, unknown>, mapping: ReturnType<typeof mapHeaders>): string {
@@ -78,7 +93,8 @@ export function parseExcel(buffer: Buffer): ExcelStatement {
   if (isBinarySpreadsheet(buffer)) {
     const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
     const sheet = pickSheet(workbook);
-    rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null });
+    const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: null });
+    rows = matrixToRows(matrix, false);
   } else {
     rows = csvBufferToRows(buffer);
   }
