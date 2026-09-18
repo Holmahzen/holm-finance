@@ -413,6 +413,11 @@ export default function DashboardPage() {
               title="Gastos por categoria"
               data={summary.charts.expensesByCategory}
               tone="negative"
+              getHref={(d) =>
+                d.name === "Sem categoria"
+                  ? null
+                  : `/entries?type=PAYABLE&search=${encodeURIComponent(d.name)}`
+              }
             />
             <div className="grid grid-cols-1 gap-4">
               <HorizontalBarChart
