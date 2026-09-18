@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useState, type FormEvent } from "react";
+import { Fragment, Suspense, useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { formatBRL } from "@/lib/format";
 import { PeriodFilter } from "@/components/PeriodFilter";
@@ -66,6 +66,14 @@ function formatDate(value: string) {
 const now = new Date();
 
 export default function EntriesPage() {
+  return (
+    <Suspense fallback={<p className="text-sm text-muted">Carregando...</p>}>
+      <EntriesPageInner />
+    </Suspense>
+  );
+}
+
+function EntriesPageInner() {
   // Chegar aqui com ?type=&search= (ex.: clicando numa barra de "Top
   // fornecedores/clientes" no Início) já abre filtrado, sem precisar digitar
   // de novo o que a outra tela já sabia.
