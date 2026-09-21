@@ -1,6 +1,7 @@
 import { marketplaceSaleRepository } from "@/repositories/marketplaceSaleRepository";
 import { productRepository } from "@/repositories/productRepository";
 import { mlAdSpendRepository } from "@/repositories/mlAdSpendRepository";
+import { mlFullCostRepository } from "@/repositories/mlFullCostRepository";
 import { dreService } from "@/services/dreService";
 import { aggregateSalesBySku } from "@/domain/salesAggregation";
 import { buildProfitabilityReport } from "@/domain/productProfitability";
@@ -102,7 +103,25 @@ export const productProfitabilityService = {
       adSpendBySku.set(sku, (adSpendBySku.get(sku) ?? 0) + Number(row.investimento));
     }
 
-    const { rows, suggestedMarginThreshold } = buildProfitabilityReport(skus, productBySku, marginThreshold, adSpendBySku);
+    // Custo Full já vem com SKU direto no relatório (diferente do Ads, que só
+    // tem MLB) — não precisa de ponte, só soma por SKU no período.
+    const knownSkus = skus.map((s) => s.sku);
+    const fullCostRows = knownSkus.length
+      ? await mlFullCostRepository.findBySkusAndPeriod(knownSkus, start, end)
+      : [];
+    const fullCostBySku = new Map<string, number>();
+    for (const row of fullCostRows) {
+      if (!row.sku) continue;
+      fullCostBySku.set(row.sku, (fullCostBySku.get(row.sku) ?? 0) + Number(row.amount));
+    }
+
+    const { rows, suggestedMarginThreshold } = buildProfitabilityReport(
+      skus,
+      productBySku,
+      marginThreshold,
+      adSpendBySku,
+      fullCostBySku,
+    );
 
     return { year, month: month ?? null, rows, suggestedMarginThreshold, periodResult };
   },

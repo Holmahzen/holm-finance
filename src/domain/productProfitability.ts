@@ -84,6 +84,15 @@ export type SkuProfitability = SkuAbc & {
    * de forma útil (contribuição zero ou negativa: o produto já é
    * deficitário sem nem contar Ads, um problema diferente). */
   adSharePercent: number | null;
+  /** Custos do Mercado Livre Full atribuídos a esse SKU no período (coleta +
+   * armazenamento prolongado + retirada de estoque) — 0 quando não há
+   * relatório de tarifas Full importado, ou o SKU não teve custo Full nesse
+   * período. Não inclui a tarifa de armazenamento geral, que o relatório do
+   * ML não discrimina por SKU. */
+  fullCost: number;
+  /** `contribution` já descontando Ads E os custos do Full — a contribuição
+   * final de verdade, depois de todo custo operacional conhecido. */
+  contributionFinal: number;
   quadrant: ProfitabilityQuadrant;
 };
 
@@ -100,6 +109,7 @@ export function buildProfitabilityReport(
   productBySku: Map<string, ProductInput>,
   marginThreshold?: number,
   adSpendBySku: Map<string, number> = new Map(),
+  fullCostBySku: Map<string, number> = new Map(),
 ): { rows: SkuProfitability[]; suggestedMarginThreshold: number } {
   const abc = classifyAbc(skus);
 
@@ -120,6 +130,7 @@ export function buildProfitabilityReport(
     const marginPercent = margin?.marginPercent ?? 0;
     const contribution = marginValue * s.quantity;
     const adSpend = adSpendBySku.get(s.sku) ?? 0;
+    const fullCost = fullCostBySku.get(s.sku) ?? 0;
     return {
       ...s,
       hasCost,
@@ -129,6 +140,8 @@ export function buildProfitabilityReport(
       adSpend,
       contributionAfterAds: contribution - adSpend,
       adSharePercent: contribution > 0 ? adSpend / contribution : null,
+      fullCost,
+      contributionFinal: contribution - adSpend - fullCost,
       quadrant: classifyQuadrant(s.tier, marginPercent, hasCost, threshold),
     };
   });

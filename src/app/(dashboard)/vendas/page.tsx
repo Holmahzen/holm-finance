@@ -86,6 +86,13 @@ type AdsImportResult = {
   updatedRows: number;
 };
 
+type FullCostImportResult = {
+  totalRows: number;
+  skippedRows: number;
+  newRows: number;
+  updatedRows: number;
+};
+
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-1 rounded-lg border border-border bg-surface p-4">
@@ -113,6 +120,11 @@ export default function VendasPage() {
   const [adsSubmitting, setAdsSubmitting] = useState(false);
   const [adsResult, setAdsResult] = useState<AdsImportResult | null>(null);
   const [adsError, setAdsError] = useState<string | null>(null);
+
+  const [fullCostFile, setFullCostFile] = useState<File | null>(null);
+  const [fullCostSubmitting, setFullCostSubmitting] = useState(false);
+  const [fullCostResult, setFullCostResult] = useState<FullCostImportResult | null>(null);
+  const [fullCostError, setFullCostError] = useState<string | null>(null);
 
   const defaultFortnight = currentFortnight();
   const [modalityFrom, setModalityFrom] = useState(defaultFortnight.from);
@@ -211,6 +223,37 @@ export default function VendasPage() {
     setAdsSubmitting(false);
   }
 
+  async function handleFullCostUpload(e: FormEvent) {
+    e.preventDefault();
+    if (!fullCostFile) return;
+    setFullCostSubmitting(true);
+    setFullCostError(null);
+    setFullCostResult(null);
+
+    const formData = new FormData();
+    formData.append("file", fullCostFile);
+
+    const res = await fetch("/api/imports/ml-full-costs", { method: "POST", body: formData });
+    let body: unknown = null;
+    try {
+      body = await res.json();
+    } catch {
+      body = null;
+    }
+
+    if (!res.ok) {
+      const message =
+        body && typeof body === "object" && "error" in body && typeof (body as { error: unknown }).error === "string"
+          ? (body as { error: string }).error
+          : `Falha ao importar (HTTP ${res.status}). Tente novamente.`;
+      setFullCostError(message);
+    } else {
+      setFullCostResult(body as FullCostImportResult);
+      setFullCostFile(null);
+    }
+    setFullCostSubmitting(false);
+  }
+
   return (
     <div className="flex flex-col gap-8">
       <div>
@@ -307,6 +350,54 @@ export default function VendasPage() {
             )}
             <li className="text-emerald-400">Registros novos: {adsResult.newRows}</li>
             <li>Já existentes, atualizados com os valores desta planilha: {adsResult.updatedRows}</li>
+          </ul>
+        </div>
+      )}
+
+      <div>
+        <h2 className="font-serif text-xl text-foreground">Investimento em Full</h2>
+        <p className="text-sm text-muted">
+          Importe o "Relatório de Tarifas Full" do Mercado Livre pra trazer os custos de coleta,
+          armazenamento prolongado e retirada de estoque pra dentro da margem de cada SKU (a
+          tarifa de armazenamento geral não entra aqui — o relatório não a discrimina por SKU).
+        </p>
+      </div>
+
+      <form
+        onSubmit={handleFullCostUpload}
+        className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-surface p-4"
+      >
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-muted">
+            Relatório de Tarifas Full do Mercado Livre (.xlsx)
+          </label>
+          <input
+            required
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={(e) => setFullCostFile(e.target.files?.[0] ?? null)}
+            className="text-sm text-foreground file:mr-2 file:rounded file:border-0 file:bg-gold file:px-3 file:py-1 file:text-black"
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={fullCostSubmitting}
+          className="rounded bg-gold px-4 py-1.5 text-sm font-medium text-black transition hover:bg-gold-soft disabled:opacity-50"
+        >
+          {fullCostSubmitting ? "Importando..." : "Importar"}
+        </button>
+      </form>
+
+      {fullCostError && <p className="text-sm text-red-400">{fullCostError}</p>}
+      {fullCostResult && (
+        <div className="rounded-lg border border-border bg-surface p-4 text-sm">
+          <ul className="flex flex-col gap-1">
+            <li>Linhas na planilha: {fullCostResult.totalRows}</li>
+            {fullCostResult.skippedRows > 0 && (
+              <li>Ignoradas por falta de dado essencial: {fullCostResult.skippedRows}</li>
+            )}
+            <li className="text-emerald-400">Registros novos: {fullCostResult.newRows}</li>
+            <li>Já existentes, atualizados com os valores desta planilha: {fullCostResult.updatedRows}</li>
           </ul>
         </div>
       )}

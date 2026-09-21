@@ -24,6 +24,8 @@ type Row = {
   adSpend: number;
   contributionAfterAds: number;
   adSharePercent: number | null;
+  fullCost: number;
+  contributionFinal: number;
 };
 
 type PeriodResult = {
@@ -378,7 +380,7 @@ export default function ProductProfitabilityPage() {
               <div style={{ width: tableWidth || "100%", height: 1 }} />
             </div>
             <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto">
-              <table ref={tableRef} className="w-full min-w-[1200px] text-left text-sm">
+              <table ref={tableRef} className="w-full min-w-[1400px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-border text-muted">
                     <th className="py-2 font-medium">Produto</th>
@@ -390,6 +392,8 @@ export default function ProductProfitabilityPage() {
                     <th className="py-2 font-medium">Contribuição</th>
                     <th className="py-2 font-medium">Ads</th>
                     <th className="py-2 font-medium">Contrib. após Ads</th>
+                    <th className="py-2 font-medium">Full</th>
+                    <th className="py-2 font-medium">Contrib. final</th>
                     <th className="py-2 font-medium">Grupo</th>
                   </tr>
                 </thead>
@@ -416,6 +420,14 @@ export default function ProductProfitabilityPage() {
                         className={`py-2 ${r.hasCost ? (r.contributionAfterAds >= 0 ? "text-emerald-400" : "text-red-400") : "text-muted"}`}
                       >
                         {r.hasCost ? formatBRL(r.contributionAfterAds) : "—"}
+                      </td>
+                      <td className="py-2 text-muted">
+                        {r.fullCost > 0 ? formatBRL(r.fullCost) : "—"}
+                      </td>
+                      <td
+                        className={`py-2 ${r.hasCost ? (r.contributionFinal >= 0 ? "text-emerald-400" : "text-red-400") : "text-muted"}`}
+                      >
+                        {r.hasCost ? formatBRL(r.contributionFinal) : "—"}
                       </td>
                       <td className="py-2">
                         {QUADRANT_EMOJI[r.quadrant]} {QUADRANT_LABEL[r.quadrant]}

@@ -498,6 +498,36 @@ model MlAdSpend {
   @@map("ml_ad_spend")
 }
 
+enum MlFullCostType {
+  ARMAZENAMENTO
+  COLETA
+  ARMAZENAMENTO_PROLONGADO
+  RETIRADA
+}
+
+/**
+ * Custos do Mercado Livre Full (armazenagem, coleta, armazenamento
+ * prolongado, retirada de estoque), do "Relatorio de Tarifas Full" que o ML
+ * exporta. A aba de armazenagem geral não vem com SKU nem MLB — só as outras
+ * três (coleta, armazenamento prolongado, retirada) trazem, e são essas que
+ * entram na Lucratividade dos Produtos.
+ */
+model MlFullCost {
+  id          String         @id @default(cuid())
+  type        MlFullCostType
+  costNumber  String         @unique
+  costDate    DateTime
+  sku         String?
+  listingCode String?
+  amount      Decimal        @db.Decimal(14, 2)
+  details     String?
+  createdAt   DateTime       @default(now())
+
+  @@index([sku])
+  @@index([costDate])
+  @@map("ml_full_costs")
+}
+
 /**
  * Vendas lidas do relatório que o Mercado Livre exporta direto ("Vendas BR"),
  * numa tabela própria em vez de dentro de MarketplaceSale.

@@ -171,4 +171,23 @@ describe("buildProfitabilityReport", () => {
     expect(rows[0].contribution).toBeLessThanOrEqual(0);
     expect(rows[0].adSharePercent).toBeNull();
   });
+
+  it("desconta o custo Full da contribuicao final quando o SKU teve custo Full no periodo", () => {
+    const skus = [sku({ sku: "A1", grossRevenue: 1000, quantity: 10 })];
+    const products = new Map([["A1", product({ salePrice: 100, tecidoCost: 20, costuraCost: 10, aviamentosCost: 5, marketplaceFee: 19 })]]);
+    const adSpendBySku = new Map([["A1", 150]]);
+    const fullCostBySku = new Map([["A1", 40]]);
+    const { rows } = buildProfitabilityReport(skus, products, 0.3, adSpendBySku, fullCostBySku);
+    expect(rows[0].fullCost).toBe(40);
+    expect(rows[0].contributionAfterAds).toBeCloseTo(310); // 460 - 150, nao afetado pelo Full
+    expect(rows[0].contributionFinal).toBeCloseTo(270); // 460 - 150 - 40
+  });
+
+  it("fullCost e contributionFinal ficam zero/iguais a contributionAfterAds quando nao ha custo Full pro SKU", () => {
+    const skus = [sku({ sku: "A1", grossRevenue: 1000, quantity: 10 })];
+    const products = new Map([["A1", product({ salePrice: 100, tecidoCost: 20, costuraCost: 10, aviamentosCost: 5, marketplaceFee: 19 })]]);
+    const { rows } = buildProfitabilityReport(skus, products, 0.3);
+    expect(rows[0].fullCost).toBe(0);
+    expect(rows[0].contributionFinal).toBeCloseTo(rows[0].contributionAfterAds);
+  });
 });
