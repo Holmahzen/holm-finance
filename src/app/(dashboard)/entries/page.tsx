@@ -453,7 +453,7 @@ function EntriesPageInner() {
         </td>
         <td className="py-2">{formatBRL(entry.amount)}</td>
         <td className="py-2">{formatDate(entry.dueDate)}</td>
-        <td className="py-2">
+        <td className="no-print py-2">
           {editingPlannedId === entry.id ? (
             <div className="flex items-center gap-1">
               <input
@@ -481,8 +481,8 @@ function EntriesPageInner() {
             </button>
           )}
         </td>
-        <td className="py-2 text-muted">{entry.competenceDate ? formatDate(entry.competenceDate) : "—"}</td>
-        <td className="py-2 text-muted">{entry.paidAt ? formatDate(entry.paidAt) : "—"}</td>
+        <td className="no-print py-2 text-muted">{entry.competenceDate ? formatDate(entry.competenceDate) : "—"}</td>
+        <td className="no-print py-2 text-muted">{entry.paidAt ? formatDate(entry.paidAt) : "—"}</td>
         <td className="py-2">{entry.category?.name ?? "—"}</td>
         <td className="py-2">
           <span className={`text-xs font-semibold ${paymentStatus.className}`}>{paymentStatus.label}</span>
@@ -962,9 +962,9 @@ function EntriesPageInner() {
               <th className="py-2 font-medium">Descrição</th>
               <th className="py-2 font-medium">Valor</th>
               <th className="py-2 font-medium">Vencimento</th>
-              <th className="py-2 font-medium">Data planejada</th>
-              <th className="py-2 font-medium">Competência</th>
-              <th className="py-2 font-medium">Data de pagamento</th>
+              <th className="no-print py-2 font-medium">Data planejada</th>
+              <th className="no-print py-2 font-medium">Competência</th>
+              <th className="no-print py-2 font-medium">Data de pagamento</th>
               <th className="py-2 font-medium">Categoria</th>
               <th className="py-2 font-medium">Status</th>
               <th className="no-print py-2 font-medium"></th>
