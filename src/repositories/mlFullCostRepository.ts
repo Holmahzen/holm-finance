@@ -4,13 +4,14 @@ import type { Prisma } from "@/generated/prisma/client";
 export const mlFullCostRepository = {
   /** Upsert por costNumber (id único do ML, prefixado com o tipo) —
    * reimportar o mesmo relatório atualiza em vez de duplicar. */
-  async upsertMany(rows: Prisma.MlFullCostUncheckedCreateInput[]) {
+  async upsertMany(rows: Prisma.MlFullCostUncheckedCreateInput[], tx?: Prisma.TransactionClient) {
+    const client = tx ?? prisma;
     let newCount = 0;
     let updatedCount = 0;
     for (const row of rows) {
       const key = { costNumber: row.costNumber };
-      const existing = await prisma.mlFullCost.findUnique({ where: key });
-      await prisma.mlFullCost.upsert({ where: key, create: row, update: row });
+      const existing = await client.mlFullCost.findUnique({ where: key });
+      await client.mlFullCost.upsert({ where: key, create: row, update: row });
       if (existing) updatedCount++;
       else newCount++;
     }

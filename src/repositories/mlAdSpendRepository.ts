@@ -5,7 +5,8 @@ export const mlAdSpendRepository = {
   /** Upsert pela chave natural do relatório (anúncio + campanha + período) —
    * reimportar o mesmo arquivo, ou um período que se sobrepõe, atualiza em
    * vez de duplicar. */
-  async upsertMany(rows: Prisma.MlAdSpendUncheckedCreateInput[]) {
+  async upsertMany(rows: Prisma.MlAdSpendUncheckedCreateInput[], tx?: Prisma.TransactionClient) {
+    const client = tx ?? prisma;
     let newCount = 0;
     let updatedCount = 0;
     for (const row of rows) {
@@ -17,8 +18,8 @@ export const mlAdSpendRepository = {
           periodEnd: row.periodEnd,
         },
       };
-      const existing = await prisma.mlAdSpend.findUnique({ where: key });
-      await prisma.mlAdSpend.upsert({ where: key, create: row, update: row });
+      const existing = await client.mlAdSpend.findUnique({ where: key });
+      await client.mlAdSpend.upsert({ where: key, create: row, update: row });
       if (existing) updatedCount++;
       else newCount++;
     }

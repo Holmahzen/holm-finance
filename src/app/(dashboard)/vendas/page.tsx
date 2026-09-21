@@ -102,6 +102,39 @@ function StatCard({ label, value }: { label: string; value: string }) {
   );
 }
 
+function ImportBatchTable({ title, batches }: { title: string; batches: ImportBatch[] }) {
+  if (batches.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-3">
+      <h2 className="font-serif text-xl text-foreground">{title}</h2>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[600px] text-left text-sm">
+          <thead>
+            <tr className="border-b border-border text-muted">
+              <th className="py-2 font-medium">Arquivo</th>
+              <th className="py-2 font-medium">Linhas</th>
+              <th className="py-2 font-medium">Novas</th>
+              <th className="py-2 font-medium">Duplicadas</th>
+              <th className="py-2 font-medium">Importado em</th>
+            </tr>
+          </thead>
+          <tbody>
+            {batches.map((b) => (
+              <tr key={b.id} className="border-b border-border/50">
+                <td className="py-2">{b.fileName}</td>
+                <td className="py-2">{b.rowCount}</td>
+                <td className="py-2">{b.importedCount}</td>
+                <td className="py-2">{b.duplicateCount}</td>
+                <td className="py-2">{new Date(b.importedAt).toLocaleString("pt-BR", { timeZone: "UTC" })}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 const now = new Date();
 
 export default function VendasPage() {
@@ -109,6 +142,8 @@ export default function VendasPage() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [report, setReport] = useState<SalesReport | null>(null);
   const [batches, setBatches] = useState<ImportBatch[]>([]);
+  const [adsBatches, setAdsBatches] = useState<ImportBatch[]>([]);
+  const [fullCostBatches, setFullCostBatches] = useState<ImportBatch[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [file, setFile] = useState<File | null>(null);
@@ -159,6 +194,21 @@ export default function VendasPage() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, month]);
+
+  async function loadAdsBatches() {
+    const res = await fetch("/api/imports/ml-ads");
+    setAdsBatches(await res.json());
+  }
+
+  async function loadFullCostBatches() {
+    const res = await fetch("/api/imports/ml-full-costs");
+    setFullCostBatches(await res.json());
+  }
+
+  useEffect(() => {
+    loadAdsBatches();
+    loadFullCostBatches();
+  }, []);
 
   async function handleUpload(e: FormEvent) {
     e.preventDefault();
@@ -219,6 +269,7 @@ export default function VendasPage() {
     } else {
       setAdsResult(body as AdsImportResult);
       setAdsFile(null);
+      await loadAdsBatches();
     }
     setAdsSubmitting(false);
   }
@@ -250,6 +301,7 @@ export default function VendasPage() {
     } else {
       setFullCostResult(body as FullCostImportResult);
       setFullCostFile(null);
+      await loadFullCostBatches();
     }
     setFullCostSubmitting(false);
   }
@@ -572,37 +624,9 @@ export default function VendasPage() {
         </>
       )}
 
-      {batches.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <h2 className="font-serif text-xl text-foreground">Importações realizadas</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[600px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-border text-muted">
-                  <th className="py-2 font-medium">Arquivo</th>
-                  <th className="py-2 font-medium">Linhas</th>
-                  <th className="py-2 font-medium">Novas</th>
-                  <th className="py-2 font-medium">Duplicadas</th>
-                  <th className="py-2 font-medium">Importado em</th>
-                </tr>
-              </thead>
-              <tbody>
-                {batches.map((b) => (
-                  <tr key={b.id} className="border-b border-border/50">
-                    <td className="py-2">{b.fileName}</td>
-                    <td className="py-2">{b.rowCount}</td>
-                    <td className="py-2">{b.importedCount}</td>
-                    <td className="py-2">{b.duplicateCount}</td>
-                    <td className="py-2">
-                      {new Date(b.importedAt).toLocaleString("pt-BR", { timeZone: "UTC" })}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      <ImportBatchTable title="Importações de Vendas realizadas" batches={batches} />
+      <ImportBatchTable title="Importações de Ads realizadas" batches={adsBatches} />
+      <ImportBatchTable title="Importações de Full realizadas" batches={fullCostBatches} />
     </div>
   );
 }

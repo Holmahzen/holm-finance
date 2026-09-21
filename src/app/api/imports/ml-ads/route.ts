@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { mlAdsImportService } from "@/services/mlAdsImportService";
+import { mlAdSpendImportBatchRepository } from "@/repositories/mlAdSpendImportBatchRepository";
 import { DomainError } from "@/domain/errors";
 
 export const maxDuration = 60;
+
+export async function GET() {
+  const batches = await mlAdSpendImportBatchRepository.findMany();
+  return NextResponse.json(batches);
+}
 
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
@@ -15,7 +21,7 @@ export async function POST(request: NextRequest) {
   const buffer = Buffer.from(await file.arrayBuffer());
 
   try {
-    const result = await mlAdsImportService.importFile(buffer);
+    const result = await mlAdsImportService.importFile(file.name, buffer);
     return NextResponse.json(result, { status: 201 });
   } catch (err) {
     if (err instanceof DomainError) {

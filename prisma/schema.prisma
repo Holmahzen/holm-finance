@@ -498,6 +498,19 @@ model MlAdSpend {
   @@map("ml_ad_spend")
 }
 
+/** Histórico de importações do relatório de Ads — mesmo padrão do SalesImportBatch, pra saber quando cada arquivo foi importado. */
+model MlAdSpendImportBatch {
+  id             String   @id @default(cuid())
+  fileName       String
+  fileHash       String   @unique
+  rowCount       Int
+  importedCount  Int
+  duplicateCount Int
+  importedAt     DateTime @default(now())
+
+  @@map("ml_ad_spend_import_batches")
+}
+
 enum MlFullCostType {
   ARMAZENAMENTO
   COLETA
@@ -526,6 +539,19 @@ model MlFullCost {
   @@index([sku])
   @@index([costDate])
   @@map("ml_full_costs")
+}
+
+/** Histórico de importações do Relatório de Tarifas Full — mesmo padrão do SalesImportBatch. */
+model MlFullCostImportBatch {
+  id             String   @id @default(cuid())
+  fileName       String
+  fileHash       String   @unique
+  rowCount       Int
+  importedCount  Int
+  duplicateCount Int
+  importedAt     DateTime @default(now())
+
+  @@map("ml_full_cost_import_batches")
 }
 
 /**
