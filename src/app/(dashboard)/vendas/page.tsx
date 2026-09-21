@@ -93,6 +93,19 @@ type FullCostImportResult = {
   updatedRows: number;
 };
 
+type GeneralStorageMonth = {
+  month: string;
+  total: number;
+  count: number;
+};
+
+const MONTH_NAMES_SHORT = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+function formatYearMonth(yearMonth: string): string {
+  const [year, month] = yearMonth.split("-").map(Number);
+  return `${MONTH_NAMES_SHORT[month - 1]}/${year}`;
+}
+
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-1 rounded-lg border border-border bg-surface p-4">
@@ -161,6 +174,8 @@ export default function VendasPage() {
   const [fullCostResult, setFullCostResult] = useState<FullCostImportResult | null>(null);
   const [fullCostError, setFullCostError] = useState<string | null>(null);
 
+  const [generalStorage, setGeneralStorage] = useState<GeneralStorageMonth[]>([]);
+
   const defaultFortnight = currentFortnight();
   const [modalityFrom, setModalityFrom] = useState(defaultFortnight.from);
   const [modalityTo, setModalityTo] = useState(defaultFortnight.to);
@@ -205,9 +220,15 @@ export default function VendasPage() {
     setFullCostBatches(await res.json());
   }
 
+  async function loadGeneralStorage() {
+    const res = await fetch("/api/full-costs/storage-summary");
+    setGeneralStorage(await res.json());
+  }
+
   useEffect(() => {
     loadAdsBatches();
     loadFullCostBatches();
+    loadGeneralStorage();
   }, []);
 
   async function handleUpload(e: FormEvent) {
@@ -302,6 +323,7 @@ export default function VendasPage() {
       setFullCostResult(body as FullCostImportResult);
       setFullCostFile(null);
       await loadFullCostBatches();
+      await loadGeneralStorage();
     }
     setFullCostSubmitting(false);
   }
@@ -451,6 +473,37 @@ export default function VendasPage() {
             <li className="text-emerald-400">Registros novos: {fullCostResult.newRows}</li>
             <li>Já existentes, atualizados com os valores desta planilha: {fullCostResult.updatedRows}</li>
           </ul>
+        </div>
+      )}
+
+      {generalStorage.length > 0 && (
+        <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4">
+          <h2 className="font-serif text-lg text-foreground">Armazenagem geral do Full por mês</h2>
+          <p className="max-w-prose text-sm text-muted">
+            Essa é a única tarifa do relatório Full que não vem com SKU — o Mercado Livre não diz qual
+            produto gerou a cobrança, só o total. Um salto de mês pra mês costuma indicar mais peças
+            passando do prazo grátis de armazenagem sem vender.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[420px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-border text-muted">
+                  <th className="py-1.5 font-medium">Mês</th>
+                  <th className="py-1.5 font-medium">Total</th>
+                  <th className="py-1.5 font-medium">Nº de cobranças</th>
+                </tr>
+              </thead>
+              <tbody>
+                {generalStorage.map((m) => (
+                  <tr key={m.month} className="border-b border-border/50">
+                    <td className="py-1.5">{formatYearMonth(m.month)}</td>
+                    <td className="py-1.5">{formatBRL(m.total)}</td>
+                    <td className="py-1.5 text-muted">{m.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

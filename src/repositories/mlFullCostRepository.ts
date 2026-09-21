@@ -27,4 +27,13 @@ export const mlFullCostRepository = {
       },
     });
   },
+
+  /** Todas as cobranças de Armazenagem geral — a única que não vem com SKU, então só dá pra somar por mês, não por produto. */
+  findGeneralStorage() {
+    return prisma.mlFullCost.findMany({
+      where: { type: "ARMAZENAMENTO" },
+      select: { costDate: true, amount: true },
+      orderBy: { costDate: "asc" },
+    });
+  },
 };
