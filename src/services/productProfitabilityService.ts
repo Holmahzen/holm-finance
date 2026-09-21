@@ -5,6 +5,7 @@ import { mlFullCostRepository } from "@/repositories/mlFullCostRepository";
 import { dreService } from "@/services/dreService";
 import { aggregateSalesBySku } from "@/domain/salesAggregation";
 import { buildProfitabilityReport } from "@/domain/productProfitability";
+import { allocateAdSpendBySku } from "@/domain/adSpendAllocation";
 import type { ProductInput } from "@/domain/breakEven";
 
 export type PeriodResult = {
@@ -88,20 +89,17 @@ export const productProfitabilityService = {
       products.filter((p) => p.sku).map((p) => [p.sku!, p]),
     );
 
-    const skuByListingCode = new Map<string, string>();
-    for (const s of sales) {
-      if (s.listingCode) skuByListingCode.set(s.listingCode, s.sku);
-    }
-    const listingCodes = [...skuByListingCode.keys()];
+    // Um mesmo anúncio (MLB) costuma vender vários SKUs diferentes no
+    // período (variações de tamanho/cor) — o investimento desse anúncio
+    // precisa ser dividido entre eles, não jogado inteiro num SKU só.
+    const listingCodes = [...new Set(sales.map((s) => s.listingCode).filter((c): c is string => !!c))];
     const adSpendRows = listingCodes.length
       ? await mlAdSpendRepository.findByListingCodesAndPeriod(listingCodes, start, end)
       : [];
-    const adSpendBySku = new Map<string, number>();
-    for (const row of adSpendRows) {
-      const sku = skuByListingCode.get(row.listingCode);
-      if (!sku) continue;
-      adSpendBySku.set(sku, (adSpendBySku.get(sku) ?? 0) + Number(row.investimento));
-    }
+    const adSpendBySku = allocateAdSpendBySku(
+      sales.map((s) => ({ sku: s.sku, listingCode: s.listingCode, grossRevenue: Number(s.grossRevenue) })),
+      adSpendRows.map((r) => ({ listingCode: r.listingCode, investimento: Number(r.investimento) })),
+    );
 
     // Custo Full já vem com SKU direto no relatório (diferente do Ads, que só
     // tem MLB) — não precisa de ponte, só soma por SKU no período.
