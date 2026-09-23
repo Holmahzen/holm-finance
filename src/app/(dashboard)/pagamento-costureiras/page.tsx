@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { formatBRL } from "@/lib/format";
 
 type Counterparty = { id: string; name: string; isCostureira: boolean };
-type Category = { id: string; name: string };
 type Account = { id: string; name: string };
 
 type Servico = {
@@ -18,6 +17,8 @@ type Pendencia = {
   entryId: string | null;
   dueDate: string | null;
   servicos: Servico[];
+  categoryId: string;
+  categoryName: string;
 };
 
 type Entry = {
@@ -43,7 +44,6 @@ function isOverdue(dueDate: string) {
 
 export default function PagamentoCostureirasPage() {
   const [counterparties, setCounterparties] = useState<Counterparty[]>([]);
-  const [costuraCategoryId, setCosturaCategoryId] = useState<string | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -81,14 +81,11 @@ export default function PagamentoCostureirasPage() {
 
   async function loadBase() {
     setLoading(true);
-    const [counterpartiesRes, categoriesRes, accountsRes] = await Promise.all([
+    const [counterpartiesRes, accountsRes] = await Promise.all([
       fetch("/api/counterparties"),
-      fetch("/api/categories"),
       fetch("/api/accounts"),
     ]);
     setCounterparties(await counterpartiesRes.json());
-    const categories: Category[] = await categoriesRes.json();
-    setCosturaCategoryId(categories.find((c) => c.name === "Costura")?.id ?? null);
     setAccounts(await accountsRes.json());
     setLoading(false);
   }
@@ -104,18 +101,15 @@ export default function PagamentoCostureirasPage() {
       return;
     }
     setLoadingPendentes(true);
-    const [pendenciaRes, historicoRes] = await Promise.all([
-      fetch(`/api/costureira-servicos?counterpartyId=${id}`),
-      costuraCategoryId
-        ? fetch(`/api/entries?counterpartyId=${id}&categoryId=${costuraCategoryId}&status=PAID`)
-        : Promise.resolve(null),
-    ]);
-    setPendencia(await pendenciaRes.json());
-    if (historicoRes) {
-      const entries: Entry[] = await historicoRes.json();
-      entries.sort((a, b) => (b.paidAt ?? "").localeCompare(a.paidAt ?? ""));
-      setHistorico(entries);
-    }
+    const pendenciaData: Pendencia = await fetch(`/api/costureira-servicos?counterpartyId=${id}`).then((r) =>
+      r.json(),
+    );
+    setPendencia(pendenciaData);
+    const entries: Entry[] = await fetch(
+      `/api/entries?counterpartyId=${id}&categoryId=${pendenciaData.categoryId}&status=PAID`,
+    ).then((r) => r.json());
+    entries.sort((a, b) => (b.paidAt ?? "").localeCompare(a.paidAt ?? ""));
+    setHistorico(entries);
     setLoadingPendentes(false);
   }
 
@@ -123,7 +117,7 @@ export default function PagamentoCostureirasPage() {
     setEditingDueDate(false);
     loadPendentesEHistorico(counterpartyId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [counterpartyId, costuraCategoryId]);
+  }, [counterpartyId]);
 
   async function handleAddServico(e: FormEvent) {
     e.preventDefault();
@@ -310,6 +304,11 @@ export default function PagamentoCostureirasPage() {
                   <div>
                     <h2 className="font-serif text-lg text-foreground">
                       Pendente — {selectedCostureira?.name}
+                      {pendencia && pendencia.categoryName !== "Costura" && (
+                        <span className="ml-1 text-xs font-normal text-muted">
+                          (categoria {pendencia.categoryName})
+                        </span>
+                      )}
                     </h2>
                     <p className="text-2xl font-serif text-gold">{formatBRL(totalPendente)}</p>
                     {pendencia?.dueDate && (

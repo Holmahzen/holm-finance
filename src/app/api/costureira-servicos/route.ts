@@ -6,12 +6,11 @@ import { DomainError } from "@/domain/errors";
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const counterpartyId = searchParams.get("counterpartyId");
-  if (counterpartyId) {
-    const pendentes = await costureiraServicoService.listPending(counterpartyId);
-    return NextResponse.json(pendentes);
+  if (!counterpartyId) {
+    return NextResponse.json({ error: "counterpartyId é obrigatório." }, { status: 400 });
   }
-  const grouped = await costureiraServicoService.listAllPendingGrouped();
-  return NextResponse.json(grouped);
+  const pendentes = await costureiraServicoService.listPending(counterpartyId);
+  return NextResponse.json(pendentes);
 }
 
 export async function POST(request: NextRequest) {

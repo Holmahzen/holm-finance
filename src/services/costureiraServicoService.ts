@@ -19,71 +19,58 @@ async function getCosturaCategory() {
   return category;
 }
 
-function describeEntry(counterpartyName: string, count: number) {
-  return `Costura - ${counterpartyName} (${count} serviço${count > 1 ? "s" : ""})`;
+// A maioria usa a categoria "Costura" genérica, mas algumas costureiras têm
+// um tipo de serviço com categoria própria já cadastrada (ex.: "Caseado",
+// pago separado há meses) — nesse caso `defaultCategoryId` na contraparte
+// manda, em vez de forçar tudo em "Costura".
+async function resolveCategoryFor(counterparty: { defaultCategoryId: string | null }) {
+  if (counterparty.defaultCategoryId) {
+    const category = await categoryRepository.findById(counterparty.defaultCategoryId);
+    if (category) return category;
+  }
+  return getCosturaCategory();
 }
 
-async function syncEntryTotal(entryId: string, counterpartyName: string) {
+async function getCounterpartyOrThrow(counterpartyId: string) {
+  const counterparty = await counterpartyRepository.findById(counterpartyId);
+  if (!counterparty) throw new NotFoundError("Contraparte", counterpartyId);
+  return counterparty;
+}
+
+function describeEntry(categoryName: string, counterpartyName: string, count: number) {
+  return `${categoryName} - ${counterpartyName} (${count} serviço${count > 1 ? "s" : ""})`;
+}
+
+async function syncEntryTotal(entryId: string, categoryName: string, counterpartyName: string) {
   const servicos = await costureiraServicoRepository.findByEntry(entryId);
   const total = servicos.reduce((sum, s) => sum + Number(s.amount), 0);
   await entryService.update(entryId, {
     amount: total,
-    description: describeEntry(counterpartyName, servicos.length),
+    description: describeEntry(categoryName, counterpartyName, servicos.length),
   });
 }
 
 export const costureiraServicoService = {
   async listPending(counterpartyId: string) {
-    const category = await getCosturaCategory();
+    const counterparty = await getCounterpartyOrThrow(counterpartyId);
+    const category = await resolveCategoryFor(counterparty);
     const openEntry = await costureiraServicoRepository.findOpenEntry(counterpartyId, category.id);
-    if (!openEntry) return { entryId: null, dueDate: null, servicos: [] };
-    const servicos = await costureiraServicoRepository.findByEntry(openEntry.id);
-    return { entryId: openEntry.id, dueDate: openEntry.dueDate, servicos };
-  },
-
-  // Visão agrupada — todas as costureiras com pendência, cada uma com seu
-  // Entry (e vencimento) e a lista de serviços que compõem aquele valor.
-  async listAllPendingGrouped() {
-    const category = await getCosturaCategory();
-    const servicos = await costureiraServicoRepository.findAllPending(category.id);
-
-    const groups = new Map<
-      string,
-      {
-        counterpartyId: string;
-        counterpartyName: string;
-        entryId: string;
-        dueDate: Date;
-        total: number;
-        servicos: { id: string; date: Date; amount: number; description: string | null }[];
-      }
-    >();
-
-    for (const s of servicos) {
-      if (!s.entry) continue;
-      let group = groups.get(s.counterpartyId);
-      if (!group) {
-        group = {
-          counterpartyId: s.counterpartyId,
-          counterpartyName: s.counterparty.name,
-          entryId: s.entry.id,
-          dueDate: s.entry.dueDate,
-          total: 0,
-          servicos: [],
-        };
-        groups.set(s.counterpartyId, group);
-      }
-      group.total += Number(s.amount);
-      group.servicos.push({ id: s.id, date: s.date, amount: Number(s.amount), description: s.description });
+    if (!openEntry) {
+      return { entryId: null, dueDate: null, servicos: [], categoryId: category.id, categoryName: category.name };
     }
-
-    return Array.from(groups.values()).sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
+    const servicos = await costureiraServicoRepository.findByEntry(openEntry.id);
+    return {
+      entryId: openEntry.id,
+      dueDate: openEntry.dueDate,
+      servicos,
+      categoryId: category.id,
+      categoryName: category.name,
+    };
   },
 
   async create(input: CreateCostureiraServicoInput) {
-    const category = await getCosturaCategory();
-    const counterparty = await counterpartyRepository.findById(input.counterpartyId);
-    if (!counterparty) throw new NotFoundError("Contraparte", input.counterpartyId);
+    const counterparty = await getCounterpartyOrThrow(input.counterpartyId);
+    const category = await resolveCategoryFor(counterparty);
 
     const openEntry = await costureiraServicoRepository.findOpenEntry(input.counterpartyId, category.id);
 
@@ -95,7 +82,7 @@ export const costureiraServicoService = {
         description: input.description,
         entryId: openEntry.id,
       });
-      await syncEntryTotal(openEntry.id, counterparty.name);
+      await syncEntryTotal(openEntry.id, category.name, counterparty.name);
       return servico;
     }
 
@@ -107,7 +94,7 @@ export const costureiraServicoService = {
 
     const entry = await entryService.create({
       type: "PAYABLE",
-      description: describeEntry(counterparty.name, 1),
+      description: describeEntry(category.name, counterparty.name, 1),
       amount: input.amount,
       dueDate: input.dueDate,
       categoryId: category.id,
@@ -138,7 +125,8 @@ export const costureiraServicoService = {
         await entryService.remove(servico.entryId);
       } else {
         const counterparty = await counterpartyRepository.findById(servico.counterpartyId);
-        await syncEntryTotal(servico.entryId, counterparty?.name ?? "");
+        const category = counterparty ? await resolveCategoryFor(counterparty) : null;
+        await syncEntryTotal(servico.entryId, category?.name ?? COSTURA_CATEGORY_NAME, counterparty?.name ?? "");
       }
       return { ok: true };
     }
@@ -147,14 +135,16 @@ export const costureiraServicoService = {
   },
 
   async updateDueDate(counterpartyId: string, input: UpdateCostureiraDueDateInput) {
-    const category = await getCosturaCategory();
+    const counterparty = await getCounterpartyOrThrow(counterpartyId);
+    const category = await resolveCategoryFor(counterparty);
     const openEntry = await costureiraServicoRepository.findOpenEntry(counterpartyId, category.id);
     if (!openEntry) throw new DomainError("Nenhum serviço pendente pra essa costureira.");
     return entryService.update(openEntry.id, { dueDate: input.dueDate });
   },
 
   async pagar(input: PagarCostureiraInput) {
-    const category = await getCosturaCategory();
+    const counterparty = await getCounterpartyOrThrow(input.counterpartyId);
+    const category = await resolveCategoryFor(counterparty);
     const openEntry = await costureiraServicoRepository.findOpenEntry(input.counterpartyId, category.id);
     if (!openEntry) {
       throw new DomainError("Nenhum serviço pendente pra essa costureira.");
