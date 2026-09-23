@@ -53,7 +53,7 @@ type CashFlowReport = {
   accounts: ContaSaldo[];
   days: CashFlowDay[];
   firstNegativeDay: CashFlowDay | null;
-  mlAfter7d: number;
+  mlOutsideWindow: number;
   realizedToday: RealizedToday;
   safeToSpend: number;
   safeToSpendWithML: number;
@@ -470,20 +470,20 @@ export default function CashFlowPage() {
                   Pode gastar até {formatBRL(report.safeToSpendWithML)}
                 </p>
                 <p className="text-sm text-sky-400/80">
-                  Mesma conta de "Compras", somando também {formatBRL(report.mlTotal)} que está a
-                  liberar no Mercado Livre (hoje + amanhã + até 7 dias + depois de 7 dias) — só use
-                  se confia que esse valor vai mesmo cair na conta.
+                  Mesma conta de "Compras", somando também {formatBRL(report.mlTotal)} que ainda vai
+                  liberar no Mercado Livre, de todas as vendas em aberto — só use se confia que esse
+                  valor vai mesmo cair na conta.
                 </p>
                 <MaterialSplitLine amount={report.safeToSpendWithML} split={report.materialSplit} />
               </div>
             )}
           </div>
 
-          {report.mlAfter7d > 0 && (
+          {report.mlOutsideWindow > 0 && (
             <p className="text-xs text-muted">
-              Além do que já está na projeção abaixo, tem mais {formatBRL(report.mlAfter7d)} do
-              Mercado Livre "a liberar depois de 7 dias" (sem data exata cadastrada em Início — não
-              entra na curva).
+              Além do que já está na projeção abaixo, tem mais {formatBRL(report.mlOutsideWindow)} do
+              Mercado Livre por vir — ou ainda sem data (depende da entrega), ou com repasse previsto
+              depois do período mostrado aqui.
             </p>
           )}
 

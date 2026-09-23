@@ -2,7 +2,7 @@ import { dashboardRepository } from "@/repositories/dashboardRepository";
 import { entryRepository } from "@/repositories/entryRepository";
 import { productRepository } from "@/repositories/productRepository";
 import { marketplaceSaleRepository } from "@/repositories/marketplaceSaleRepository";
-import { mercadoLivreReceivableService } from "@/services/mercadoLivreReceivableService";
+import { mercadoLivreReleaseService } from "@/services/mercadoLivreReleaseService";
 import {
   computeCashFlowProjection,
   findFirstNegativeDay,
@@ -33,10 +33,10 @@ export const cashFlowService = {
 
     const last30dStart = new Date(todayUTC.getTime() - 30 * MS_PER_DAY);
 
-    const [accounts, entries, mlReceivable, paidToday, recentSales, productCosts] = await Promise.all([
+    const [accounts, entries, mlReport, paidToday, recentSales, productCosts] = await Promise.all([
       dashboardRepository.getAccountBalances(),
       entryRepository.findMany({ status: "PENDING" }),
-      mercadoLivreReceivableService.get(),
+      mercadoLivreReleaseService.getReport(todayUTC),
       entryRepository.findMany({
         status: "PAID",
         paidAt: { gte: todayUTC, lt: tomorrowUTC },
@@ -62,31 +62,20 @@ export const cashFlowService = {
       movements.push({ date: effectiveDate, amount, label: e.description, cardName, categoryName: e.category?.name ?? null });
     }
 
-    // Recebimentos do Mercado Livre "a liberar" (informado manualmente em
-    // Início, sem data exata) — hoje/amanhã/até 7 dias entram na projeção
-    // nos dias correspondentes; "após 7 dias" não tem data conhecida, então
-    // fica de fora da curva e é devolvido só como valor informativo à parte.
-    const mlToday = Number(mlReceivable.today);
-    const mlTomorrow = Number(mlReceivable.tomorrow);
-    const mlWithin7d = Number(mlReceivable.within7d);
-    const mlAfter7d = Number(mlReceivable.after7d);
-
-    if (mlToday > 0) {
-      movements.push({ date: todayUTC, amount: mlToday, label: "Mercado Livre — a liberar hoje" });
-    }
-    if (mlTomorrow > 0) {
-      movements.push({
-        date: new Date(todayUTC.getTime() + MS_PER_DAY),
-        amount: mlTomorrow,
-        label: "Mercado Livre — a liberar amanhã",
-      });
-    }
-    if (mlWithin7d > 0) {
-      movements.push({
-        date: new Date(todayUTC.getTime() + 7 * MS_PER_DAY),
-        amount: mlWithin7d,
-        label: "Mercado Livre — a liberar até 7 dias",
-      });
+    // Repasse do Mercado Livre, dia a dia — data real vinda do hub (ou
+    // estimada por entrega, sem o hub), não mais só hoje/amanhã/até 7 dias
+    // resumidos: cada dia que ainda vai liberar entra na curva na data certa,
+    // até onde o período escolhido alcançar.
+    let mlInWindow = 0;
+    for (const day of mlReport.days) {
+      if (day.released) continue;
+      // `mlReport.days[].date` vem como "YYYY-MM-DD" (formato de API) — parse
+      // manual em UTC, senão `new Date(texto)` local desloca o dia inteiro.
+      const [y, m, d] = day.date.split("-").map(Number);
+      const dayDate = new Date(Date.UTC(y, m - 1, d));
+      if (dayDate >= windowEnd) continue;
+      movements.push({ date: dayDate, amount: day.amount, label: "Mercado Livre — repasse" });
+      mlInWindow += day.amount;
     }
 
     const projection = computeCashFlowProjection(startingBalance, movements, todayUTC, days);
@@ -101,11 +90,15 @@ export const cashFlowService = {
       .reduce((sum, m) => sum + Math.abs(m.amount), 0);
     const safeToSpend = Math.max(0, startingBalance - totalPendingOutflows);
 
-    // Mesma conta, só que otimista: soma também o que está "a liberar" no
-    // Mercado Livre (as 4 faixas informadas em Início, inclusive "após 7
-    // dias" — que não tem data exata e por isso fica fora da curva/projeção).
-    const mlTotal = mlToday + mlTomorrow + mlWithin7d + mlAfter7d;
+    // Mesma conta, só que otimista: soma também tudo que ainda vai liberar do
+    // Mercado Livre — inclusive o que ainda não tem data exata (depende da
+    // entrega) ou cai fora do período escolhido na tela.
+    const mlTotal = mlReport.scheduledTotal + mlReport.awaitingDelivery.amount;
     const safeToSpendWithML = Math.max(0, startingBalance - totalPendingOutflows + mlTotal);
+    // O que fica de fora da curva acima: ou não tem data conhecida ainda
+    // (aguardando entrega), ou tem data mas ela é mais distante que o período
+    // escolhido na tela (ex.: repasse em 45 dias numa projeção de 30 dias).
+    const mlOutsideWindow = Math.max(0, mlTotal - mlInWindow);
 
     // Sugestão de pra onde deveria ir o "pode gastar": tecido x aviamento, na
     // mesma proporção das peças efetivamente vendidas nos últimos 30 dias
@@ -181,7 +174,7 @@ export const cashFlowService = {
       })),
       days: projection,
       firstNegativeDay,
-      mlAfter7d,
+      mlOutsideWindow,
       realizedToday,
       safeToSpend,
       safeToSpendWithML,
