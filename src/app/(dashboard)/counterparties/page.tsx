@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 type Counterparty = {
   id: string;
@@ -26,6 +26,7 @@ export default function CounterpartiesPage() {
   const [isOwnEntity, setIsOwnEntity] = useState(false);
   const [isCostureira, setIsCostureira] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [busca, setBusca] = useState("");
 
   async function load() {
     setLoading(true);
@@ -63,6 +64,14 @@ export default function CounterpartiesPage() {
     });
     await load();
   }
+
+  const filtrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    if (!termo) return items;
+    return items.filter(
+      (c) => c.name.toLowerCase().includes(termo) || (c.document ?? "").toLowerCase().includes(termo),
+    );
+  }, [items, busca]);
 
   return (
     <div className="flex flex-col gap-8">
@@ -134,10 +143,19 @@ export default function CounterpartiesPage() {
         </button>
       </form>
 
+      <input
+        value={busca}
+        onChange={(e) => setBusca(e.target.value)}
+        placeholder="Buscar por nome ou CPF/CNPJ..."
+        className="max-w-md rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
+      />
+
       {loading ? (
         <p className="text-sm text-muted">Carregando...</p>
-      ) : items.length === 0 ? (
-        <p className="text-sm text-muted">Nenhuma contraparte cadastrada ainda.</p>
+      ) : filtrados.length === 0 ? (
+        <p className="text-sm text-muted">
+          {items.length === 0 ? "Nenhuma contraparte cadastrada ainda." : "Nenhuma contraparte encontrada."}
+        </p>
       ) : (
         <table className="w-full text-left text-sm">
           <thead>
@@ -149,7 +167,7 @@ export default function CounterpartiesPage() {
             </tr>
           </thead>
           <tbody>
-            {items.map((c) => (
+            {filtrados.map((c) => (
               <tr key={c.id} className="border-b border-border/50">
                 <td className="py-2">
                   {c.name} {c.isOwnEntity && <span className="text-xs text-gold">(própria)</span>}
