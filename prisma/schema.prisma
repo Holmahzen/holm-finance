@@ -200,8 +200,26 @@ model Counterparty {
   entries    Entry[]
   fixedCosts FixedCost[]
   creditCardPurchases CreditCardPurchase[]
+  costureiraServicos  CostureiraServico[]
 
   @@map("counterparties")
+}
+
+// Cada serviço que a costureira presta vai sendo lançado aqui (data + valor),
+// acumulando sem gerar cobrança — só quando ela "fecha" (Pagar tudo) que os
+// pendentes viram um único Entry pago, e ganham paidEntryId marcando quitado.
+model CostureiraServico {
+  id             String       @id @default(cuid())
+  counterpartyId String
+  counterparty   Counterparty @relation(fields: [counterpartyId], references: [id])
+  date           DateTime
+  amount         Decimal      @db.Decimal(14, 2)
+  description    String?
+  paidEntryId    String?
+  createdAt      DateTime     @default(now())
+
+  @@index([counterpartyId, paidEntryId])
+  @@map("costureira_servicos")
 }
 
 model Entry {
