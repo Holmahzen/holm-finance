@@ -13,6 +13,7 @@ import {
   computeDaysRemainingInMonth,
   computeDailyGoal,
 } from "@/domain/cashReserve";
+import { computeMonthRevenueProjection } from "@/domain/projections";
 import { todayUTCInBrazil } from "@/lib/today";
 
 function monthlyAmount(
@@ -65,7 +66,23 @@ export const cashReserveService = {
     const salaryCosts = active.filter((fc) => fc.laborProvisionEligible);
     const monthlySalaries = salaryCosts.reduce((sum, fc) => sum + monthlyAmount(fc, year, month), 0);
     const totalMonthlyFixedCosts = active.reduce((sum, fc) => sum + monthlyAmount(fc, year, month), 0);
-    const taxRefRevenue = Number(taxRefFlow.inflow);
+
+    // Quando o mês de referência é o mês corrente (ainda em andamento — caso
+    // do card depois do dia `taxDueDay`, adiantando a reserva pro próximo
+    // DAS), a receita "recebida até agora" é só uma fração do mês inteiro.
+    // Sem projetar pelo ritmo diário, a estimativa de imposto saía baixa
+    // demais logo depois da virada do dia 20, subindo artificialmente dia a
+    // dia só porque o mês foi avançando — nunca refletindo o mês inteiro até
+    // ele de fato terminar.
+    const isCurrentMonthRef = taxRefYear === year && taxRefMonth === month;
+    const taxRefRevenueSoFar = Number(taxRefFlow.inflow);
+    const taxRefRevenue = isCurrentMonthRef
+      ? (computeMonthRevenueProjection(
+          taxRefRevenueSoFar,
+          now.getUTCDate(),
+          new Date(taxRefYear, taxRefMonth, 0).getDate(),
+        )?.projectedRevenue ?? taxRefRevenueSoFar)
+      : taxRefRevenueSoFar;
 
     const thirteenth = computeThirteenthProvision(monthlySalaries, monthsElapsed);
     const vacation = computeVacationProvision(monthlySalaries, monthsElapsed);
@@ -141,6 +158,7 @@ export const cashReserveService = {
       },
       tax: {
         source: taxRefApuracao ? ("pgdas" as const) : ("estimativa" as const),
+        isProjection: !taxRefApuracao && isCurrentMonthRef,
         ratePercent: taxRatePercent,
         referencePeriod: { year: taxRefYear, month: taxRefMonth },
         monthlyRevenue: taxRefApuracao ? taxRefApuracao.revenue : taxRefRevenue,

@@ -23,6 +23,7 @@ type Contingency = {
 
 type Tax = {
   source: "pgdas" | "estimativa";
+  isProjection: boolean;
   ratePercent: number;
   referencePeriod: { year: number; month: number };
   monthlyRevenue: number;
@@ -404,9 +405,13 @@ export default function CashReservePage() {
                   ) : (
                     <span
                       className="rounded bg-amber-400/15 px-2 py-0.5 text-xs font-medium text-amber-300"
-                      title="Sem extrato do PGDAS-D pra esse mês ainda — estimativa por %, importe o extrato em Simples Nacional pro valor oficial."
+                      title={
+                        report.tax.isProjection
+                          ? "Mês ainda em andamento: faturamento projetado pelo ritmo diário até agora, não é só o que já entrou em caixa."
+                          : "Sem extrato do PGDAS-D pra esse mês ainda — estimativa por %, importe o extrato em Simples Nacional pro valor oficial."
+                      }
                     >
-                      estimativa
+                      {report.tax.isProjection ? "projeção" : "estimativa"}
                     </span>
                   )}
                   {report.tax.dasPaid === false && (
@@ -424,9 +429,11 @@ export default function CashReservePage() {
                     </>
                   ) : (
                     <>
-                      {report.tax.ratePercent}% sobre o faturamento de{" "}
+                      {report.tax.ratePercent}% sobre o faturamento{" "}
+                      {report.tax.isProjection ? "projetado" : ""} de{" "}
                       {MONTHS[report.tax.referencePeriod.month - 1]}/{report.tax.referencePeriod.year} (
-                      {formatBRL(report.tax.monthlyRevenue)})
+                      {formatBRL(report.tax.monthlyRevenue)}
+                      {report.tax.isProjection ? ", pelo ritmo até agora" : ""})
                     </>
                   )}{" "}
                   — DAS desse mês, ainda não vencido; reseta a cada novo mês, não acumula como 13º/férias.
