@@ -10,16 +10,13 @@ type Account = { id: string; name: string };
 type Servico = {
   id: string;
   date: string;
-  amount: number;
+  amount: string;
   description: string | null;
 };
 
-type PendingGroup = {
-  counterpartyId: string;
-  counterpartyName: string;
-  entryId: string;
-  dueDate: string;
-  total: number;
+type Pendencia = {
+  entryId: string | null;
+  dueDate: string | null;
   servicos: Servico[];
 };
 
@@ -50,12 +47,9 @@ export default function PagamentoCostureirasPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [grupos, setGrupos] = useState<PendingGroup[]>([]);
-  const [loadingGrupos, setLoadingGrupos] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [counterpartyId, setCounterpartyId] = useState("");
 
   // lançar serviço
-  const [counterpartyId, setCounterpartyId] = useState("");
   const [servicoData, setServicoData] = useState(todayLocalDateString());
   const [servicoValor, setServicoValor] = useState("");
   const [servicoDescricao, setServicoDescricao] = useState("");
@@ -63,25 +57,26 @@ export default function PagamentoCostureirasPage() {
   const [savingServico, setSavingServico] = useState(false);
   const [servicoError, setServicoError] = useState<string | null>(null);
 
-  // pagar (por grupo)
-  const [pagamentoDataByGroup, setPagamentoDataByGroup] = useState<Record<string, string>>({});
-  const [bankAccountIdByGroup, setBankAccountIdByGroup] = useState<Record<string, string>>({});
-  const [pagandoId, setPagandoId] = useState<string | null>(null);
+  // pagar
+  const [pagamentoData, setPagamentoData] = useState(todayLocalDateString());
+  const [bankAccountId, setBankAccountId] = useState("");
+  const [pagando, setPagando] = useState(false);
   const [pagamentoError, setPagamentoError] = useState<string | null>(null);
   const [pagamentoSuccess, setPagamentoSuccess] = useState<string | null>(null);
 
   // editar vencimento
-  const [editingDueDateFor, setEditingDueDateFor] = useState<string | null>(null);
+  const [editingDueDate, setEditingDueDate] = useState(false);
   const [editDueDateValue, setEditDueDateValue] = useState("");
 
-  // histórico
-  const [historicoCounterpartyId, setHistoricoCounterpartyId] = useState("");
+  const [pendencia, setPendencia] = useState<Pendencia | null>(null);
   const [historico, setHistorico] = useState<Entry[] | null>(null);
+  const [loadingPendentes, setLoadingPendentes] = useState(false);
 
   const costureiras = useMemo(() => counterparties.filter((c) => c.isCostureira), [counterparties]);
-  const jaTemPendente = useMemo(
-    () => new Set(grupos.map((g) => g.counterpartyId)),
-    [grupos],
+  const selectedCostureira = costureiras.find((c) => c.id === counterpartyId);
+  const totalPendente = useMemo(
+    () => (pendencia?.servicos ?? []).reduce((sum, s) => sum + Number(s.amount), 0),
+    [pendencia],
   );
 
   async function loadBase() {
@@ -98,39 +93,42 @@ export default function PagamentoCostureirasPage() {
     setLoading(false);
   }
 
-  async function loadGrupos() {
-    setLoadingGrupos(true);
-    const res = await fetch("/api/costureira-servicos");
-    setGrupos(await res.json());
-    setLoadingGrupos(false);
-  }
-
   useEffect(() => {
     loadBase();
-    loadGrupos();
   }, []);
 
-  async function loadHistorico(id: string) {
-    if (!id || !costuraCategoryId) {
+  async function loadPendentesEHistorico(id: string) {
+    if (!id) {
+      setPendencia(null);
       setHistorico(null);
       return;
     }
-    const res = await fetch(`/api/entries?counterpartyId=${id}&categoryId=${costuraCategoryId}&status=PAID`);
-    const entries: Entry[] = await res.json();
-    entries.sort((a, b) => (b.paidAt ?? "").localeCompare(a.paidAt ?? ""));
-    setHistorico(entries);
+    setLoadingPendentes(true);
+    const [pendenciaRes, historicoRes] = await Promise.all([
+      fetch(`/api/costureira-servicos?counterpartyId=${id}`),
+      costuraCategoryId
+        ? fetch(`/api/entries?counterpartyId=${id}&categoryId=${costuraCategoryId}&status=PAID`)
+        : Promise.resolve(null),
+    ]);
+    setPendencia(await pendenciaRes.json());
+    if (historicoRes) {
+      const entries: Entry[] = await historicoRes.json();
+      entries.sort((a, b) => (b.paidAt ?? "").localeCompare(a.paidAt ?? ""));
+      setHistorico(entries);
+    }
+    setLoadingPendentes(false);
   }
 
   useEffect(() => {
-    loadHistorico(historicoCounterpartyId);
+    setEditingDueDate(false);
+    loadPendentesEHistorico(counterpartyId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [historicoCounterpartyId, costuraCategoryId]);
+  }, [counterpartyId, costuraCategoryId]);
 
   async function handleAddServico(e: FormEvent) {
     e.preventDefault();
     setSavingServico(true);
     setServicoError(null);
-    const isPrimeiro = !jaTemPendente.has(counterpartyId);
     const res = await fetch("/api/costureira-servicos", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -139,7 +137,7 @@ export default function PagamentoCostureirasPage() {
         date: servicoData,
         amount: servicoValor,
         description: servicoDescricao || undefined,
-        dueDate: isPrimeiro ? servicoDueDate : undefined,
+        dueDate: !pendencia?.entryId ? servicoDueDate : undefined,
       }),
     });
     if (!res.ok) {
@@ -152,56 +150,51 @@ export default function PagamentoCostureirasPage() {
     setServicoDescricao("");
     setServicoDueDate("");
     setSavingServico(false);
-    await loadGrupos();
+    await loadPendentesEHistorico(counterpartyId);
   }
 
   async function handleRemoveServico(id: string) {
     if (!confirm("Excluir esse serviço lançado?")) return;
     await fetch(`/api/costureira-servicos/${id}`, { method: "DELETE" });
-    await loadGrupos();
-    if (historicoCounterpartyId) await loadHistorico(historicoCounterpartyId);
+    await loadPendentesEHistorico(counterpartyId);
   }
 
-  async function handlePagarTudo(grupo: PendingGroup) {
-    const bankAccountId = bankAccountIdByGroup[grupo.counterpartyId];
-    if (!bankAccountId) return;
-    setPagandoId(grupo.counterpartyId);
-    setPagamentoError(null);
-    setPagamentoSuccess(null);
-    const paidAt = pagamentoDataByGroup[grupo.counterpartyId] ?? todayLocalDateString();
-    const res = await fetch("/api/costureira-servicos/pagar", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ counterpartyId: grupo.counterpartyId, bankAccountId, paidAt }),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      setPagamentoError(typeof body.error === "string" ? body.error : "Não foi possível pagar.");
-      setPagandoId(null);
-      return;
-    }
-    const result = await res.json();
-    setPagamentoSuccess(
-      `Pago ${formatBRL(result.total)} (${result.count} serviço${result.count > 1 ? "s" : ""}) pra ${grupo.counterpartyName}.`,
-    );
-    setPagandoId(null);
-    await loadGrupos();
-    if (historicoCounterpartyId === grupo.counterpartyId) await loadHistorico(grupo.counterpartyId);
+  function startEditDueDate() {
+    setEditDueDateValue(pendencia?.dueDate?.slice(0, 10) ?? "");
+    setEditingDueDate(true);
   }
 
-  function startEditDueDate(grupo: PendingGroup) {
-    setEditingDueDateFor(grupo.counterpartyId);
-    setEditDueDateValue(grupo.dueDate.slice(0, 10));
-  }
-
-  async function saveDueDate(counterpartyId: string) {
+  async function saveDueDate() {
     await fetch("/api/costureira-servicos/due-date", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ counterpartyId, dueDate: editDueDateValue }),
     });
-    setEditingDueDateFor(null);
-    await loadGrupos();
+    setEditingDueDate(false);
+    await loadPendentesEHistorico(counterpartyId);
+  }
+
+  async function handlePagarTudo() {
+    setPagando(true);
+    setPagamentoError(null);
+    setPagamentoSuccess(null);
+    const res = await fetch("/api/costureira-servicos/pagar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ counterpartyId, bankAccountId, paidAt: pagamentoData }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setPagamentoError(typeof body.error === "string" ? body.error : "Não foi possível pagar.");
+      setPagando(false);
+      return;
+    }
+    const result = await res.json();
+    setPagamentoSuccess(
+      `Pago ${formatBRL(result.total)} (${result.count} serviço${result.count > 1 ? "s" : ""}) pra ${selectedCostureira?.name}.`,
+    );
+    setPagando(false);
+    await loadPendentesEHistorico(counterpartyId);
   }
 
   if (loading) return <p className="text-sm text-muted">Carregando...</p>;
@@ -211,10 +204,10 @@ export default function PagamentoCostureirasPage() {
       <div>
         <h1 className="font-serif text-3xl text-foreground">Pagamento de Costureiras</h1>
         <p className="max-w-prose text-sm text-muted">
-          Lança cada serviço enviado (data + valor), sem gerar cobrança na hora — vai acumulando. O primeiro
-          serviço de uma quinzena já cria a previsão no Fluxo de Caixa, com o vencimento que você escolher.
-          Quando fechar a quinzena, clique em &quot;Pagar tudo&quot; pra virar um lançamento pago. Pra
-          aparecer aqui, marque a contraparte como costureira em{" "}
+          Lança cada serviço enviado (data + valor), sem gerar cobrança na hora — vai acumulando. O
+          primeiro serviço de uma quinzena já cria a previsão no Fluxo de Caixa, com o vencimento que
+          você escolher. Quando fechar a quinzena, clique em &quot;Pagar tudo&quot; pra virar um único
+          lançamento pago. Pra aparecer aqui, marque a contraparte como costureira em{" "}
           <a href="/counterparties" className="text-gold hover:underline">
             Contrapartes
           </a>
@@ -232,213 +225,184 @@ export default function PagamentoCostureirasPage() {
         </p>
       ) : (
         <>
-          <form
-            onSubmit={handleAddServico}
-            className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-surface p-4"
-          >
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-muted">Costureira</label>
-              <select
-                required
-                value={counterpartyId}
-                onChange={(e) => setCounterpartyId(e.target.value)}
-                className="w-56 rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
-              >
-                <option value="">Selecione...</option>
-                {costureiras.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-muted">Data do serviço</label>
-              <input
-                required
-                type="date"
-                value={servicoData}
-                onChange={(e) => setServicoData(e.target.value)}
-                className="rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-muted">Valor (R$)</label>
-              <input
-                required
-                type="number"
-                step="0.01"
-                min={0}
-                value={servicoValor}
-                onChange={(e) => setServicoValor(e.target.value)}
-                className="w-32 rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-muted">Descrição (opcional)</label>
-              <input
-                value={servicoDescricao}
-                onChange={(e) => setServicoDescricao(e.target.value)}
-                placeholder="Ex.: lote de 40 camisetas"
-                className="w-56 rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
-              />
-            </div>
-            {counterpartyId && !jaTemPendente.has(counterpartyId) && (
-              <div className="flex flex-col gap-1">
-                <label
-                  className="text-xs font-medium text-muted"
-                  title="Primeiro serviço dessa quinzena — essa data já entra na previsão do Fluxo de Caixa. Pode ser uma data passada, se a quinzena já fechou e só falta pagar."
-                >
-                  Vencimento previsto
-                </label>
-                <input
-                  required
-                  type="date"
-                  value={servicoDueDate}
-                  onChange={(e) => setServicoDueDate(e.target.value)}
-                  className="rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
-                />
-              </div>
-            )}
-            <button
-              type="submit"
-              disabled={savingServico || !counterpartyId}
-              className="rounded bg-gold px-4 py-1.5 text-sm font-medium text-black transition hover:bg-gold-soft disabled:opacity-50"
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted">Costureira</label>
+            <select
+              value={counterpartyId}
+              onChange={(e) => setCounterpartyId(e.target.value)}
+              className="w-56 rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
             >
-              {savingServico ? "Lançando..." : "Lançar serviço"}
-            </button>
-            {servicoError && <p className="w-full text-sm text-red-400">{servicoError}</p>}
-          </form>
+              <option value="">Selecione...</option>
+              {costureiras.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
-          {pagamentoError && <p className="text-sm text-red-400">{pagamentoError}</p>}
-          {pagamentoSuccess && <p className="text-sm text-emerald-400">{pagamentoSuccess}</p>}
+          {counterpartyId && (
+            <>
+              <form
+                onSubmit={handleAddServico}
+                className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-surface p-4"
+              >
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-muted">Data do serviço</label>
+                  <input
+                    required
+                    type="date"
+                    value={servicoData}
+                    onChange={(e) => setServicoData(e.target.value)}
+                    className="rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-muted">Valor (R$)</label>
+                  <input
+                    required
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    value={servicoValor}
+                    onChange={(e) => setServicoValor(e.target.value)}
+                    className="w-32 rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-muted">Descrição (opcional)</label>
+                  <input
+                    value={servicoDescricao}
+                    onChange={(e) => setServicoDescricao(e.target.value)}
+                    placeholder="Ex.: lote de 40 camisetas"
+                    className="w-56 rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
+                  />
+                </div>
+                {pendencia && !pendencia.entryId && (
+                  <div className="flex flex-col gap-1">
+                    <label
+                      className="text-xs font-medium text-muted"
+                      title="Primeiro serviço dessa quinzena — essa data já entra na previsão do Fluxo de Caixa. Pode ser uma data passada, se a quinzena já fechou e só falta pagar."
+                    >
+                      Vencimento previsto
+                    </label>
+                    <input
+                      required
+                      type="date"
+                      value={servicoDueDate}
+                      onChange={(e) => setServicoDueDate(e.target.value)}
+                      className="rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
+                    />
+                  </div>
+                )}
+                <button
+                  type="submit"
+                  disabled={savingServico}
+                  className="rounded bg-gold px-4 py-1.5 text-sm font-medium text-black transition hover:bg-gold-soft disabled:opacity-50"
+                >
+                  {savingServico ? "Lançando..." : "Lançar serviço"}
+                </button>
+                {servicoError && <p className="w-full text-sm text-red-400">{servicoError}</p>}
+              </form>
 
-          {loadingGrupos ? (
-            <p className="text-sm text-muted">Carregando pendências...</p>
-          ) : grupos.length === 0 ? (
-            <p className="text-sm text-muted">Nenhuma pendência — lance um serviço acima.</p>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {grupos.map((grupo) => {
-                const expanded = expandedId === grupo.counterpartyId;
-                const overdue = isOverdue(grupo.dueDate);
-                const editingDueDate = editingDueDateFor === grupo.counterpartyId;
-                return (
-                  <div key={grupo.counterpartyId} className="rounded-lg border border-border bg-surface p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                      <div>
-                        <span className="text-sm font-medium text-foreground">{grupo.counterpartyName}</span>
-                        <p className="mt-1 text-xs text-muted">
-                          {editingDueDate ? (
-                            <span className="inline-flex items-center gap-2">
-                              Vencimento:
-                              <input
-                                type="date"
-                                value={editDueDateValue}
-                                onChange={(e) => setEditDueDateValue(e.target.value)}
-                                className="rounded border border-border bg-background px-2 py-0.5 text-xs text-foreground focus:border-gold focus:outline-none"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => saveDueDate(grupo.counterpartyId)}
-                                className="font-medium text-gold hover:underline"
-                              >
-                                Salvar
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setEditingDueDateFor(null)}
-                                className="text-muted hover:underline"
-                              >
-                                Cancelar
-                              </button>
-                            </span>
-                          ) : (
-                            <span className={overdue ? "text-red-400" : ""}>
-                              Vencimento: {formatDate(grupo.dueDate)}
-                              {overdue && " (atrasado)"}{" "}
-                              <button
-                                type="button"
-                                onClick={() => startEditDueDate(grupo)}
-                                className="ml-1 text-gold hover:underline"
-                              >
-                                editar
-                              </button>
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <span className="block text-xs font-medium tracking-wide text-muted uppercase">
-                          Pendente
-                        </span>
-                        <span className="font-serif text-xl text-foreground">{formatBRL(grupo.total)}</span>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm">
-                      <span className="text-muted">
-                        {grupo.servicos.length} serviço{grupo.servicos.length > 1 ? "s" : ""} lançado
-                        {grupo.servicos.length > 1 ? "s" : ""}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setExpandedId(expanded ? null : grupo.counterpartyId)}
-                        className="text-xs font-medium text-gold hover:text-gold-soft hover:underline"
-                      >
-                        {expanded ? "Ocultar serviços" : "Ver serviços"}
-                      </button>
-                    </div>
-
-                    {expanded && (
-                      <table className="mt-3 w-full text-left text-sm">
-                        <thead>
-                          <tr className="border-b border-border text-muted">
-                            <th className="py-1 font-medium">Data</th>
-                            <th className="py-1 font-medium">Descrição</th>
-                            <th className="py-1 font-medium">Valor</th>
-                            <th className="py-1 font-medium"></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {grupo.servicos.map((s) => (
-                            <tr key={s.id} className="border-b border-border/50">
-                              <td className="py-1">{formatDate(s.date)}</td>
-                              <td className="py-1 text-muted">{s.description || "—"}</td>
-                              <td className="py-1">{formatBRL(s.amount)}</td>
-                              <td className="py-1 text-right">
-                                <button
-                                  onClick={() => handleRemoveServico(s.id)}
-                                  className="text-xs font-medium text-red-400 hover:underline"
-                                >
-                                  Excluir
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+              <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="font-serif text-lg text-foreground">
+                      Pendente — {selectedCostureira?.name}
+                    </h2>
+                    <p className="text-2xl font-serif text-gold">{formatBRL(totalPendente)}</p>
+                    {pendencia?.dueDate && (
+                      <p className="mt-1 text-xs text-muted">
+                        {editingDueDate ? (
+                          <span className="inline-flex items-center gap-2">
+                            Vencimento:
+                            <input
+                              type="date"
+                              value={editDueDateValue}
+                              onChange={(e) => setEditDueDateValue(e.target.value)}
+                              className="rounded border border-border bg-background px-2 py-0.5 text-xs text-foreground focus:border-gold focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={saveDueDate}
+                              className="font-medium text-gold hover:underline"
+                            >
+                              Salvar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingDueDate(false)}
+                              className="text-muted hover:underline"
+                            >
+                              Cancelar
+                            </button>
+                          </span>
+                        ) : (
+                          <span className={isOverdue(pendencia.dueDate) ? "text-red-400" : ""}>
+                            Vencimento: {formatDate(pendencia.dueDate)}
+                            {isOverdue(pendencia.dueDate) && " (atrasado)"}{" "}
+                            <button
+                              type="button"
+                              onClick={startEditDueDate}
+                              className="ml-1 text-gold hover:underline"
+                            >
+                              editar
+                            </button>
+                          </span>
+                        )}
+                      </p>
                     )}
+                  </div>
+                </div>
 
-                    <div className="mt-3 flex flex-wrap items-end gap-3 border-t border-border pt-3">
+                {loadingPendentes ? (
+                  <p className="text-sm text-muted">Carregando...</p>
+                ) : pendencia && pendencia.servicos.length > 0 ? (
+                  <>
+                    <table className="w-full text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-border text-muted">
+                          <th className="py-2 font-medium">Data</th>
+                          <th className="py-2 font-medium">Descrição</th>
+                          <th className="py-2 font-medium">Valor</th>
+                          <th className="py-2 font-medium"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pendencia.servicos.map((s) => (
+                          <tr key={s.id} className="border-b border-border/50">
+                            <td className="py-2">{formatDate(s.date)}</td>
+                            <td className="py-2 text-muted">{s.description || "—"}</td>
+                            <td className="py-2">{formatBRL(s.amount)}</td>
+                            <td className="py-2 text-right">
+                              <button
+                                onClick={() => handleRemoveServico(s.id)}
+                                className="text-xs font-medium text-red-400 hover:underline"
+                              >
+                                Excluir
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+
+                    <div className="flex flex-wrap items-end gap-3 border-t border-border pt-3">
                       <div className="flex flex-col gap-1">
                         <label className="text-xs font-medium text-muted">Data do pagamento</label>
                         <input
                           type="date"
-                          value={pagamentoDataByGroup[grupo.counterpartyId] ?? todayLocalDateString()}
-                          onChange={(e) =>
-                            setPagamentoDataByGroup((prev) => ({ ...prev, [grupo.counterpartyId]: e.target.value }))
-                          }
+                          value={pagamentoData}
+                          onChange={(e) => setPagamentoData(e.target.value)}
                           className="rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
                         />
                       </div>
                       <div className="flex flex-col gap-1">
                         <label className="text-xs font-medium text-muted">Pago de qual conta</label>
                         <select
-                          value={bankAccountIdByGroup[grupo.counterpartyId] ?? ""}
-                          onChange={(e) =>
-                            setBankAccountIdByGroup((prev) => ({ ...prev, [grupo.counterpartyId]: e.target.value }))
-                          }
+                          value={bankAccountId}
+                          onChange={(e) => setBankAccountId(e.target.value)}
                           className="rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
                         >
                           <option value="">Selecione...</option>
@@ -450,57 +414,46 @@ export default function PagamentoCostureirasPage() {
                         </select>
                       </div>
                       <button
-                        onClick={() => handlePagarTudo(grupo)}
-                        disabled={pagandoId === grupo.counterpartyId || !bankAccountIdByGroup[grupo.counterpartyId]}
+                        onClick={handlePagarTudo}
+                        disabled={pagando || !bankAccountId}
                         className="rounded bg-gold px-4 py-1.5 text-sm font-medium text-black transition hover:bg-gold-soft disabled:opacity-50"
                       >
-                        {pagandoId === grupo.counterpartyId ? "Pagando..." : `Pagar tudo (${formatBRL(grupo.total)})`}
+                        {pagando ? "Pagando..." : `Pagar tudo (${formatBRL(totalPendente)})`}
                       </button>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                    {pagamentoError && <p className="text-sm text-red-400">{pagamentoError}</p>}
+                    {pagamentoSuccess && <p className="text-sm text-emerald-400">{pagamentoSuccess}</p>}
+                  </>
+                ) : (
+                  <p className="text-sm text-muted">Nenhum serviço pendente — lance um acima.</p>
+                )}
+              </div>
+
+              {historico && historico.length > 0 && (
+                <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4">
+                  <h2 className="font-serif text-lg text-foreground">
+                    Histórico de pagamentos — {selectedCostureira?.name}
+                  </h2>
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-muted">
+                        <th className="py-2 font-medium">Data</th>
+                        <th className="py-2 font-medium">Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historico.map((h) => (
+                        <tr key={h.id} className="border-b border-border/50">
+                          <td className="py-2">{h.paidAt ? formatDate(h.paidAt) : "—"}</td>
+                          <td className="py-2">{formatBRL(h.paidAmount ?? h.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
           )}
-
-          <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-muted">Ver histórico de pagamentos de</label>
-              <select
-                value={historicoCounterpartyId}
-                onChange={(e) => setHistoricoCounterpartyId(e.target.value)}
-                className="w-56 rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
-              >
-                <option value="">Selecione...</option>
-                {costureiras.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {historico && historico.length > 0 ? (
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-border text-muted">
-                    <th className="py-2 font-medium">Data</th>
-                    <th className="py-2 font-medium">Valor</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {historico.map((h) => (
-                    <tr key={h.id} className="border-b border-border/50">
-                      <td className="py-2">{h.paidAt ? formatDate(h.paidAt) : "—"}</td>
-                      <td className="py-2">{formatBRL(h.paidAmount ?? h.amount)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              historicoCounterpartyId && <p className="text-sm text-muted">Nenhum pagamento ainda.</p>
-            )}
-          </div>
         </>
       )}
     </div>

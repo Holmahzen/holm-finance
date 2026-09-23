@@ -36,8 +36,9 @@ export const costureiraServicoService = {
   async listPending(counterpartyId: string) {
     const category = await getCosturaCategory();
     const openEntry = await costureiraServicoRepository.findOpenEntry(counterpartyId, category.id);
-    if (!openEntry) return [];
-    return costureiraServicoRepository.findByEntry(openEntry.id);
+    if (!openEntry) return { entryId: null, dueDate: null, servicos: [] };
+    const servicos = await costureiraServicoRepository.findByEntry(openEntry.id);
+    return { entryId: openEntry.id, dueDate: openEntry.dueDate, servicos };
   },
 
   // Visão agrupada — todas as costureiras com pendência, cada uma com seu
