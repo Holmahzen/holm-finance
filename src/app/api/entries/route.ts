@@ -10,6 +10,7 @@ export async function GET(request: NextRequest) {
     status: searchParams.get("status") ?? undefined,
     type: searchParams.get("type") ?? undefined,
     categoryId: searchParams.get("categoryId") ?? undefined,
+    counterpartyId: searchParams.get("counterpartyId") ?? undefined,
     year: year ? Number(year) : undefined,
     month: month ? Number(month) : undefined,
   });

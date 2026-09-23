@@ -190,6 +190,9 @@ model Counterparty {
   defaultCategoryId String?
   defaultCategory   Category?        @relation(fields: [defaultCategoryId], references: [id])
   isOwnEntity       Boolean          @default(false)
+  // Marca quem recebe por costura — filtra a aba de Pagamento de Costureiras
+  // sem misturar com fornecedor de tecido ou outro tipo de contraparte.
+  isCostureira      Boolean          @default(false)
   isActive          Boolean          @default(true)
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt

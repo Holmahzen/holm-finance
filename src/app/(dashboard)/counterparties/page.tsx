@@ -8,6 +8,7 @@ type Counterparty = {
   document: string | null;
   type: "PESSOA_FISICA" | "PESSOA_JURIDICA" | "OUTRO";
   isOwnEntity: boolean;
+  isCostureira: boolean;
 };
 
 const typeLabels: Record<Counterparty["type"], string> = {
@@ -23,6 +24,7 @@ export default function CounterpartiesPage() {
   const [document, setDocument] = useState("");
   const [type, setType] = useState<Counterparty["type"]>("OUTRO");
   const [isOwnEntity, setIsOwnEntity] = useState(false);
+  const [isCostureira, setIsCostureira] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   async function load() {
@@ -42,13 +44,23 @@ export default function CounterpartiesPage() {
     await fetch("/api/counterparties", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, document, type, isOwnEntity }),
+      body: JSON.stringify({ name, document, type, isOwnEntity, isCostureira }),
     });
     setName("");
     setDocument("");
     setType("OUTRO");
     setIsOwnEntity(false);
+    setIsCostureira(false);
     setSubmitting(false);
+    await load();
+  }
+
+  async function toggleCostureira(c: Counterparty) {
+    await fetch(`/api/counterparties/${c.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isCostureira: !c.isCostureira }),
+    });
     await load();
   }
 
@@ -104,6 +116,15 @@ export default function CounterpartiesPage() {
           />
           Entidade própria
         </label>
+        <label className="flex items-center gap-2 pb-1.5 text-sm text-foreground">
+          <input
+            type="checkbox"
+            checked={isCostureira}
+            onChange={(e) => setIsCostureira(e.target.checked)}
+            className="accent-gold"
+          />
+          Costureira
+        </label>
         <button
           type="submit"
           disabled={submitting}
@@ -124,6 +145,7 @@ export default function CounterpartiesPage() {
               <th className="py-2 font-medium">Nome</th>
               <th className="py-2 font-medium">CPF/CNPJ</th>
               <th className="py-2 font-medium">Tipo</th>
+              <th className="py-2 font-medium"></th>
             </tr>
           </thead>
           <tbody>
@@ -131,9 +153,18 @@ export default function CounterpartiesPage() {
               <tr key={c.id} className="border-b border-border/50">
                 <td className="py-2">
                   {c.name} {c.isOwnEntity && <span className="text-xs text-gold">(própria)</span>}
+                  {c.isCostureira && <span className="ml-2 text-xs text-gold">(costureira)</span>}
                 </td>
                 <td className="py-2">{c.document ?? "—"}</td>
                 <td className="py-2">{typeLabels[c.type]}</td>
+                <td className="py-2 text-right">
+                  <button
+                    onClick={() => toggleCostureira(c)}
+                    className="text-xs font-medium text-gold hover:underline"
+                  >
+                    {c.isCostureira ? "Desmarcar costureira" : "Marcar como costureira"}
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>

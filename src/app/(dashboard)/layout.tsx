@@ -18,6 +18,7 @@ const navGroups = [
     items: [
       { href: "/accounts", label: "Contas" },
       { href: "/entries", label: "Lançamentos" },
+      { href: "/pagamento-costureiras", label: "Pagamento de Costureiras" },
       { href: "/cartao-credito", label: "Cartão de Crédito" },
       { href: "/fluxo-de-caixa", label: "Fluxo de Caixa" },
       { href: "/reserva-de-caixa", label: "Reserva de Caixa" },

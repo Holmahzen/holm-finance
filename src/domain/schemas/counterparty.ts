@@ -19,6 +19,7 @@ export const createCounterpartySchema = z.object({
   aliases: z.array(z.string()).optional(),
   defaultCategoryId: z.string().optional(),
   isOwnEntity: z.boolean().optional(),
+  isCostureira: z.boolean().optional(),
 });
 
 export const updateCounterpartySchema = createCounterpartySchema

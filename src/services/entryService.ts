@@ -28,6 +28,7 @@ export const entryService = {
     status?: string;
     type?: string;
     categoryId?: string;
+    counterpartyId?: string;
     year?: number;
     month?: number;
   }) {
@@ -35,6 +36,7 @@ export const entryService = {
     if (filters?.status) where.status = filters.status as Prisma.EntryWhereInput["status"];
     if (filters?.type) where.type = filters.type as Prisma.EntryWhereInput["type"];
     if (filters?.categoryId) where.categoryId = filters.categoryId;
+    if (filters?.counterpartyId) where.counterpartyId = filters.counterpartyId;
     if (filters?.year && filters?.month) {
       const start = new Date(filters.year, filters.month - 1, 1);
       const end = new Date(filters.year, filters.month, 1);
