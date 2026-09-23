@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { formatBRL } from "@/lib/format";
 import { PrintButton } from "@/components/PrintButton";
+import { aggregateReleasesByFortnight } from "@/domain/mercadoLivreReleases";
 
 type ReleaseDay = {
   date: string;
@@ -134,6 +135,63 @@ function ReleaseChart({ days, comAno }: { days: ReleaseDay[]; comAno: boolean })
         </div>
       </div>
     </div>
+  );
+}
+
+function FortnightTable({ days, comAno }: { days: ReleaseDay[]; comAno: boolean }) {
+  const buckets = useMemo(
+    () => aggregateReleasesByFortnight(days.map((d) => ({ ...d, date: parseDay(d.date) }))),
+    [days],
+  );
+
+  if (buckets.length === 0) return null;
+
+  function formatPeriodo(startDate: Date, endDate: Date) {
+    const d1 = `${startDate.getUTCDate()} ${MONTHS[startDate.getUTCMonth()]}`;
+    const d2 = `${endDate.getUTCDate()} ${MONTHS[endDate.getUTCMonth()]}`;
+    const ano = comAno ? ` ${String(endDate.getUTCFullYear()).slice(2)}` : "";
+    return `${d1} – ${d2}${ano}`;
+  }
+
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="font-serif text-xl text-foreground">Por quinzena</h2>
+      <p className="text-sm text-muted">
+        Mesmo calendário, agrupado em quinzenas de calendário (dia 1–15 e 16–fim do mês).
+      </p>
+      <div className="overflow-x-auto rounded-lg border border-border">
+        <table className="w-full min-w-2xl text-sm">
+          <thead className="bg-surface">
+            <tr className="text-xs tracking-wide text-muted uppercase">
+              <th className="px-4 py-3 text-left font-medium">Quinzena</th>
+              <th className="px-4 py-3 text-right font-medium">Vendas</th>
+              <th className="px-4 py-3 text-right font-medium">Valor total</th>
+              <th className="px-4 py-3 text-right font-medium">Já liberado</th>
+              <th className="px-4 py-3 text-right font-medium">A liberar</th>
+            </tr>
+          </thead>
+          <tbody>
+            {buckets.map((b) => (
+              <tr key={`${b.year}-${b.month}-${b.half}`} className="border-t border-border">
+                <td className="px-4 py-2 whitespace-nowrap text-foreground">
+                  {formatPeriodo(b.startDate, b.endDate)}
+                </td>
+                <td className="px-4 py-2 text-right text-muted tabular-nums">{b.count}</td>
+                <td className="px-4 py-2 text-right text-foreground tabular-nums">
+                  {formatBRL(b.amount)}
+                </td>
+                <td className="px-4 py-2 text-right text-emerald-400 tabular-nums">
+                  {b.releasedAmount > 0 ? formatBRL(b.releasedAmount) : "—"}
+                </td>
+                <td className="px-4 py-2 text-right text-amber-300 tabular-nums">
+                  {b.scheduledAmount > 0 ? formatBRL(b.scheduledAmount) : "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
@@ -278,6 +336,9 @@ export default function RecebiveisMlPage() {
   const diasVisiveis = report.days.filter((d) => d.date >= report.janelaInicio);
   const diasOcultos = report.days.length - diasVisiveis.length;
   const comAno = new Set(diasVisiveis.map((d) => d.date.slice(0, 4))).size > 1;
+  // A tabela por quinzena usa o calendário inteiro (não só diasVisiveis), então
+  // pode cobrir mais anos do que o recorte recente de cima.
+  const comAnoCompleto = new Set(report.days.map((d) => d.date.slice(0, 4))).size > 1;
 
   // O cálculo só enxerga o que a fonte já viu. Na planilha, vendas feitas
   // depois da exportação não estão nela; no hub, é o sync que pode ter parado.
@@ -503,6 +564,8 @@ export default function RecebiveisMlPage() {
               </table>
             </div>
           </section>
+
+          <FortnightTable days={report.days} comAno={comAnoCompleto} />
 
           {!daReal && <ImportPanel onImported={reload} compact />}
 

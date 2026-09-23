@@ -252,6 +252,63 @@ export function computeScheduleFromDays(
  * justamente o tratamento certo pra dinheiro sem data conhecida. Devolução e
  * mediação em aberto ficam fora dos quatro — podem virar reembolso.
  */
+export type FortnightBucket = {
+  year: number;
+  /** 1–12. */
+  month: number;
+  /** 1 = dias 1–15, 2 = dias 16–fim do mês. */
+  half: 1 | 2;
+  startDate: Date;
+  endDate: Date;
+  count: number;
+  amount: number;
+  releasedAmount: number;
+  scheduledAmount: number;
+};
+
+/**
+ * Agrupa o calendário de repasse por quinzena de calendário (1–15, 16–fim do
+ * mês) — não por blocos corridos de 15 dias a partir de hoje. É assim que a
+ * Mariana já pensa o fluxo de pagamentos (ex.: fechamento das costureiras),
+ * então o repasse do Mercado Livre fica na mesma referência.
+ */
+export function aggregateReleasesByFortnight(days: ReleaseDay[]): FortnightBucket[] {
+  const buckets = new Map<string, FortnightBucket>();
+
+  for (const d of days) {
+    const year = d.date.getUTCFullYear();
+    const month = d.date.getUTCMonth();
+    const half: 1 | 2 = d.date.getUTCDate() <= 15 ? 1 : 2;
+    const key = `${year}-${month}-${half}`;
+
+    let bucket = buckets.get(key);
+    if (!bucket) {
+      bucket = {
+        year,
+        month: month + 1,
+        half,
+        startDate: new Date(Date.UTC(year, month, half === 1 ? 1 : 16)),
+        endDate:
+          half === 1
+            ? new Date(Date.UTC(year, month, 15))
+            : new Date(Date.UTC(year, month + 1, 0)),
+        count: 0,
+        amount: 0,
+        releasedAmount: 0,
+        scheduledAmount: 0,
+      };
+      buckets.set(key, bucket);
+    }
+
+    bucket.count += d.count;
+    bucket.amount += d.amount;
+    if (d.released) bucket.releasedAmount += d.amount;
+    else bucket.scheduledAmount += d.amount;
+  }
+
+  return [...buckets.values()].sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+}
+
 export function computeBuckets(
   days: ReleaseDay[],
   awaitingDeliveryAmount: number,

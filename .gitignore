@@ -49,3 +49,6 @@ tests/fixtures/ofx/real/
 
 # pg_dump/pg_restore backups (contain live financial data, never commit)
 *.dump
+
+.vercel
+.env*

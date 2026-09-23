@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
+  aggregateReleasesByFortnight,
   classifySale,
   computeReleaseSchedule,
   computeScheduleFromDays,
   estimateReleaseDate,
   RELEASE_DELAY_DAYS,
+  type ReleaseDay,
   type SaleForRelease,
 } from "@/domain/mercadoLivreReleases";
 
@@ -243,5 +245,70 @@ describe("computeScheduleFromDays", () => {
     expect(schedule.days).toEqual([]);
     expect(schedule.total).toBe(0);
     expect(schedule.buckets).toEqual({ today: 0, tomorrow: 0, within7d: 0, after7d: 0 });
+  });
+});
+
+function releaseDay(overrides: Partial<ReleaseDay> = {}): ReleaseDay {
+  return { date: utc(2026, 9, 1), count: 1, amount: 100, cumulative: 100, released: true, ...overrides };
+}
+
+describe("aggregateReleasesByFortnight", () => {
+  it("separa dia 15 e dia 16 em quinzenas diferentes", () => {
+    const buckets = aggregateReleasesByFortnight([
+      releaseDay({ date: utc(2026, 9, 15), amount: 100 }),
+      releaseDay({ date: utc(2026, 9, 16), amount: 200 }),
+    ]);
+
+    expect(buckets).toHaveLength(2);
+    expect(buckets[0]).toMatchObject({
+      year: 2026,
+      month: 9,
+      half: 1,
+      startDate: utc(2026, 9, 1),
+      endDate: utc(2026, 9, 15),
+      amount: 100,
+    });
+    expect(buckets[1]).toMatchObject({
+      year: 2026,
+      month: 9,
+      half: 2,
+      startDate: utc(2026, 9, 16),
+      endDate: utc(2026, 9, 30),
+      amount: 200,
+    });
+  });
+
+  it("soma vários dias na mesma quinzena e separa liberado de a liberar", () => {
+    const buckets = aggregateReleasesByFortnight([
+      releaseDay({ date: utc(2026, 9, 2), amount: 50, count: 2, released: true }),
+      releaseDay({ date: utc(2026, 9, 9), amount: 30, count: 1, released: false }),
+    ]);
+
+    expect(buckets).toHaveLength(1);
+    expect(buckets[0]).toMatchObject({
+      count: 3,
+      amount: 80,
+      releasedAmount: 50,
+      scheduledAmount: 30,
+    });
+  });
+
+  it("quinzena de fevereiro termina no último dia do mês, mesmo em ano bissexto", () => {
+    const buckets = aggregateReleasesByFortnight([releaseDay({ date: utc(2028, 2, 20), amount: 10 })]);
+    expect(buckets[0].endDate).toEqual(utc(2028, 2, 29));
+  });
+
+  it("ordena os buckets por data, mesmo recebendo os dias fora de ordem", () => {
+    const buckets = aggregateReleasesByFortnight([
+      releaseDay({ date: utc(2026, 10, 3), amount: 1 }),
+      releaseDay({ date: utc(2026, 9, 3), amount: 1 }),
+      releaseDay({ date: utc(2026, 9, 20), amount: 1 }),
+    ]);
+
+    expect(buckets.map((b) => `${b.year}-${b.month}-${b.half}`)).toEqual(["2026-9-1", "2026-9-2", "2026-10-1"]);
+  });
+
+  it("devolve vazio sem estourar", () => {
+    expect(aggregateReleasesByFortnight([])).toEqual([]);
   });
 });
