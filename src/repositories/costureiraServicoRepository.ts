@@ -2,16 +2,33 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 
 export const costureiraServicoRepository = {
-  findPending(counterpartyId: string) {
+  findOpenEntry(counterpartyId: string, categoryId: string) {
+    return prisma.entry.findFirst({
+      where: { counterpartyId, categoryId, status: "PENDING" },
+    });
+  },
+
+  findByEntry(entryId: string) {
     return prisma.costureiraServico.findMany({
-      where: { counterpartyId, paidEntryId: null },
+      where: { entryId },
       orderBy: { date: "asc" },
     });
   },
 
-  findSettled(counterpartyId: string) {
+  // Todos os serviços cujo Entry ainda está pendente, de todas as
+  // costureiras — base da visão agrupada (igual Cartão de Crédito).
+  findAllPending(categoryId: string) {
     return prisma.costureiraServico.findMany({
-      where: { counterpartyId, paidEntryId: { not: null } },
+      where: { entry: { categoryId, status: "PENDING" } },
+      include: { counterparty: true, entry: true },
+      orderBy: { date: "asc" },
+    });
+  },
+
+  findSettledByCounterparty(counterpartyId: string, categoryId: string) {
+    return prisma.costureiraServico.findMany({
+      where: { counterpartyId, entry: { categoryId, status: "PAID" } },
+      include: { entry: true },
       orderBy: { date: "desc" },
     });
   },
@@ -26,9 +43,5 @@ export const costureiraServicoRepository = {
 
   delete(id: string) {
     return prisma.costureiraServico.delete({ where: { id } });
-  },
-
-  markPaid(ids: string[], paidEntryId: string) {
-    return prisma.costureiraServico.updateMany({ where: { id: { in: ids } }, data: { paidEntryId } });
   },
 };

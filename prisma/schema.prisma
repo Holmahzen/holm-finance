@@ -205,9 +205,11 @@ model Counterparty {
   @@map("counterparties")
 }
 
-// Cada serviço que a costureira presta vai sendo lançado aqui (data + valor),
-// acumulando sem gerar cobrança — só quando ela "fecha" (Pagar tudo) que os
-// pendentes viram um único Entry pago, e ganham paidEntryId marcando quitado.
+// Cada serviço que a costureira presta vai sendo lançado aqui (data + valor).
+// O 1º serviço depois do último fechamento já cria um Entry PENDENTE (com o
+// vencimento que a Mariana digita ali), pra aparecer na previsão do Fluxo de
+// Caixa; os próximos serviços só somam no mesmo Entry. "Pagar tudo" paga esse
+// Entry — o status dele (PENDING/PAID) é o que separa pendente de quitado.
 model CostureiraServico {
   id             String       @id @default(cuid())
   counterpartyId String
@@ -215,10 +217,11 @@ model CostureiraServico {
   date           DateTime
   amount         Decimal      @db.Decimal(14, 2)
   description    String?
-  paidEntryId    String?
+  entryId        String?
+  entry          Entry?       @relation(fields: [entryId], references: [id])
   createdAt      DateTime     @default(now())
 
-  @@index([counterpartyId, paidEntryId])
+  @@index([counterpartyId, entryId])
   @@map("costureira_servicos")
 }
 
@@ -251,6 +254,7 @@ model Entry {
   reconciliationMatch ReconciliationMatch?
   rejectedMatchPairs  RejectedMatchPair[]
   serviceInvoice      ServiceInvoice?
+  costureiraServicos  CostureiraServico[]
 
   @@index([status, dueDate])
   @@map("entries")
