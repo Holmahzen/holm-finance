@@ -13,6 +13,8 @@ import {
 import { aggregateSalesBySku, isExcludedSaleStatus } from "@/domain/salesAggregation";
 import { computeCogsBySku, computeMaterialSpendSplit } from "@/domain/cogs";
 import { plannedPurchaseMovements, suggestPurchase } from "@/domain/plannedPurchase";
+import { estimateFlexInvoices } from "@/domain/flexEstimate";
+import { FLEX_COST_PER_PACKAGE } from "@/domain/breakEven";
 import { todayUTCInBrazil } from "@/lib/today";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -35,7 +37,7 @@ export const cashFlowService = {
 
     const last30dStart = new Date(todayUTC.getTime() - 30 * MS_PER_DAY);
 
-    const [accounts, entries, mlReport, paidToday, recentSales, productCosts, plannedRows] = await Promise.all([
+    const [accounts, entries, mlReport, paidToday, recentSales, productCosts, plannedRows, flexEntryRows] = await Promise.all([
       dashboardRepository.getAccountBalances(),
       entryRepository.findMany({ status: "PENDING" }),
       mercadoLivreReleaseService.getReport(todayUTC),
@@ -46,6 +48,11 @@ export const cashFlowService = {
       marketplaceSaleRepository.findByPeriod(last30dStart, tomorrowUTC),
       productRepository.getProductCostsBySku(),
       plannedPurchaseRepository.findMany(),
+      // faturas Flex já lançadas (pendentes ou pagas): quando a real existe, a estimativa some
+      entryRepository.findMany({
+        category: { name: "Flex" },
+        dueDate: { gte: new Date(todayUTC.getTime() - 40 * MS_PER_DAY) },
+      }),
     ]);
 
     const startingBalance = accounts.reduce((sum, a) => sum + Number(a.balance), 0);
@@ -80,6 +87,31 @@ export const cashFlowService = {
       movements.push({ date: dayDate, amount: day.amount, label: "Mercado Livre — repasse" });
       mlInWindow += day.amount;
     }
+
+    // Fatura Flex (transportadora, R$ por pacote, paga por quinzena): estimada
+    // pelas vendas Flex já importadas, até virar o lançamento real.
+    const validRecentSales = recentSales.filter((s) => !isExcludedSaleStatus(s.status));
+    const flexByDayMap = new Map<number, number>();
+    for (const sale of validRecentSales) {
+      if ((sale.shippingModality ?? "").trim().toLowerCase() !== "flex") continue;
+      const key = sale.saleDate.getTime();
+      flexByDayMap.set(key, (flexByDayMap.get(key) ?? 0) + 1);
+    }
+    const flexByDay = [...flexByDayMap.entries()].map(([t, flexCount]) => ({ date: new Date(t), flexCount }));
+    movements.push(
+      ...estimateFlexInvoices({
+        today: todayUTC,
+        windowEnd,
+        flexByDay,
+        lastSaleDate: recentSales.reduce<Date | null>(
+          (max, sale) => (max === null || sale.saleDate > max ? sale.saleDate : max),
+          null,
+        ),
+        paceFlexPerDay: flexByDay.reduce((sum, d) => sum + d.flexCount, 0) / 30,
+        feePerPackage: FLEX_COST_PER_PACKAGE,
+        flexEntries: flexEntryRows.map((e) => ({ date: e.dueDate, amount: Number(e.amount) })),
+      }),
+    );
 
     const projection = computeCashFlowProjection(startingBalance, movements, todayUTC, days);
     const firstNegativeDay = findFirstNegativeDay(projection);
