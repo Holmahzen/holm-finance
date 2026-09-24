@@ -71,6 +71,11 @@ export default function DashboardLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   const pathname = usePathname();
 
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.assign("/login");
+  }
+
   return (
     <div className="flex flex-1">
       <aside className="no-print sticky top-0 flex h-screen w-56 shrink-0 flex-col overflow-y-auto border-r border-border bg-surface/60 px-4 py-6">
@@ -102,6 +107,13 @@ export default function DashboardLayout({
             </div>
           ))}
         </nav>
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="mt-6 rounded px-3 py-1.5 text-left text-sm text-muted transition hover:bg-surface-hover hover:text-gold-soft"
+        >
+          Sair
+        </button>
       </aside>
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-8">{children}</main>
     </div>
