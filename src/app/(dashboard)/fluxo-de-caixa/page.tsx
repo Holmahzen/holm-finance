@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { formatBRL } from "@/lib/format";
 import { SaldoPorConta, type ContaSaldo } from "@/components/SaldoPorConta";
 import { PrintButton } from "@/components/PrintButton";
@@ -11,6 +11,7 @@ type Movement = {
   label: string;
   cardName?: string | null;
   categoryName?: string | null;
+  planned?: boolean;
 };
 type CashFlowDay = {
   date: string;
@@ -48,7 +49,35 @@ type WeeklyBucket = {
 /** Fixado na carga do modulo: ler a data durante o render torna o componente impuro. */
 const AGORA = Date.now();
 
+type PlannedPurchase = {
+  id: string;
+  kind: string;
+  label: string;
+  amount: number;
+  dueDate: string;
+  installments: number;
+  parentId: string | null;
+};
+
+type PurchaseSuggestion = {
+  tecido: number;
+  aviamentos: number;
+  costuraPerTecido: number | null;
+  coveragePercent: number | null;
+  lowCoverage: boolean;
+} | null;
+
+type WithPlanned = {
+  days: CashFlowDay[];
+  endBalance: number;
+  lowestDay: { date: string; balance: number };
+  firstNegativeDay: CashFlowDay | null;
+};
+
 type CashFlowReport = {
+  plannedPurchases: PlannedPurchase[];
+  withPlanned: WithPlanned;
+  purchaseSuggestion: PurchaseSuggestion;
   startingBalance: number;
   accounts: ContaSaldo[];
   days: CashFlowDay[];
@@ -277,7 +306,12 @@ function MovementsList({ movements }: { movements: Movement[] }) {
         if (item.kind === "single") {
           const m = item.movement;
           return (
-            <li key={idx} className={m.amount >= 0 ? "text-emerald-400" : "text-red-400"}>
+            <li
+              key={idx}
+              className={
+                m.planned ? "text-amber-300 italic" : m.amount >= 0 ? "text-emerald-400" : "text-red-400"
+              }
+            >
               {m.label} ({m.amount >= 0 ? "+" : ""}
               {formatBRL(m.amount)})
             </li>
@@ -324,6 +358,352 @@ function MovementsList({ movements }: { movements: Movement[] }) {
   );
 }
 
+function addDaysISO(iso: string, days: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+function todayISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+const inputClass =
+  "rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none";
+
+function PlannedPurchasesPanel({
+  report,
+  includePlanned,
+  setIncludePlanned,
+  periodLabel,
+  onChanged,
+}: {
+  report: CashFlowReport;
+  includePlanned: boolean;
+  setIncludePlanned: (v: boolean) => void;
+  periodLabel: string;
+  onChanged: () => void;
+}) {
+  const [open, setOpen] = useState(report.plannedPurchases.length > 0);
+  const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
+  const [type, setType] = useState<"TECIDO" | "AVIAMENTOS" | "OUTRO">("TECIDO");
+  const [supplierId, setSupplierId] = useState("");
+  const [amount, setAmount] = useState("");
+  const [dueDate, setDueDate] = useState(() => addDaysISO(todayISO(), 7));
+  const [installments, setInstallments] = useState("1");
+  const [withCostura, setWithCostura] = useState(true);
+  const [costuraAmount, setCosturaAmount] = useState("");
+  const [costuraDate, setCosturaDate] = useState("");
+  const [costuraTouched, setCosturaTouched] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open || suppliers.length > 0) return;
+    fetch("/api/counterparties")
+      .then((r) => r.json())
+      .then((list: { id: string; name: string; isActive: boolean }[]) =>
+        setSuppliers(list.filter((c) => c.isActive)),
+      );
+  }, [open, suppliers.length]);
+
+  const ratio = report.purchaseSuggestion?.costuraPerTecido ?? null;
+  const suggestedCostura =
+    type === "TECIDO" && ratio !== null && Number(amount) > 0 ? (Number(amount) * ratio).toFixed(2) : "";
+  const costuraValue = costuraTouched ? costuraAmount : suggestedCostura;
+  const costuraDateValue = costuraDate || addDaysISO(dueDate, 15);
+  const sendCostura = type === "TECIDO" && withCostura && Number(costuraValue) > 0;
+
+  async function handleAdd(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    const res = await fetch("/api/planned-purchases", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type,
+        counterpartyId: supplierId || undefined,
+        amount,
+        dueDate,
+        installments,
+        costuraAmount: sendCostura ? costuraValue : undefined,
+        costuraDueDate: sendCostura ? costuraDateValue : undefined,
+      }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setError(typeof body.error === "string" ? body.error : "Não foi possível salvar a compra planejada.");
+      return;
+    }
+    setAmount("");
+    setCosturaAmount("");
+    setCosturaTouched(false);
+    setCosturaDate("");
+    setIncludePlanned(true);
+    onChanged();
+  }
+
+  async function handleRemove(id: string) {
+    await fetch(`/api/planned-purchases/${id}`, { method: "DELETE" });
+    onChanged();
+  }
+
+  async function handleConfirm(item: PlannedPurchase) {
+    const parcelas = item.installments > 1 ? ` em ${item.installments}x` : "";
+    if (
+      !confirm(
+        `Confirmar a compra "${item.label}" de ${formatBRL(item.amount)}${parcelas}? Ela vira lançamento pendente real. A costura estimada continua só como estimativa.`,
+      )
+    )
+      return;
+    const res = await fetch(`/api/planned-purchases/${item.id}/confirm`, { method: "POST" });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setError(typeof body.error === "string" ? body.error : "Não foi possível confirmar.");
+      return;
+    }
+    onChanged();
+  }
+
+  const planned = report.plannedPurchases;
+  const materials = planned.filter((p) => p.kind === "MATERIAL");
+  const orphanCostura = planned.filter((p) => p.kind === "COSTURA" && !materials.some((m) => m.id === p.parentId));
+  const realEnd = report.days[report.days.length - 1].runningBalance;
+  const negative = report.withPlanned.firstNegativeDay;
+  const sug = report.purchaseSuggestion;
+
+  return (
+    <div className="no-print flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
+      <button type="button" onClick={() => setOpen(!open)} className="flex items-center justify-between text-left">
+        <span className="font-serif text-lg text-foreground">
+          {open ? "▾" : "▸"} Planejar compra
+          {planned.length > 0 && <span className="ml-2 text-xs text-amber-300">{materials.length} planejada(s)</span>}
+        </span>
+        <span className="text-xs text-muted">simulação — não vira lançamento até você confirmar</span>
+      </button>
+
+      {open && (
+        <>
+          {sug && (
+            <div className="flex flex-wrap items-center gap-2 text-sm text-muted">
+              <span>
+                Reposição de 30 dias de vendas: tecido {formatBRL(sug.tecido)} · aviamentos {formatBRL(sug.aviamentos)}
+                {sug.lowCoverage && sug.coveragePercent !== null && (
+                  <> (baseado em {sug.coveragePercent.toFixed(0)}% das vendas com custo cadastrado)</>
+                )}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setType("TECIDO");
+                  setAmount(sug.tecido.toFixed(2));
+                  setCosturaTouched(false);
+                }}
+                className="text-xs font-medium text-gold hover:underline"
+              >
+                usar tecido
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setType("AVIAMENTOS");
+                  setAmount(sug.aviamentos.toFixed(2));
+                }}
+                className="text-xs font-medium text-gold hover:underline"
+              >
+                usar aviamentos
+              </button>
+            </div>
+          )}
+
+          <form onSubmit={handleAdd} className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted">Tipo</label>
+              <select value={type} onChange={(e) => setType(e.target.value as typeof type)} className={inputClass}>
+                <option value="TECIDO">Tecido</option>
+                <option value="AVIAMENTOS">Aviamentos</option>
+                <option value="OUTRO">Outro</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted">Fornecedor (opcional)</label>
+              <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className={`w-48 ${inputClass}`}>
+                <option value="">—</option>
+                {suppliers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted">Valor total (R$)</label>
+              <input
+                required
+                type="number"
+                step="0.01"
+                min={0}
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className={`w-32 ${inputClass}`}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted">Pagar em</label>
+              <input required type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={inputClass} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted">Parcelas</label>
+              <input
+                type="number"
+                min={1}
+                max={12}
+                value={installments}
+                onChange={(e) => setInstallments(e.target.value)}
+                className={`w-20 ${inputClass}`}
+              />
+            </div>
+            {type === "TECIDO" && (
+              <div className="flex flex-wrap items-end gap-3 rounded border border-border/60 px-3 py-2">
+                <label className="flex items-center gap-2 pb-1.5 text-sm text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={withCostura}
+                    onChange={(e) => setWithCostura(e.target.checked)}
+                    className="accent-gold"
+                  />
+                  Estimar costura
+                </label>
+                {withCostura && (
+                  <>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-medium text-muted">Costura (R$)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min={0}
+                        value={costuraValue}
+                        onChange={(e) => {
+                          setCosturaAmount(e.target.value);
+                          setCosturaTouched(true);
+                        }}
+                        className={`w-28 ${inputClass}`}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-medium text-muted">Pagar em (15 dias depois)</label>
+                      <input
+                        type="date"
+                        value={costuraDateValue}
+                        onChange={(e) => setCosturaDate(e.target.value)}
+                        className={inputClass}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded bg-gold px-4 py-1.5 text-sm font-medium text-black transition hover:bg-gold-soft disabled:opacity-50"
+            >
+              {saving ? "Salvando..." : "Planejar"}
+            </button>
+          </form>
+          {type === "TECIDO" && withCostura && ratio === null && (
+            <p className="text-xs text-muted">
+              Sem vendas recentes com custo de tecido cadastrado, então não consigo estimar a costura sozinho — preencha o valor.
+            </p>
+          )}
+          {error && <p className="text-sm text-red-400">{error}</p>}
+
+          {planned.length > 0 && (
+            <>
+              <ul className="flex flex-col gap-1.5 text-sm">
+                {materials.map((m) => {
+                  const child = planned.find((p) => p.parentId === m.id);
+                  return (
+                    <li key={m.id} className="flex flex-col gap-0.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-amber-300">
+                        <span>
+                          {m.label} — {formatBRL(m.amount)}
+                          {m.installments > 1 ? ` em ${m.installments}x` : ""} · a partir de {formatDate(m.dueDate)}
+                        </span>
+                        <span className="flex gap-3 text-xs">
+                          <button type="button" onClick={() => handleConfirm(m)} className="font-medium text-emerald-400 hover:underline">
+                            Confirmar
+                          </button>
+                          <button type="button" onClick={() => handleRemove(m.id)} className="font-medium text-red-400 hover:underline">
+                            Remover
+                          </button>
+                        </span>
+                      </div>
+                      {child && (
+                        <div className="ml-4 flex flex-wrap items-center justify-between gap-2 text-amber-300/80">
+                          <span>
+                            └ {child.label} — {formatBRL(child.amount)} · {formatDate(child.dueDate)}
+                          </span>
+                          <button type="button" onClick={() => handleRemove(child.id)} className="text-xs font-medium text-red-400 hover:underline">
+                            Remover
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+                {orphanCostura.map((c) => (
+                  <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 text-amber-300/80">
+                    <span>
+                      {c.label} (compra já confirmada) — {formatBRL(c.amount)} · {formatDate(c.dueDate)}
+                    </span>
+                    <button type="button" onClick={() => handleRemove(c.id)} className="text-xs font-medium text-red-400 hover:underline">
+                      Remover
+                    </button>
+                  </li>
+                ))}
+              </ul>
+
+              <label className="flex items-center gap-2 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  checked={includePlanned}
+                  onChange={(e) => setIncludePlanned(e.target.checked)}
+                  className="accent-gold"
+                />
+                Incluir no gráfico e nos movimentos
+              </label>
+
+              <div className="rounded border border-border/60 p-3 text-sm">
+                <p className="text-foreground">
+                  Saldo {periodLabel}: <span className="text-muted">{formatBRL(realEnd)}</span> →{" "}
+                  <span className={report.withPlanned.endBalance >= 0 ? "text-emerald-400" : "text-red-400"}>
+                    {formatBRL(report.withPlanned.endBalance)}
+                  </span>{" "}
+                  <span className="text-muted">(com as compras planejadas)</span>
+                </p>
+                <p className="text-muted">
+                  Menor saldo no período: {formatBRL(report.withPlanned.lowestDay.balance)} em{" "}
+                  {formatDate(report.withPlanned.lowestDay.date)}
+                </p>
+                {negative ? (
+                  <p className="text-red-400">
+                    ⚠ Não cabe: o saldo fica negativo em {formatDate(negative.date)} ({formatBRL(negative.runningBalance)}).
+                  </p>
+                ) : (
+                  <p className="text-emerald-400">✔ Cabe: o saldo não fica negativo em nenhum dia do período.</p>
+                )}
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function StatCard({
   label,
   value,
@@ -349,6 +729,8 @@ export default function CashFlowPage() {
   const [range, setRange] = useState<Range>(30);
   const [report, setReport] = useState<CashFlowReport | null>(null);
   const [loading, setLoading] = useState(true);
+  const [includePlanned, setIncludePlanned] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     setLoading(true);
@@ -359,17 +741,19 @@ export default function CashFlowPage() {
         setReport(data);
         setLoading(false);
       });
-  }, [range]);
+  }, [range, reloadKey]);
 
   // Frase usada nos textos ("as contas pendentes ...") — no modo "mês
   // vigente" o período tem um nome fixo em vez de "X dias".
   const periodPhrase = range === "month" ? "até o fim do mês" : `nos próximos ${range} dias`;
   const periodLabel = range === "month" ? "até o fim do mês" : `em ${range} dias`;
 
-  const daysWithMovement = report?.days.filter((d) => d.movements.length > 0) ?? [];
-  const lowestDay = report?.days.reduce(
+  const activeDays =
+    report && includePlanned && report.plannedPurchases.length > 0 ? report.withPlanned.days : report?.days;
+  const daysWithMovement = activeDays?.filter((d) => d.movements.length > 0) ?? [];
+  const lowestDay = activeDays?.reduce(
     (min, d) => (d.runningBalance < min.runningBalance ? d : min),
-    report.days[0],
+    activeDays[0],
   );
 
   return (
@@ -479,6 +863,14 @@ export default function CashFlowPage() {
             )}
           </div>
 
+          <PlannedPurchasesPanel
+            report={report}
+            includePlanned={includePlanned}
+            setIncludePlanned={setIncludePlanned}
+            periodLabel={periodLabel}
+            onChanged={() => setReloadKey((k) => k + 1)}
+          />
+
           {report.mlOutsideWindow > 0 && (
             <p className="text-xs text-muted">
               Além do que já está na projeção abaixo, tem mais {formatBRL(report.mlOutsideWindow)} do
@@ -508,8 +900,8 @@ export default function CashFlowPage() {
             <StatCard label="Saldo atual" value={formatBRL(report.startingBalance)} />
             <StatCard
               label={`Saldo projetado ${periodLabel}`}
-              value={formatBRL(report.days[report.days.length - 1].runningBalance)}
-              tone={report.days[report.days.length - 1].runningBalance >= 0 ? "positive" : "negative"}
+              value={formatBRL(activeDays![activeDays!.length - 1].runningBalance)}
+              tone={activeDays![activeDays!.length - 1].runningBalance >= 0 ? "positive" : "negative"}
             />
             <StatCard
               label="Menor saldo no período"
@@ -524,7 +916,7 @@ export default function CashFlowPage() {
             titulo="Saldo atual, por conta"
           />
 
-          <BalanceChart days={report.days} />
+          <BalanceChart days={activeDays!} />
 
           <WeeklyBreakdown buckets={report.weeklyBreakdown} />
 

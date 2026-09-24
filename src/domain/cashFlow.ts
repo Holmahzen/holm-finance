@@ -14,6 +14,8 @@ export type CashFlowMovement = {
    * quando vários lançamentos sem cartão do mesmo dia caem na mesma
    * categoria (ex.: "Materiais de Consumo"), em vez de uma linha por item. */
   categoryName?: string | null;
+  /** Compra planejada (simulação): só aparece na curva "com compras", nunca em nada real. */
+  planned?: boolean;
 };
 
 export type CashFlowDay = {

@@ -2,6 +2,7 @@ import { dashboardRepository } from "@/repositories/dashboardRepository";
 import { entryRepository } from "@/repositories/entryRepository";
 import { productRepository } from "@/repositories/productRepository";
 import { marketplaceSaleRepository } from "@/repositories/marketplaceSaleRepository";
+import { plannedPurchaseRepository } from "@/repositories/plannedPurchaseRepository";
 import { mercadoLivreReleaseService } from "@/services/mercadoLivreReleaseService";
 import {
   computeCashFlowProjection,
@@ -11,6 +12,7 @@ import {
 } from "@/domain/cashFlow";
 import { aggregateSalesBySku, isExcludedSaleStatus } from "@/domain/salesAggregation";
 import { computeCogsBySku, computeMaterialSpendSplit } from "@/domain/cogs";
+import { plannedPurchaseMovements, suggestPurchase } from "@/domain/plannedPurchase";
 import { todayUTCInBrazil } from "@/lib/today";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -33,7 +35,7 @@ export const cashFlowService = {
 
     const last30dStart = new Date(todayUTC.getTime() - 30 * MS_PER_DAY);
 
-    const [accounts, entries, mlReport, paidToday, recentSales, productCosts] = await Promise.all([
+    const [accounts, entries, mlReport, paidToday, recentSales, productCosts, plannedRows] = await Promise.all([
       dashboardRepository.getAccountBalances(),
       entryRepository.findMany({ status: "PENDING" }),
       mercadoLivreReleaseService.getReport(todayUTC),
@@ -43,6 +45,7 @@ export const cashFlowService = {
       }),
       marketplaceSaleRepository.findByPeriod(last30dStart, tomorrowUTC),
       productRepository.getProductCostsBySku(),
+      plannedPurchaseRepository.findMany(),
     ]);
 
     const startingBalance = accounts.reduce((sum, a) => sum + Number(a.balance), 0);
@@ -80,6 +83,30 @@ export const cashFlowService = {
 
     const projection = computeCashFlowProjection(startingBalance, movements, todayUTC, days);
     const firstNegativeDay = findFirstNegativeDay(projection);
+
+    // Compras planejadas: mesma curva com as saídas simuladas por cima. Fica
+    // separada de `movements` de propósito — nada disso entra em "pode gastar".
+    const plannedMovements = plannedPurchaseMovements(
+      plannedRows.map((p) => ({
+        kind: p.kind,
+        label: p.label,
+        amount: Number(p.amount),
+        dueDate: p.dueDate,
+        installments: p.installments,
+      })),
+      todayUTC,
+      windowEnd,
+    );
+    const projectionWithPlanned = computeCashFlowProjection(
+      startingBalance,
+      [...movements, ...plannedMovements],
+      todayUTC,
+      days,
+    );
+    const lowestWithPlanned = projectionWithPlanned.reduce(
+      (min, d) => (d.runningBalance < min.runningBalance ? d : min),
+      projectionWithPlanned[0],
+    );
 
     // Quanto dá pra gastar agora sem comprometer o que já está pendente pra
     // sair (inclusive custos fixos) nos próximos `days` dias — desconta só
@@ -133,6 +160,7 @@ export const cashFlowService = {
       estimatedAdditionalRevenue: dailyNetRevenuePace * bucket.days,
     }));
 
+    const purchaseSuggestion = suggestPurchase(cogs, MATERIAL_SPLIT_MIN_COVERAGE_PERCENT);
     const split = computeMaterialSpendSplit(cogs.tecido, cogs.aviamentos);
     const materialSplit =
       split === null
@@ -174,6 +202,22 @@ export const cashFlowService = {
       })),
       days: projection,
       firstNegativeDay,
+      plannedPurchases: plannedRows.map((p) => ({
+        id: p.id,
+        kind: p.kind,
+        label: p.label,
+        amount: Number(p.amount),
+        dueDate: p.dueDate.toISOString().slice(0, 10),
+        installments: p.installments,
+        parentId: p.parentId,
+      })),
+      withPlanned: {
+        days: projectionWithPlanned,
+        endBalance: projectionWithPlanned[projectionWithPlanned.length - 1].runningBalance,
+        lowestDay: { date: lowestWithPlanned.date, balance: lowestWithPlanned.runningBalance },
+        firstNegativeDay: findFirstNegativeDay(projectionWithPlanned),
+      },
+      purchaseSuggestion,
       mlOutsideWindow,
       realizedToday,
       safeToSpend,

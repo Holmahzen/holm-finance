@@ -895,3 +895,25 @@ model PgdasMonthlyRevenue {
 
   @@map("pgdas_monthly_revenues")
 }
+
+// Compra planejada (simulação no Fluxo de Caixa): sobrepõe saídas na curva
+// sem virar lançamento real. kind MATERIAL = tecido/aviamento/outro (pode
+// virar lançamento pendente via "Confirmar"); COSTURA = estimativa da costura
+// que essa compra vai gerar, ligada à compra por parentId e independente
+// depois que a compra é confirmada.
+model PlannedPurchase {
+  id             String            @id @default(cuid())
+  kind           String
+  label          String
+  categoryId     String?
+  counterpartyId String?
+  amount         Decimal           @db.Decimal(14, 2)
+  dueDate        DateTime
+  installments   Int               @default(1)
+  parentId       String?
+  parent         PlannedPurchase?  @relation("PlannedPurchaseChildren", fields: [parentId], references: [id], onDelete: SetNull)
+  children       PlannedPurchase[] @relation("PlannedPurchaseChildren")
+  createdAt      DateTime          @default(now())
+
+  @@map("planned_purchases")
+}
