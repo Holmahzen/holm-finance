@@ -110,3 +110,13 @@ export function computeFixedCostMonthlyAmount(
   );
   return occurrences.length * fc.amount;
 }
+
+/**
+ * Intervalo do DIA (UTC) de uma data de vencimento. Lançamentos antigos foram
+ * gravados às 03h UTC (meia-noite no Brasil) e os novos às 00h UTC; comparar o
+ * instante exato fazia o gerador não reconhecer os antigos e duplicá-los.
+ */
+export function dueDateDayRange(due: Date): { gte: Date; lt: Date } {
+  const start = new Date(Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate()));
+  return { gte: start, lt: new Date(start.getTime() + 24 * 60 * 60 * 1000) };
+}

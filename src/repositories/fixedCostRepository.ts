@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { dueDateDayRange } from "@/domain/fixedCostSchedule";
 import type { Prisma } from "@/generated/prisma/client";
 
 export const fixedCostRepository = {
@@ -33,7 +34,7 @@ export const fixedCostRepository = {
 
   /** Usada na geração: um custo fixo quinzenal/semanal gera mais de um lançamento por mês, então o dedup é por data exata, não só "existe algo nesse mês". */
   findEntryForDate(fixedCostId: string, dueDate: Date) {
-    return prisma.entry.findFirst({ where: { fixedCostId, dueDate } });
+    return prisma.entry.findFirst({ where: { fixedCostId, dueDate: dueDateDayRange(dueDate) } });
   },
 
   unlinkEntries(fixedCostId: string) {

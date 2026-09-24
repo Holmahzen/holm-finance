@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeFixedCostDueDates, computeFixedCostMonthlyAmount } from "@/domain/fixedCostSchedule";
+import { computeFixedCostDueDates, computeFixedCostMonthlyAmount, dueDateDayRange } from "@/domain/fixedCostSchedule";
 
 function isoDates(dates: Date[]) {
   return dates.map((d) => d.toISOString().slice(0, 10));
@@ -203,5 +203,17 @@ describe("computeFixedCostMonthlyAmount", () => {
       9,
     );
     expect(total).toBe(1500);
+  });
+});
+
+describe("dueDateDayRange", () => {
+  it("cobre lançamentos gravados às 00h UTC e às 03h UTC do mesmo dia, e nada além", () => {
+    const due = new Date(Date.UTC(2026, 9, 20));
+    const r = dueDateDayRange(due);
+    const inRange = (d: Date) => d >= r.gte && d < r.lt;
+    expect(inRange(new Date("2026-10-20T00:00:00.000Z"))).toBe(true);
+    expect(inRange(new Date("2026-10-20T03:00:00.000Z"))).toBe(true);
+    expect(inRange(new Date("2026-10-19T23:59:59.000Z"))).toBe(false);
+    expect(inRange(new Date("2026-10-21T00:00:00.000Z"))).toBe(false);
   });
 });
