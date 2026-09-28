@@ -723,7 +723,7 @@ function StatCard({
   );
 }
 
-type Range = 30 | 60 | 90 | "month";
+type Range = 15 | 30 | 60 | 90 | "month";
 
 export default function CashFlowPage() {
   const [range, setRange] = useState<Range>(30);
@@ -769,7 +769,7 @@ export default function CashFlowPage() {
         </div>
         <div className="flex items-center gap-3">
           <div className="no-print flex gap-1 rounded-lg border border-border bg-surface p-1">
-            {([30, 60, 90] as const).map((d) => (
+            {([15, 30, 60, 90] as const).map((d) => (
               <button
                 key={d}
                 type="button"
