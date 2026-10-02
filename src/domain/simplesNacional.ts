@@ -183,3 +183,23 @@ export function computeSimplesNacionalStatus(
     alertLevel: alertLevelFromPercent(Math.max(yearToDatePercentOfCeiling, projectedYearEndPercentOfCeiling ?? 0)),
   };
 }
+
+/** Categorias de receita que entram no caixa sem nota fiscal (hoje, o atacado). */
+export const UNBILLED_REVENUE_CATEGORY = /atacado/i;
+
+/**
+ * Soma a receita sem nota aos meses cuja receita veio de notas ou do PGDAS —
+ * para o Simples, faturamento é toda venda, com ou sem nota. Mês que caiu
+ * na DRE já contém essa receita (é o dinheiro que entrou), então não soma
+ * de novo.
+ */
+export function addUnbilledRevenue(
+  monthly: SourcedMonthlyRevenue[],
+  unbilledByMonth: Record<string, number>,
+): SourcedMonthlyRevenue[] {
+  return monthly.map((m) => {
+    if (m.source === "dre") return m;
+    const key = `${m.year}-${String(m.month).padStart(2, "0")}`;
+    return { ...m, revenue: m.revenue + (unbilledByMonth[key] ?? 0) };
+  });
+}

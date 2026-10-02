@@ -45,6 +45,7 @@ describe("servidor MCP", () => {
       "recebiveis_mercado_livre",
       "resumo_do_mes",
       "saude_financeira",
+      "simples_nacional",
     ]);
     for (const t of tools) {
       expect(t.annotations?.readOnlyHint, t.name).toBe(true);

@@ -12,6 +12,7 @@ import { healthService } from "@/services/healthService";
 import { monthChecklistService } from "@/services/monthChecklistService";
 import { productReturnsService } from "@/services/productReturnsService";
 import { channelMarginService } from "@/services/channelMarginService";
+import { simplesNacionalService } from "@/services/simplesNacionalService";
 import { todayUTCInBrazil } from "@/lib/today";
 
 /**
@@ -221,6 +222,18 @@ export function buildMcpServer(): McpServer {
       const limit = produtos ?? 15;
       return json({ ...report, channels: report.channels.map((c) => ({ ...c, products: c.products.slice(0, limit), totalProducts: c.products.length })) });
     },
+  );
+
+  server.registerTool(
+    "simples_nacional",
+    {
+      title: "Simples Nacional — teto e sublimite",
+      description:
+        "Faturamento do ano (pelas notas/PGDAS e também com a receita sem nota do atacado), projeção pra dezembro, marcos do sublimite (R$ 3,6 mi), sublimite + 20%, teto (R$ 4,8 mi) e teto + 20%, RBT12 e DAS por tributo dos extratos.",
+      inputSchema: {},
+      annotations: readOnly,
+    },
+    async () => json(await simplesNacionalService.getReport()),
   );
 
   server.registerTool(

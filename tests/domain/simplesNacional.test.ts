@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeTrailingMonths, computeSimplesNacionalStatus, pickMonthlyRevenues } from "@/domain/simplesNacional";
+import { addUnbilledRevenue, computeTrailingMonths, computeSimplesNacionalStatus, pickMonthlyRevenues } from "@/domain/simplesNacional";
 
 describe("pickMonthlyRevenues", () => {
   const months = [
@@ -154,5 +154,19 @@ describe("computeSimplesNacionalStatus", () => {
     const monthlyRevenues = [{ year: 2026, month: 9, revenue: ceiling * 0.5 }];
     const status = computeSimplesNacionalStatus(monthlyRevenues, 2026, 9, ceiling);
     expect(status.alertLevel).toBe("ok");
+  });
+});
+
+describe("addUnbilledRevenue", () => {
+  it("soma a receita sem nota aos meses de notas/PGDAS, mas não aos que vieram da DRE", () => {
+    const result = addUnbilledRevenue(
+      [
+        { year: 2026, month: 8, revenue: 400_000, source: "pgdas" },
+        { year: 2026, month: 9, revenue: 450_000, source: "notas" },
+        { year: 2026, month: 10, revenue: 50_000, source: "dre" },
+      ],
+      { "2026-08": 40_000, "2026-09": 44_000, "2026-10": 10_000 },
+    );
+    expect(result.map((m) => m.revenue)).toEqual([440_000, 494_000, 50_000]);
   });
 });

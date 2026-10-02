@@ -61,6 +61,26 @@ type Report = {
     icmsBlocked: boolean | null;
   } | null;
   apuracoes: Apuracao[];
+  unbilled: {
+    byMonth: { year: number; month: number; revenue: number }[];
+    total12m: number;
+    status: StatusBlock;
+  } | null;
+};
+
+function milestoneWhen(m: Milestone | undefined) {
+  if (!m || m.month === null) return <span className="text-muted">não chega este ano</span>;
+  if (m.projected) return <span className="text-amber-300">previsto em {MONTHS[m.month - 1]}</span>;
+  return <span className="font-medium text-red-400">passou em {MONTHS[m.month - 1]}</span>;
+}
+
+type StatusBlock = {
+  yearToDate: number;
+  yearToDatePercentOfCeiling: number;
+  projectedYearEnd: number | null;
+  projectedYearEndPercentOfCeiling: number | null;
+  milestones: Milestone[];
+  alertLevel: AlertLevel;
 };
 
 type Milestone = {
@@ -372,6 +392,49 @@ export default function SimplesNacionalPage() {
             </p>
           </div>
 
+          {report.unbilled && (
+            <div className={`rounded-lg border p-4 ${ALERT_STYLES[report.unbilled.status.alertLevel].border} ${ALERT_STYLES[report.unbilled.status.alertLevel].bg}`}>
+              <div className="flex flex-wrap items-end justify-between gap-4">
+                <div>
+                  <span className={`text-xs font-medium tracking-wide uppercase ${ALERT_STYLES[report.unbilled.status.alertLevel].text}`}>
+                    Faturamento real em {report.period.year} — com a receita sem nota
+                  </span>
+                  <p className={`font-serif text-3xl ${ALERT_STYLES[report.unbilled.status.alertLevel].text}`}>
+                    {formatBRL(report.unbilled.status.yearToDate)}
+                  </p>
+                  <p className="text-xs text-muted">
+                    {report.unbilled.status.yearToDatePercentOfCeiling.toFixed(1)}% do teto · {formatBRL(report.unbilled.status.yearToDate - report.yearToDate)} a mais
+                    que o das notas
+                  </p>
+                </div>
+                {report.unbilled.status.projectedYearEnd !== null && (
+                  <div className="text-right">
+                    <span className={`text-xs font-medium tracking-wide uppercase ${ALERT_STYLES[report.unbilled.status.alertLevel].text}`}>
+                      {ALERT_LABEL[report.unbilled.status.alertLevel]}
+                    </span>
+                    <p className={`font-serif text-3xl ${ALERT_STYLES[report.unbilled.status.alertLevel].text}`}>
+                      {formatBRL(report.unbilled.status.projectedYearEnd)}
+                    </p>
+                    <p className="text-xs text-muted">
+                      projeção pra dezembro · {report.unbilled.status.projectedYearEndPercentOfCeiling?.toFixed(1)}% do teto
+                    </p>
+                  </div>
+                )}
+              </div>
+              <div className="mt-3">
+                <ProgressBar
+                  percent={report.unbilled.status.yearToDatePercentOfCeiling}
+                  colorClass={ALERT_STYLES[report.unbilled.status.alertLevel].bar}
+                />
+              </div>
+              <p className="mt-2 text-xs text-muted">
+                Soma ao faturamento das notas o que entrou nos lançamentos de Receita Atacado, que é vendido sem nota
+                ({formatBRL(report.unbilled.total12m)} nos últimos 12 meses). Para o Simples, faturamento é toda venda,
+                com ou sem nota — este é o número a levar ao contador.
+              </p>
+            </div>
+          )}
+
           <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4">
             <h2 className="font-serif text-lg text-foreground">Marcos do ano</h2>
             <p className="text-xs text-muted">
@@ -384,7 +447,8 @@ export default function SimplesNacionalPage() {
                   <tr className="border-b border-border text-muted">
                     <th className="py-2 font-medium">Marco</th>
                     <th className="py-2 text-right font-medium">Valor</th>
-                    <th className="py-2 pl-4 font-medium">Quando</th>
+                    <th className="py-2 pl-4 font-medium">{report.unbilled ? "Só com notas" : "Quando"}</th>
+                    {report.unbilled && <th className="py-2 pl-4 font-medium">Com a receita sem nota</th>}
                     <th className="py-2 pl-4 font-medium">O que acontece</th>
                   </tr>
                 </thead>
@@ -393,17 +457,12 @@ export default function SimplesNacionalPage() {
                     <tr key={m.key} className="border-b border-border/50 align-top">
                       <td className="py-2 text-foreground">{MILESTONE_TEXT[m.key].label}</td>
                       <td className="py-2 text-right tabular-nums text-foreground">{formatBRL(m.value)}</td>
-                      <td className="py-2 pl-4 whitespace-nowrap">
-                        {m.month === null ? (
-                          <span className="text-muted">não chega este ano</span>
-                        ) : m.projected ? (
-                          <span className="text-amber-300">
-                            previsto em {MONTHS[m.month - 1]}
-                          </span>
-                        ) : (
-                          <span className="font-medium text-red-400">passou em {MONTHS[m.month - 1]}</span>
-                        )}
-                      </td>
+                      <td className="py-2 pl-4 whitespace-nowrap">{milestoneWhen(m)}</td>
+                      {report.unbilled && (
+                        <td className="py-2 pl-4 whitespace-nowrap">
+                          {milestoneWhen(report.unbilled.status.milestones.find((u) => u.key === m.key))}
+                        </td>
+                      )}
                       <td className="py-2 pl-4 text-muted">{MILESTONE_TEXT[m.key].consequence}</td>
                     </tr>
                   ))}
@@ -502,6 +561,7 @@ export default function SimplesNacionalPage() {
                 <tr className="border-b border-border text-muted">
                   <th className="py-2 font-medium">Mês</th>
                   <th className="py-2 font-medium">Receita bruta</th>
+                  {report.unbilled && <th className="py-2 font-medium">Sem nota (atacado)</th>}
                   <th className="py-2 font-medium">Fonte</th>
                 </tr>
               </thead>
@@ -517,6 +577,14 @@ export default function SimplesNacionalPage() {
                       )}
                     </td>
                     <td className="py-2 text-foreground">{formatBRL(m.revenue)}</td>
+                    {report.unbilled && (
+                      <td className="py-2 text-amber-300">
+                        {(() => {
+                          const u = report.unbilled.byMonth.find((b) => b.year === m.year && b.month === m.month)?.revenue ?? 0;
+                          return u > 0 ? formatBRL(u) : <span className="text-muted">—</span>;
+                        })()}
+                      </td>
+                    )}
                     <td className="py-2">
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs ${SOURCE_BADGE[m.source].className}`}
