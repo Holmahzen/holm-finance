@@ -9,12 +9,42 @@ import {
   computeBreakEven,
   computeEstimatedProfit,
 } from "@/domain/breakEven";
-import { computeMonthRevenueProjection, computeProjectedBreakEvenDay } from "@/domain/projections";
+import { computeMonthRevenueProjectionWithFallback, computeProjectedBreakEvenDay } from "@/domain/projections";
 import { computeInsights } from "@/domain/insights";
 import { aggregateSalesBySku } from "@/domain/salesAggregation";
 import { computeDaysRemainingInMonth, computeDailyGoal } from "@/domain/cashReserve";
 import { computeFixedCostMonthlyAmount } from "@/domain/fixedCostSchedule";
 import { todayUTCInBrazil } from "@/lib/today";
+
+const MARGIN_BASE_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+type SaleRow = Awaited<ReturnType<typeof marketplaceSaleRepository.findByPeriod>>[number];
+
+function toAggregateInput(sales: SaleRow[]) {
+  return sales.map((s) => ({
+    sku: s.sku,
+    productName: s.productName,
+    quantity: s.quantity,
+    grossRevenue: Number(s.grossRevenue),
+    netRevenue: Number(s.netRevenue),
+    marketplaceCost: Number(s.marketplaceCost),
+    status: s.status,
+    shippingModality: s.shippingModality,
+  }));
+}
+
+/**
+ * Ritmo diário da janela-base. Divide pelos dias que de fato têm venda
+ * importada (do início da janela até a última venda), não pelos 30 — se a
+ * última importação foi há uma semana, dividir por 30 subestimaria o ritmo.
+ */
+function dailyPaceOf(sales: SaleRow[], revenue: number, start: Date): number | null {
+  if (sales.length === 0) return null;
+  const lastSale = Math.max(...sales.map((s) => s.saleDate.getTime()));
+  const coveredDays = Math.min(MARGIN_BASE_DAYS, Math.max(1, Math.floor((lastSale - start.getTime()) / DAY_MS) + 1));
+  return revenue / coveredDays;
+}
 
 export const breakEvenService = {
   async getReport(year?: number, month?: number) {
@@ -23,10 +53,19 @@ export const breakEvenService = {
     const m = month ?? now.getUTCMonth() + 1;
     const monthStart = new Date(y, m - 1, 1);
     const monthEnd = new Date(y, m, 1);
+    const isCurrentPeriod = y === now.getUTCFullYear() && m === now.getUTCMonth() + 1;
 
-    const [products, sales, fixedCosts, flow, settings, productCosts] = await Promise.all([
+    // A margem e o mix de produtos saem de uma janela que represente um mês
+    // de venda: no mês corrente, os últimos 30 dias completos (no dia 2 o mês
+    // tem 1–2 dias de venda, e a margem e o "lucro estimado" saíam disso); em
+    // mês passado, o próprio mês.
+    const marginBaseStart = isCurrentPeriod ? new Date(now.getTime() - MARGIN_BASE_DAYS * DAY_MS) : monthStart;
+    const marginBaseEnd = isCurrentPeriod ? now : monthEnd;
+
+    const [products, monthSales, baseSales, fixedCosts, flow, settings, productCosts] = await Promise.all([
       productRepository.findActive(),
       marketplaceSaleRepository.findByPeriod(monthStart, monthEnd),
+      isCurrentPeriod ? marketplaceSaleRepository.findByPeriod(marginBaseStart, marginBaseEnd) : null,
       fixedCostRepository.findActive(),
       dashboardRepository.getMonthlyFlow(monthStart, monthEnd),
       breakEvenSettingsService.get(),
@@ -42,18 +81,8 @@ export const breakEvenService = {
       0,
     );
 
-    const skuAggregates = aggregateSalesBySku(
-      sales.map((s) => ({
-        sku: s.sku,
-        productName: s.productName,
-        quantity: s.quantity,
-        grossRevenue: Number(s.grossRevenue),
-        netRevenue: Number(s.netRevenue),
-        marketplaceCost: Number(s.marketplaceCost),
-        status: s.status,
-        shippingModality: s.shippingModality,
-      })),
-    );
+    const sales = baseSales ?? monthSales;
+    const skuAggregates = aggregateSalesBySku(toAggregateInput(sales));
 
     // Quando há vendas importadas no período, elas mandam nos números (dado
     // real, por SKU). Sem vendas nesse mês, cai pro cadastro manual em
@@ -91,10 +120,12 @@ export const breakEvenService = {
             ...computeProductMargin(p),
           }));
 
+    const monthAggregates = baseSales ? aggregateSalesBySku(toAggregateInput(monthSales)) : skuAggregates;
     const actualRevenueThisMonth =
       dataSource === "vendas"
-        ? skuAggregates.reduce((sum, s) => sum + s.grossRevenue, 0)
+        ? monthAggregates.reduce((sum, s) => sum + s.grossRevenue, 0)
         : Number(flow.inflow);
+    const marginBaseRevenue = skuAggregates.reduce((sum, s) => sum + s.grossRevenue, 0);
 
     const ranked = [...productsWithMargin].sort((a, b) => b.marginPercent - a.marginPercent);
     const top10 = ranked.slice(0, 10);
@@ -112,23 +143,30 @@ export const breakEvenService = {
         ? actualRevenueThisMonth - breakEven.breakEvenRevenue
         : null;
 
-    const estimatedProfit = computeEstimatedProfit(
-      actualRevenueThisMonth,
-      breakEven.weightedMarginPercent,
-      fixedCostsTotal,
-    );
-
     const negativeMarginProducts = productsWithMargin
       .filter((p) => p.marginValue < 0)
       .map((p) => ({ name: p.name }));
 
-    const isCurrentPeriod = y === now.getUTCFullYear() && m === now.getUTCMonth() + 1;
     const daysInMonth = new Date(y, m, 0).getDate();
     const daysElapsed = isCurrentPeriod ? now.getUTCDate() : 0;
 
     const projection = isCurrentPeriod
-      ? computeMonthRevenueProjection(actualRevenueThisMonth, daysElapsed, daysInMonth)
+      ? computeMonthRevenueProjectionWithFallback(
+          actualRevenueThisMonth,
+          daysElapsed,
+          daysInMonth,
+          baseSales && dataSource === "vendas" ? dailyPaceOf(baseSales, marginBaseRevenue, marginBaseStart) : null,
+        )
       : null;
+
+    // Mês corrente: lucro do mês inteiro, pelo faturamento projetado — e não
+    // o faturado até hoje contra o custo fixo do mês todo, que dá prejuízo
+    // em qualquer começo de mês.
+    const estimatedProfit = computeEstimatedProfit(
+      projection?.projectedRevenue ?? actualRevenueThisMonth,
+      breakEven.weightedMarginPercent,
+      fixedCostsTotal,
+    );
 
     const projectedBreakEvenDay = projection
       ? computeProjectedBreakEvenDay(breakEven.breakEvenRevenue, projection.dailyPace, daysInMonth)
@@ -178,6 +216,9 @@ export const breakEvenService = {
       dailyRevenueGoal,
       insights,
       dataSource,
+      marginBase: baseSales
+        ? { kind: "ultimos30dias" as const, start: marginBaseStart.toISOString(), end: marginBaseEnd.toISOString() }
+        : { kind: "mes" as const, start: monthStart.toISOString(), end: monthEnd.toISOString() },
       productionCostMatchedSkus: dataSource === "vendas" ? productionCostMatchedSkus : null,
       productionCostUnmatchedSkus: dataSource === "vendas" ? productionCostUnmatchedSkus : null,
     };

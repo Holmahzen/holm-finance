@@ -53,6 +53,7 @@ type BreakEvenReport = {
   dailyRevenueGoal: number | null;
   insights: BreakEvenInsight[];
   dataSource: "vendas" | "produtos";
+  marginBase: { kind: "ultimos30dias" | "mes"; start: string; end: string };
   productionCostMatchedSkus: number | null;
   productionCostUnmatchedSkus: number | null;
 };
@@ -99,8 +100,9 @@ function WhatIfSimulator({ report }: { report: BreakEvenReport }) {
   const excedente =
     targets?.breakEvenRevenue != null ? report.actualRevenueThisMonth - targets.breakEvenRevenue : null;
 
+  const revenueForProfit = report.projection?.projectedRevenue ?? report.actualRevenueThisMonth;
   const lucroEstimado = valid
-    ? computeEstimatedProfit(report.actualRevenueThisMonth, report.breakEven.weightedMarginPercent, fixedCosts)
+    ? computeEstimatedProfit(revenueForProfit, report.breakEven.weightedMarginPercent, fixedCosts)
     : null;
 
   return (
@@ -109,7 +111,7 @@ function WhatIfSimulator({ report }: { report: BreakEvenReport }) {
         <h2 className="font-serif text-lg text-foreground">Simulador — e se o custo fixo fosse outro?</h2>
         <p className="text-sm text-muted">
           Mantendo a margem de contribuição ({report.breakEven.weightedMarginPercent !== null ? `${(report.breakEven.weightedMarginPercent * 100).toFixed(1)}%` : "—"}) e o
-          faturamento atual ({formatBRL(report.actualRevenueThisMonth)}), veja o impacto de um
+          faturamento {report.projection ? "projetado do mês" : "do mês"} ({formatBRL(revenueForProfit)}), veja o impacto de um
           custo fixo diferente. É só uma simulação — não altera seus custos fixos reais.
         </p>
       </div>
@@ -255,7 +257,8 @@ function ManagementSummary({ report, monthLabel }: { report: BreakEvenReport; mo
     <div className="rounded-lg border border-border bg-surface p-4">
       <h2 className="mb-1 font-serif text-lg text-foreground">Resumo gerencial</h2>
       <p className="text-sm leading-relaxed text-foreground">
-        Em {monthLabel}, sua margem de contribuição média ponderada está em{" "}
+        {report.marginBase.kind === "ultimos30dias" ? "Nos últimos 30 dias" : `Em ${monthLabel}`}, sua margem
+        de contribuição média ponderada está em{" "}
         <span className="font-medium text-gold">{(margin * 100).toFixed(1)}%</span>
         {markup !== null && (
           <>
@@ -272,7 +275,7 @@ function ManagementSummary({ report, monthLabel }: { report: BreakEvenReport; mo
             (cerca de <span className="font-medium text-gold">{Math.ceil(units)} unidades</span>)
           </>
         )}{" "}
-        no mês pra cobrir tudo. Até agora você faturou{" "}
+        no mês pra cobrir tudo. Em {monthLabel}, até agora, você faturou{" "}
         <span className="font-medium">{formatBRL(report.actualRevenueThisMonth)}</span>, e{" "}
         <span className={`font-medium ${reached ? "text-emerald-400" : "text-amber-400"}`}>
           {reached
@@ -283,8 +286,9 @@ function ManagementSummary({ report, monthLabel }: { report: BreakEvenReport; mo
         {report.estimatedProfit !== null && (
           <>
             {" "}
-            O lucro estimado do período, considerando essa margem média sobre o faturamento real, é
-            de{" "}
+            {report.projection
+              ? `O lucro estimado do mês, aplicando essa margem ao faturamento projetado (${formatBRL(report.projection.projectedRevenue)}), é de `
+              : "O lucro estimado do período, considerando essa margem média sobre o faturamento real, é de "}
             <span
               className={`font-medium ${report.estimatedProfit >= 0 ? "text-emerald-400" : "text-red-400"}`}
             >
@@ -296,6 +300,15 @@ function ManagementSummary({ report, monthLabel }: { report: BreakEvenReport; mo
       </p>
     </div>
   );
+}
+
+/** ISO "2026-09-02T00:00:00.000Z" → "02/09". */
+function formatDayMonth(iso: string): string {
+  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+}
+
+function previousDay(iso: string): string {
+  return new Date(new Date(iso).getTime() - 24 * 60 * 60 * 1000).toISOString();
 }
 
 const MONTH_NAMES = [
@@ -415,6 +428,16 @@ export default function BreakEvenPage() {
                   Vendas
                 </a>{" "}
                 (quantidade e receita reais por SKU).
+                {report.marginBase.kind === "ultimos30dias" && (
+                  <>
+                    {" "}
+                    Margem, mix de produtos e ritmo de venda usam os últimos 30 dias (
+                    {formatDayMonth(report.marginBase.start)} a {formatDayMonth(previousDay(report.marginBase.end))}),
+                    pra não depender só dos primeiros dias do mês.
+                  </>
+                )}{" "}
+                A margem já desconta imposto, tarifa e frete (como no Mercado Turbo) e o custo de produção, mas
+                não Ads, custo do Full nem devoluções — por isso fica alguns pontos acima da margem da DRE.
               </>
             ) : (
               <>

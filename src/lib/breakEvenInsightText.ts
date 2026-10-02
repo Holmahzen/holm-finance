@@ -29,7 +29,7 @@ export function breakEvenInsightText(insight: BreakEvenInsight): string {
       return `${insight.count} produto(s) com margem de contribuição negativa: ${names}${extra}. Cada venda desses produtos gera prejuízo — revise preço ou custo em Produtos.`;
     }
     case "negative_estimated_profit":
-      return `O lucro estimado do período está negativo (${formatBRL(insight.estimatedProfit)}) — os custos fixos ainda não estão sendo cobertos pela margem gerada pelo faturamento atual.`;
+      return `O lucro estimado do mês está negativo (${formatBRL(insight.estimatedProfit)}) — no ritmo atual, a margem não cobre os custos fixos.`;
     case "projection_below_break_even":
       return `No ritmo atual de vendas, a projeção é fechar o mês em ${formatBRL(insight.projectedRevenue)} — abaixo do ponto de equilíbrio (${formatBRL(insight.breakEvenRevenue)}).`;
     case "break_even_reached":

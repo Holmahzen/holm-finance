@@ -21,6 +21,34 @@ export function computeMonthRevenueProjection(
   return { daysElapsed, daysInMonth, dailyPace, projectedRevenue };
 }
 
+/** Antes disso, o ritmo do mês corrente é amostra pequena demais pra projetar sozinho. */
+export const MIN_DAYS_FOR_MONTH_PACE = 7;
+
+/**
+ * Igual a `computeMonthRevenueProjection`, mas nos primeiros dias do mês
+ * (menos de `MIN_DAYS_FOR_MONTH_PACE`) usa um ritmo de referência — ex.: o
+ * dos últimos 30 dias — pros dias que faltam, somado ao que já foi faturado.
+ * Sem isso, no dia 2 o mês é projetado a partir de 1–2 dias de venda.
+ */
+export function computeMonthRevenueProjectionWithFallback(
+  actualRevenue: number,
+  daysElapsed: number,
+  daysInMonth: number,
+  fallbackDailyPace: number | null,
+): RevenueProjection | null {
+  if (daysElapsed >= MIN_DAYS_FOR_MONTH_PACE || fallbackDailyPace === null || fallbackDailyPace <= 0) {
+    return computeMonthRevenueProjection(actualRevenue, daysElapsed, daysInMonth);
+  }
+  if (daysInMonth <= 0) return null;
+  const remainingDays = Math.max(0, daysInMonth - daysElapsed);
+  return {
+    daysElapsed,
+    daysInMonth,
+    dailyPace: fallbackDailyPace,
+    projectedRevenue: actualRevenue + fallbackDailyPace * remainingDays,
+  };
+}
+
 /**
  * Em que dia do mês o ponto de equilíbrio deve ser atingido, no ritmo diário
  * atual. `null` quando não há ritmo positivo ou quando o ritmo atual não

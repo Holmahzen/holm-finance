@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { computeMonthRevenueProjection, computeProjectedBreakEvenDay } from "@/domain/projections";
+import {
+  computeMonthRevenueProjection,
+  computeMonthRevenueProjectionWithFallback,
+  computeProjectedBreakEvenDay,
+} from "@/domain/projections";
 
 describe("computeMonthRevenueProjection", () => {
   it("projects month-end revenue from the daily pace so far", () => {
@@ -30,5 +34,25 @@ describe("computeProjectedBreakEvenDay", () => {
     expect(computeProjectedBreakEvenDay(null, 500, 30)).toBeNull();
     expect(computeProjectedBreakEvenDay(5000, 0, 30)).toBeNull();
     expect(computeProjectedBreakEvenDay(5000, -10, 30)).toBeNull();
+  });
+});
+
+describe("computeMonthRevenueProjectionWithFallback", () => {
+  it("nos primeiros dias usa o ritmo de referência pros dias que faltam", () => {
+    // dia 2 de outubro: R$ 30 mil faturados, ritmo dos últimos 30 dias R$ 15 mil/dia
+    const p = computeMonthRevenueProjectionWithFallback(30_000, 2, 31, 15_000);
+    expect(p?.dailyPace).toBe(15_000);
+    expect(p?.projectedRevenue).toBe(30_000 + 15_000 * 29);
+  });
+
+  it("a partir do 7º dia usa o ritmo do próprio mês", () => {
+    const p = computeMonthRevenueProjectionWithFallback(70_000, 7, 30, 15_000);
+    expect(p).toEqual(computeMonthRevenueProjection(70_000, 7, 30));
+  });
+
+  it("sem ritmo de referência cai na projeção do próprio mês", () => {
+    expect(computeMonthRevenueProjectionWithFallback(30_000, 2, 31, null)).toEqual(
+      computeMonthRevenueProjection(30_000, 2, 31),
+    );
   });
 });
