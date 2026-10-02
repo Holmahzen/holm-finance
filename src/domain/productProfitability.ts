@@ -84,6 +84,18 @@ export type SkuProfitability = SkuAbc & {
    * de forma útil (contribuição zero ou negativa: o produto já é
    * deficitário sem nem contar Ads, um problema diferente). */
   adSharePercent: number | null;
+  /** Receita das vendas que o Mercado Ads atribuiu ao anúncio, rateada entre os
+   * SKUs do anúncio como o investimento. */
+  adRevenue: number;
+  /** ACOS: investimento ÷ venda que veio do Ads — a eficiência da campanha
+   * (é o número do painel do Mercado Ads). null sem investimento ou sem venda
+   * atribuída. Como investimento e venda são rateados na mesma proporção, é o
+   * ACOS do anúncio. */
+  acos: number | null;
+  /** TACOS: investimento ÷ receita TOTAL do SKU — quanto da venda o Ads
+   * consome. É ele que se compara com a margem antes de Ads: TACOS ≥ margem
+   * = o Ads come todo o lucro do produto. */
+  tacos: number | null;
   /** Custos do Mercado Livre Full atribuídos a esse SKU no período (coleta +
    * armazenamento prolongado + retirada de estoque) — 0 quando não há
    * relatório de tarifas Full importado, ou o SKU não teve custo Full nesse
@@ -110,6 +122,7 @@ export function buildProfitabilityReport(
   marginThreshold?: number,
   adSpendBySku: Map<string, number> = new Map(),
   fullCostBySku: Map<string, number> = new Map(),
+  adRevenueBySku: Map<string, number> = new Map(),
 ): { rows: SkuProfitability[]; suggestedMarginThreshold: number } {
   const abc = classifyAbc(skus);
 
@@ -131,6 +144,7 @@ export function buildProfitabilityReport(
     const contribution = marginValue * s.quantity;
     const adSpend = adSpendBySku.get(s.sku) ?? 0;
     const fullCost = fullCostBySku.get(s.sku) ?? 0;
+    const adRevenue = adRevenueBySku.get(s.sku) ?? 0;
     return {
       ...s,
       hasCost,
@@ -140,6 +154,9 @@ export function buildProfitabilityReport(
       adSpend,
       contributionAfterAds: contribution - adSpend,
       adSharePercent: contribution > 0 ? adSpend / contribution : null,
+      adRevenue,
+      acos: adSpend > 0 && adRevenue > 0 ? adSpend / adRevenue : null,
+      tacos: adSpend > 0 && s.grossRevenue > 0 ? adSpend / s.grossRevenue : null,
       fullCost,
       contributionFinal: contribution - adSpend - fullCost,
       quadrant: classifyQuadrant(s.tier, marginPercent, hasCost, threshold),

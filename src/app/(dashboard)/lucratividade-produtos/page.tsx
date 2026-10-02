@@ -24,6 +24,9 @@ type Row = {
   adSpend: number;
   contributionAfterAds: number;
   adSharePercent: number | null;
+  adRevenue: number;
+  acos: number | null;
+  tacos: number | null;
   fullCost: number;
   contributionFinal: number;
 };
@@ -72,6 +75,18 @@ const MONTH_NAMES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "se
 
 const AD_SHARE_HIGH = 0.4;
 const AD_SHARE_LOW = 0.15;
+
+/**
+ * TACOS contra a margem antes de Ads: vermelho quando o Ads come metade ou
+ * mais da margem do produto, amarelo a partir de um quarto.
+ */
+function tacosColor(r: { tacos: number | null; marginPercent: number; hasCost: boolean }): string {
+  if (r.tacos === null) return "text-muted";
+  if (!r.hasCost) return "text-foreground";
+  if (r.marginPercent <= 0 || r.tacos >= r.marginPercent * 0.5) return "text-red-400";
+  if (r.tacos >= r.marginPercent * 0.25) return "text-amber-300";
+  return "text-emerald-400";
+}
 
 function adShareColor(fraction: number): string {
   if (fraction >= AD_SHARE_HIGH) return "text-red-400";
@@ -170,8 +185,8 @@ export default function ProductProfitabilityPage() {
 
   const adEfficiencyRows = useMemo(() => {
     return rows
-      .filter((r) => r.adSpend > 0 && r.adSharePercent !== null)
-      .sort((a, b) => (b.adSharePercent ?? 0) - (a.adSharePercent ?? 0));
+      .filter((r) => r.adSpend > 0)
+      .sort((a, b) => (b.tacos ?? 0) - (a.tacos ?? 0));
   }, [rows]);
 
   return (
@@ -318,19 +333,27 @@ export default function ProductProfitabilityPage() {
             <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4">
               <h2 className="font-serif text-lg text-foreground">Eficiência de Ads por SKU</h2>
               <p className="max-w-prose text-xs text-muted">
-                Ordenado pela fatia da contribuição que o Ads comeu no período —{" "}
-                <span className="text-red-400">vermelho</span> ({pct(AD_SHARE_HIGH)}+) é candidato a
-                pausar ou reduzir o investimento; <span className="text-emerald-400">verde</span> (abaixo
-                de {pct(AD_SHARE_LOW)}) converte bem gastando pouco e aguenta mais verba.
+                <strong className="text-foreground">ACOS</strong> = investimento ÷ venda que veio do Ads (o
+                número do painel do Mercado Ads). <strong className="text-foreground">TACOS</strong> =
+                investimento ÷ venda total do produto — quanto da venda o Ads consome. Compare o TACOS com a
+                margem antes de Ads: <span className="text-red-400">vermelho</span> quando o Ads come metade
+                ou mais da margem, <span className="text-amber-300">amarelo</span> a partir de um quarto. O
+                ACOS máximo de uma campanha é a margem antes de Ads menos a margem que você quer guardar. O
+                relatório de Ads é por anúncio: os tamanhos do mesmo anúncio dividem o gasto pela receita de
+                cada um. Ordenado pelo TACOS.
               </p>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[700px] text-left text-sm">
+                <table className="w-full min-w-[1000px] text-left text-sm">
                   <thead>
                     <tr className="border-b border-border text-muted">
                       <th className="py-2 font-medium">Produto</th>
                       <th className="py-2 font-medium">SKU</th>
-                      <th className="py-2 font-medium">Contribuição</th>
+                      <th className="py-2 font-medium">Receita</th>
                       <th className="py-2 font-medium">Ads</th>
+                      <th className="py-2 font-medium">Venda via Ads</th>
+                      <th className="py-2 font-medium">ACOS</th>
+                      <th className="py-2 font-medium">TACOS</th>
+                      <th className="py-2 font-medium">Margem antes de Ads</th>
                       <th className="py-2 font-medium">% da contribuição</th>
                     </tr>
                   </thead>
@@ -341,10 +364,14 @@ export default function ProductProfitabilityPage() {
                           {r.name}
                         </td>
                         <td className="py-2 text-muted whitespace-nowrap">{r.sku}</td>
-                        <td className="py-2">{formatBRL(r.contribution)}</td>
+                        <td className="py-2">{formatBRL(r.grossRevenue)}</td>
                         <td className="py-2 text-muted">{formatBRL(r.adSpend)}</td>
-                        <td className={`py-2 font-medium ${adShareColor(r.adSharePercent!)}`}>
-                          {pct(r.adSharePercent!)}
+                        <td className="py-2 text-muted">{r.adRevenue > 0 ? formatBRL(r.adRevenue) : "—"}</td>
+                        <td className="py-2">{r.acos !== null ? pct(r.acos) : "—"}</td>
+                        <td className={`py-2 font-medium ${tacosColor(r)}`}>{r.tacos !== null ? pct(r.tacos) : "—"}</td>
+                        <td className="py-2 text-muted">{r.hasCost ? pct(r.marginPercent) : "—"}</td>
+                        <td className={`py-2 ${r.adSharePercent !== null ? adShareColor(r.adSharePercent) : "text-red-400"}`}>
+                          {r.adSharePercent !== null ? pct(r.adSharePercent) : "sem margem"}
                         </td>
                       </tr>
                     ))}
@@ -381,7 +408,7 @@ export default function ProductProfitabilityPage() {
               <div style={{ width: tableWidth || "100%", height: 1 }} />
             </div>
             <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto">
-              <table ref={tableRef} className="w-full min-w-[1400px] text-left text-sm">
+              <table ref={tableRef} className="w-full min-w-[1550px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-border text-muted">
                     <th className="py-2 font-medium">Produto</th>
@@ -392,6 +419,8 @@ export default function ProductProfitabilityPage() {
                     <th className="py-2 font-medium">Margem</th>
                     <th className="py-2 font-medium">Contribuição</th>
                     <th className="py-2 font-medium">Ads</th>
+                    <th className="py-2 font-medium">ACOS</th>
+                    <th className="py-2 font-medium">TACOS</th>
                     <th className="py-2 font-medium">Contrib. após Ads</th>
                     <th className="py-2 font-medium">Full</th>
                     <th className="py-2 font-medium">Contrib. final</th>
@@ -417,6 +446,8 @@ export default function ProductProfitabilityPage() {
                       <td className="py-2 text-muted">
                         {r.adSpend > 0 ? formatBRL(r.adSpend) : "—"}
                       </td>
+                      <td className="py-2 text-muted">{r.acos !== null ? pct(r.acos) : "—"}</td>
+                      <td className={`py-2 ${tacosColor(r)}`}>{r.tacos !== null ? pct(r.tacos) : "—"}</td>
                       <td
                         className={`py-2 ${r.hasCost ? (r.contributionAfterAds >= 0 ? "text-emerald-400" : "text-red-400") : "text-muted"}`}
                       >

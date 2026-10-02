@@ -5,7 +5,7 @@ import { mlFullCostRepository } from "@/repositories/mlFullCostRepository";
 import { dreService } from "@/services/dreService";
 import { aggregateSalesBySku } from "@/domain/salesAggregation";
 import { buildProfitabilityReport } from "@/domain/productProfitability";
-import { allocateAdSpendBySku } from "@/domain/adSpendAllocation";
+import { allocateAdSpendBySku, overlapShare } from "@/domain/adSpendAllocation";
 
 export type PeriodResult = {
   receitaLiquida: number;
@@ -98,9 +98,19 @@ export const productProfitabilityService = {
     const adSpendRows = listingCodes.length
       ? await mlAdSpendRepository.findByListingCodesAndPeriod(listingCodes, start, end)
       : [];
-    const adSpendBySku = allocateAdSpendBySku(
-      sales.map((s) => ({ sku: s.sku, listingCode: s.listingCode, grossRevenue: Number(s.grossRevenue) })),
-      adSpendRows.map((r) => ({ listingCode: r.listingCode, investimento: Number(r.investimento) })),
+    // Relatório exportado com período maior que o consultado (ex.: ago+set
+    // olhando só setembro) entra só com a parte dos dias que cai no período.
+    const saleShares = sales.map((s) => ({ sku: s.sku, listingCode: s.listingCode, grossRevenue: Number(s.grossRevenue) }));
+    const prorated = adSpendRows.map((r) => {
+      const share = overlapShare(r.periodStart, r.periodEnd, start, end);
+      return { listingCode: r.listingCode, investimento: Number(r.investimento) * share, receita: Number(r.receita) * share };
+    });
+    const adSpendBySku = allocateAdSpendBySku(saleShares, prorated);
+    // A venda atribuída ao Ads é rateada igual ao investimento, então o ACOS
+    // de cada SKU é o do anúncio dele.
+    const adRevenueBySku = allocateAdSpendBySku(
+      saleShares,
+      prorated.map((r) => ({ listingCode: r.listingCode, investimento: r.receita })),
     );
 
     // Custo Full já vem com SKU direto no relatório (diferente do Ads, que só
@@ -121,6 +131,7 @@ export const productProfitabilityService = {
       marginThreshold,
       adSpendBySku,
       fullCostBySku,
+      adRevenueBySku,
     );
 
     return { year, month: month ?? null, rows, suggestedMarginThreshold, periodResult };

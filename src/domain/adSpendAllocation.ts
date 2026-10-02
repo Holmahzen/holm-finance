@@ -46,3 +46,21 @@ export function allocateAdSpendBySku(
 
   return adSpendBySku;
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Fração de uma linha do relatório de Ads que cai dentro de [start, end).
+ * O relatório vale pro período que o usuário escolheu ao exportar ("Desde" e
+ * "Até", ambos inclusivos): um relatório de agosto+setembro consultado em
+ * setembro só pode contar a metade dele, não o investimento inteiro.
+ * Considera o gasto distribuído igualmente pelos dias do relatório.
+ */
+export function overlapShare(periodStart: Date, periodEnd: Date, start: Date, end: Date): number {
+  const rowStart = periodStart.getTime();
+  const rowEnd = periodEnd.getTime() + DAY_MS; // "Até" é inclusivo
+  const totalDays = Math.max(1, Math.round((rowEnd - rowStart) / DAY_MS));
+  const overlap = Math.min(rowEnd, end.getTime()) - Math.max(rowStart, start.getTime());
+  if (overlap <= 0) return 0;
+  return Math.min(1, Math.round(overlap / DAY_MS) / totalDays);
+}

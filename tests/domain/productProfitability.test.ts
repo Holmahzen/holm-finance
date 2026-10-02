@@ -195,4 +195,24 @@ describe("buildProfitabilityReport", () => {
     expect(rows[0].marginValue).toBeCloseTo((810 - 25.98) / 10 - 35);
     expect(rows[0].marginPercent).toBeCloseTo(rows[0].marginValue / 100);
   });
+
+  it("calcula ACOS pela venda atribuída ao Ads e TACOS pela receita total", () => {
+    const { rows } = buildProfitabilityReport(
+      [soldA1()],
+      new Map([["A1", cost()]]),
+      0.3,
+      new Map([["A1", 50]]),
+      new Map(),
+      new Map([["A1", 400]]),
+    );
+    expect(rows[0].adRevenue).toBe(400);
+    expect(rows[0].acos).toBeCloseTo(50 / 400);
+    expect(rows[0].tacos).toBeCloseTo(50 / 1000);
+  });
+
+  it("ACOS e TACOS ficam null sem investimento em Ads", () => {
+    const { rows } = buildProfitabilityReport([soldA1()], new Map([["A1", cost()]]), 0.3);
+    expect(rows[0].acos).toBeNull();
+    expect(rows[0].tacos).toBeNull();
+  });
 });

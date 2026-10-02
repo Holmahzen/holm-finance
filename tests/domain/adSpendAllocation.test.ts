@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { allocateAdSpendBySku } from "@/domain/adSpendAllocation";
+import { allocateAdSpendBySku, overlapShare } from "@/domain/adSpendAllocation";
 
 describe("allocateAdSpendBySku", () => {
   it("da o investimento inteiro ao SKU quando o anuncio so vendeu um SKU no periodo", () => {
@@ -65,5 +65,22 @@ describe("allocateAdSpendBySku", () => {
     ];
     const result = allocateAdSpendBySku(sales, adSpend);
     expect(result.get("A1")).toBeCloseTo(25);
+  });
+});
+
+describe("overlapShare", () => {
+  const d = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
+
+  it("relatório do mês inteiro conta inteiro no mês", () => {
+    expect(overlapShare(d("2026-09-01"), d("2026-09-30"), d("2026-09-01"), d("2026-10-01"))).toBe(1);
+  });
+
+  it("relatório de agosto+setembro conta só os dias de setembro", () => {
+    // 31 dias de agosto + 30 de setembro = 61 dias
+    expect(overlapShare(d("2026-08-01"), d("2026-09-30"), d("2026-09-01"), d("2026-10-01"))).toBeCloseTo(30 / 61);
+  });
+
+  it("relatório fora do período não conta", () => {
+    expect(overlapShare(d("2026-08-01"), d("2026-08-31"), d("2026-09-01"), d("2026-10-01"))).toBe(0);
   });
 });
