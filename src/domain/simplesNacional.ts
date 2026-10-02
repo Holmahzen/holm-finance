@@ -1,5 +1,8 @@
 export const SIMPLES_NACIONAL_CEILING = 4_800_000;
-/** Sublimite que muda a forma de recolher ICMS/ISS (não tira do Simples) — informativo. */
+/**
+ * Sublimite: passou dele no ano, o ICMS/ISS sai do DAS e vai pra guia própria
+ * (não tira do Simples, mas muda — e costuma aumentar — o imposto).
+ */
 export const SIMPLES_NACIONAL_SUBLIMIT = 3_600_000;
 
 const ALERT_THRESHOLD_ATENCAO_PERCENT = 80;
@@ -39,15 +42,35 @@ export function pickMonthlyRevenues(
 
 export type AlertLevel = "ok" | "atencao" | "critico";
 
+/**
+ * Marcos da receita do ANO-CALENDÁRIO (jan–dez) — é ela, e não o RBT12, que
+ * decide o desenquadramento (LC 123/2006, art. 3º §§ 9º e 9º-A; art. 20 §§ 1º
+ * e 1º-A). O RBT12 só define a faixa/alíquota do DAS.
+ */
+export type MilestoneKey = "sublimite" | "sublimite20" | "teto" | "teto20";
+
+export type Milestone = {
+  key: MilestoneKey;
+  value: number;
+  /** Mês (1–12) do ano corrente em que o acumulado passa do marco; null se não passa nem na projeção. */
+  month: number | null;
+  /** true quando o mês vem da projeção (ainda não aconteceu). */
+  projected: boolean;
+};
+
 export type SimplesNacionalStatus = {
   rbt12: number;
   rbt12PercentOfCeiling: number;
   rbt12RemainingToCeiling: number;
   yearToDate: number;
   yearToDatePercentOfCeiling: number;
-  /** Null quando não há nenhum mês fechado ainda pra estimar o ritmo (ex.: janeiro). */
+  /** Null quando não há nenhum mês fechado ainda pra estimar o ritmo. */
   projectedYearEnd: number | null;
   projectedYearEndPercentOfCeiling: number | null;
+  /** Ritmo mensal usado na projeção (média dos últimos 3 meses fechados). */
+  monthlyPace: number | null;
+  milestones: Milestone[];
+  /** Pelo acumulado do ano e pela projeção de dezembro — é o que tira do Simples. */
   alertLevel: AlertLevel;
 };
 
@@ -90,37 +113,73 @@ export function computeSimplesNacionalStatus(
   currentYear: number,
   currentMonth: number,
   ceiling = SIMPLES_NACIONAL_CEILING,
+  sublimit = SIMPLES_NACIONAL_SUBLIMIT,
 ): SimplesNacionalStatus {
   const rbt12 = monthlyRevenues.reduce((sum, m) => sum + m.revenue, 0);
-  const yearToDate = monthlyRevenues
-    .filter((m) => m.year === currentYear)
-    .reduce((sum, m) => sum + m.revenue, 0);
+  const thisYear = monthlyRevenues
+    .filter((m) => m.year === currentYear && m.month <= currentMonth)
+    .sort((a, b) => a.month - b.month);
+  const yearToDate = thisYear.reduce((sum, m) => sum + m.revenue, 0);
+  const currentPartial = thisYear.find((m) => m.month === currentMonth)?.revenue ?? 0;
 
-  // Projeção de fechamento do ano: ritmo médio dos últimos 3 meses FECHADOS
-  // (sem contar o mês corrente, ainda em andamento) extrapolado pros meses
-  // que faltam até dezembro, somado ao que já foi faturado no ano.
+  // Ritmo: média dos últimos 3 meses FECHADOS (sem o mês corrente, ainda em
+  // andamento). O mês corrente entra na projeção pelo maior entre o que já foi
+  // faturado nele e esse ritmo — senão, no começo do mês, a projeção perderia
+  // quase um mês inteiro de faturamento.
   const closedMonths = monthlyRevenues.filter(
     (m) => !(m.year === currentYear && m.month === currentMonth),
   );
   const last3Closed = closedMonths.slice(-3);
-  const monthsRemaining = 12 - currentMonth;
-  let projectedYearEnd: number | null = null;
-  if (last3Closed.length > 0) {
-    const avgMonthly = last3Closed.reduce((sum, m) => sum + m.revenue, 0) / last3Closed.length;
-    projectedYearEnd = yearToDate + avgMonthly * monthsRemaining;
-  }
+  const monthlyPace =
+    last3Closed.length > 0 ? last3Closed.reduce((sum, m) => sum + m.revenue, 0) / last3Closed.length : null;
 
-  const rbt12PercentOfCeiling = ceiling > 0 ? (rbt12 / ceiling) * 100 : 0;
+  const projectedByMonth = new Map<number, number>();
+  for (const m of thisYear) {
+    if (m.month < currentMonth) projectedByMonth.set(m.month, m.revenue);
+  }
+  if (monthlyPace !== null) {
+    projectedByMonth.set(currentMonth, Math.max(currentPartial, monthlyPace));
+    for (let m = currentMonth + 1; m <= 12; m++) projectedByMonth.set(m, monthlyPace);
+  }
+  const projectedYearEnd =
+    monthlyPace === null ? null : [...projectedByMonth.values()].reduce((sum, v) => sum + v, 0);
+
+  const milestoneValues: [MilestoneKey, number][] = [
+    ["sublimite", sublimit],
+    ["sublimite20", sublimit * 1.2],
+    ["teto", ceiling],
+    ["teto20", ceiling * 1.2],
+  ];
+  const milestones = milestoneValues.map(([key, value]): Milestone => {
+    let cumulative = 0;
+    for (const m of thisYear) {
+      cumulative += m.revenue;
+      if (cumulative > value) return { key, value, month: m.month, projected: false };
+    }
+    if (monthlyPace !== null) {
+      cumulative = 0;
+      for (let m = 1; m <= 12; m++) {
+        cumulative += projectedByMonth.get(m) ?? 0;
+        if (cumulative > value) return { key, value, month: m, projected: true };
+      }
+    }
+    return { key, value, month: null, projected: false };
+  });
+
+  const yearToDatePercentOfCeiling = ceiling > 0 ? (yearToDate / ceiling) * 100 : 0;
+  const projectedYearEndPercentOfCeiling =
+    projectedYearEnd !== null && ceiling > 0 ? (projectedYearEnd / ceiling) * 100 : null;
 
   return {
     rbt12,
-    rbt12PercentOfCeiling,
+    rbt12PercentOfCeiling: ceiling > 0 ? (rbt12 / ceiling) * 100 : 0,
     rbt12RemainingToCeiling: ceiling - rbt12,
     yearToDate,
-    yearToDatePercentOfCeiling: ceiling > 0 ? (yearToDate / ceiling) * 100 : 0,
+    yearToDatePercentOfCeiling,
     projectedYearEnd,
-    projectedYearEndPercentOfCeiling:
-      projectedYearEnd !== null && ceiling > 0 ? (projectedYearEnd / ceiling) * 100 : null,
-    alertLevel: alertLevelFromPercent(rbt12PercentOfCeiling),
+    projectedYearEndPercentOfCeiling,
+    monthlyPace,
+    milestones,
+    alertLevel: alertLevelFromPercent(Math.max(yearToDatePercentOfCeiling, projectedYearEndPercentOfCeiling ?? 0)),
   };
 }

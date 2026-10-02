@@ -49,6 +49,8 @@ type Report = {
   yearToDatePercentOfCeiling: number;
   projectedYearEnd: number | null;
   projectedYearEndPercentOfCeiling: number | null;
+  monthlyPace: number | null;
+  milestones: Milestone[];
   alertLevel: AlertLevel;
   sources: { pgdas: number; notas: number; dre: number };
   official: {
@@ -59,6 +61,32 @@ type Report = {
     icmsBlocked: boolean | null;
   } | null;
   apuracoes: Apuracao[];
+};
+
+type Milestone = {
+  key: "sublimite" | "sublimite20" | "teto" | "teto20";
+  value: number;
+  month: number | null;
+  projected: boolean;
+};
+
+const MILESTONE_TEXT: Record<Milestone["key"], { label: string; consequence: string }> = {
+  sublimite: {
+    label: "Sublimite",
+    consequence: "ICMS sai do DAS a partir de janeiro do ano seguinte e passa a ser pago por guia estadual.",
+  },
+  sublimite20: {
+    label: "Sublimite + 20%",
+    consequence: "ICMS sai do DAS já a partir do mês seguinte, sem esperar janeiro.",
+  },
+  teto: {
+    label: "Teto do Simples",
+    consequence: "A empresa sai do Simples a partir de 1º de janeiro do ano seguinte.",
+  },
+  teto20: {
+    label: "Teto + 20%",
+    consequence: "A empresa sai do Simples já a partir do mês seguinte.",
+  },
 };
 
 type ImportResult = {
@@ -285,12 +313,14 @@ export default function SimplesNacionalPage() {
                   </p>
                 </div>
               </div>
-              {report.official.sublimit != null && report.official.rbt12 > report.official.sublimit && (
+              {report.official.sublimit != null && report.official.rba > report.official.sublimit && (
                 <p className="mt-3 rounded-md border border-amber-400/40 bg-amber-400/10 p-3 text-sm text-amber-100">
-                  Passou do sublimite de {formatBRL(report.official.sublimit)}.{" "}
+                  O faturado no ano passou do sublimite de {formatBRL(report.official.sublimit)}.{" "}
                   {report.official.icmsBlocked
                     ? "O extrato já diz que a empresa está impedida de recolher ICMS no DAS: ele passa a ser pago por guia estadual."
-                    : "O extrato ainda diz que o ICMS continua no DAS — pela regra, o impedimento costuma valer a partir de janeiro do ano seguinte. Confirme com o contador."}
+                    : report.official.rba > report.official.sublimit * 1.2
+                      ? "Passou em mais de 20%: pela regra, o ICMS sai do DAS já no mês seguinte. Confirme com o contador."
+                      : "O extrato ainda diz que o ICMS continua no DAS — pela regra, o impedimento vale a partir de janeiro do ano seguinte. Confirme com o contador."}
                 </p>
               )}
             </div>
@@ -300,29 +330,86 @@ export default function SimplesNacionalPage() {
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
                 <span className={`text-xs font-medium tracking-wide uppercase ${ALERT_STYLES[report.alertLevel].text}`}>
-                  Receita dos últimos 12 meses (inclui o mês em andamento)
+                  Faturado em {report.period.year} (jan–{MONTHS[report.period.month - 1]})
                 </span>
                 <p className={`font-serif text-3xl ${ALERT_STYLES[report.alertLevel].text}`}>
-                  {formatBRL(report.rbt12)}
+                  {formatBRL(report.yearToDate)}
+                </p>
+                <p className="text-xs text-muted">
+                  {report.yearToDatePercentOfCeiling.toFixed(1)}% do teto · falta{" "}
+                  {formatBRL(Math.max(0, report.ceiling - report.yearToDate))}
                 </p>
               </div>
               <div className="text-right">
                 <span className={`text-xs font-medium tracking-wide uppercase ${ALERT_STYLES[report.alertLevel].text}`}>
                   {ALERT_LABEL[report.alertLevel]}
                 </span>
-                <p className={`font-serif text-3xl ${ALERT_STYLES[report.alertLevel].text}`}>
-                  {report.rbt12PercentOfCeiling.toFixed(1)}%
-                </p>
+                {report.projectedYearEnd !== null && (
+                  <>
+                    <p className={`font-serif text-3xl ${ALERT_STYLES[report.alertLevel].text}`}>
+                      {formatBRL(report.projectedYearEnd)}
+                    </p>
+                    <p className="text-xs text-muted">
+                      projeção pra dezembro · {report.projectedYearEndPercentOfCeiling?.toFixed(1)}% do teto
+                    </p>
+                  </>
+                )}
               </div>
             </div>
             <div className="mt-3">
-              <ProgressBar percent={report.rbt12PercentOfCeiling} colorClass={ALERT_STYLES[report.alertLevel].bar} />
+              <ProgressBar percent={report.yearToDatePercentOfCeiling} colorClass={ALERT_STYLES[report.alertLevel].bar} />
             </div>
             <p className="mt-2 text-xs text-muted">
-              Teto do Simples Nacional: {formatBRL(report.ceiling)}/ano · Falta{" "}
-              {formatBRL(Math.max(0, report.rbt12RemainingToCeiling))} pra chegar lá · Sublimite de
-              recolhimento de ICMS/ISS (não tira do Simples): {formatBRL(report.sublimit)}
+              É o faturamento do ano-calendário (janeiro a dezembro) que tira a empresa do Simples — não o dos
+              últimos 12 meses. Teto: {formatBRL(report.ceiling)}/ano.
+              {report.monthlyPace !== null && (
+                <>
+                  {" "}
+                  Projeção no ritmo de {formatBRL(report.monthlyPace)}/mês (média dos últimos 3 meses fechados), contando{" "}
+                  {MONTHS[report.period.month - 1]} inteiro.
+                </>
+              )}
             </p>
+          </div>
+
+          <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4">
+            <h2 className="font-serif text-lg text-foreground">Marcos do ano</h2>
+            <p className="text-xs text-muted">
+              Quando o faturado em {report.period.year} passa de cada valor e o que muda. Datas futuras são
+              projeção no ritmo atual. Confirme as consequências com o contador antes de decidir.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-xl text-left text-sm">
+                <thead>
+                  <tr className="border-b border-border text-muted">
+                    <th className="py-2 font-medium">Marco</th>
+                    <th className="py-2 text-right font-medium">Valor</th>
+                    <th className="py-2 pl-4 font-medium">Quando</th>
+                    <th className="py-2 pl-4 font-medium">O que acontece</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.milestones.map((m) => (
+                    <tr key={m.key} className="border-b border-border/50 align-top">
+                      <td className="py-2 text-foreground">{MILESTONE_TEXT[m.key].label}</td>
+                      <td className="py-2 text-right tabular-nums text-foreground">{formatBRL(m.value)}</td>
+                      <td className="py-2 pl-4 whitespace-nowrap">
+                        {m.month === null ? (
+                          <span className="text-muted">não chega este ano</span>
+                        ) : m.projected ? (
+                          <span className="text-amber-300">
+                            previsto em {MONTHS[m.month - 1]}
+                          </span>
+                        ) : (
+                          <span className="font-medium text-red-400">passou em {MONTHS[m.month - 1]}</span>
+                        )}
+                      </td>
+                      <td className="py-2 pl-4 text-muted">{MILESTONE_TEXT[m.key].consequence}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {report.sources.dre > 0 && (
@@ -337,77 +424,20 @@ export default function SimplesNacionalPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
+          <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
+            <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
-                <h2 className="font-serif text-lg text-foreground">
-                  Acumulado no ano ({report.period.year})
-                </h2>
+                <h2 className="font-serif text-lg text-foreground">Receita dos últimos 12 meses</h2>
                 <p className="text-xs text-muted">
-                  Receita bruta de janeiro até {MONTHS[report.period.month - 1]}/{report.period.year}.
+                  Inclui o mês em andamento. Define a faixa e a alíquota do DAS — não é o que tira do Simples.
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <span className="block text-xs font-medium tracking-wide text-muted uppercase">
-                    Faturado no ano
-                  </span>
-                  <span className="font-serif text-2xl text-gold">{formatBRL(report.yearToDate)}</span>
-                </div>
-                <div>
-                  <span className="block text-xs font-medium tracking-wide text-muted uppercase">
-                    % do teto
-                  </span>
-                  <span className="font-serif text-2xl text-foreground">
-                    {report.yearToDatePercentOfCeiling.toFixed(1)}%
-                  </span>
-                </div>
+              <div className="text-right">
+                <span className="font-serif text-2xl text-gold">{formatBRL(report.rbt12)}</span>
+                <p className="text-xs text-muted">{report.rbt12PercentOfCeiling.toFixed(1)}% do teto</p>
               </div>
-              <ProgressBar percent={report.yearToDatePercentOfCeiling} colorClass="bg-gold" />
             </div>
-
-            <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
-              <div>
-                <h2 className="font-serif text-lg text-foreground">Projeção de fechamento do ano</h2>
-                <p className="text-xs text-muted">
-                  No ritmo médio dos últimos 3 meses fechados, somado ao que já foi faturado esse ano.
-                </p>
-              </div>
-              {report.projectedYearEnd === null ? (
-                <p className="text-sm text-muted">Ainda não há meses fechados suficientes pra estimar.</p>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <span className="block text-xs font-medium tracking-wide text-muted uppercase">
-                        Projeção pra dezembro
-                      </span>
-                      <span className="font-serif text-2xl text-gold">
-                        {formatBRL(report.projectedYearEnd)}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="block text-xs font-medium tracking-wide text-muted uppercase">
-                        % do teto
-                      </span>
-                      <span className="font-serif text-2xl text-foreground">
-                        {report.projectedYearEndPercentOfCeiling?.toFixed(1)}%
-                      </span>
-                    </div>
-                  </div>
-                  <ProgressBar
-                    percent={report.projectedYearEndPercentOfCeiling ?? 0}
-                    colorClass={
-                      (report.projectedYearEndPercentOfCeiling ?? 0) >= 95
-                        ? "bg-red-400"
-                        : (report.projectedYearEndPercentOfCeiling ?? 0) >= 80
-                          ? "bg-amber-400"
-                          : "bg-gold"
-                    }
-                  />
-                </>
-              )}
-            </div>
+            <ProgressBar percent={report.rbt12PercentOfCeiling} colorClass="bg-gold" />
           </div>
 
           {report.apuracoes.length > 0 && (

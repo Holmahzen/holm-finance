@@ -82,10 +82,52 @@ describe("computeSimplesNacionalStatus", () => {
     }));
     // Meses fechados antes do corrente (março/2026): nov/25, dez/25, jan/26, fev/26 -> últimos 3 = dez/25, jan/26, fev/26
     const status = computeSimplesNacionalStatus(monthlyRevenues, 2026, 3, ceiling);
-    // média dos últimos 3 fechados (dez=300k, jan=300k, fev=200k) = 266.666,67 * 9 meses restantes + YTD (jan+fev=500k)
+    // média dos últimos 3 fechados (dez=300k, jan=300k, fev=200k) = 266.666,67 em
+    // março (ainda sem faturamento) e nos 9 meses seguintes + YTD (jan+fev=500k)
     const avg = (300_000 + 300_000 + 200_000) / 3;
-    const expectedProjection = 500_000 + avg * 9;
+    const expectedProjection = 500_000 + avg * 10;
     expect(status.projectedYearEnd).toBeCloseTo(expectedProjection);
+    expect(status.monthlyPace).toBeCloseTo(avg);
+  });
+
+  // Cenário real de out/2026: jan–set ≈ 3,576 mi, ritmo ≈ 443 mil, 2 dias de outubro.
+  const out2026 = computeTrailingMonths(2026, 10, 12).map(({ year, month }) => ({
+    year,
+    month,
+    revenue:
+      year === 2025
+        ? 240_000
+        : ([345_000, 346_000, 393_000, 341_000, 427_000, 394_000, 395_000, 481_000, 454_000, 30_000][month - 1] ?? 0),
+  }));
+
+  it("conta o mês corrente inteiro na projeção, não só os dias já faturados", () => {
+    const status = computeSimplesNacionalStatus(out2026, 2026, 10, ceiling);
+    const pace = (395_000 + 481_000 + 454_000) / 3;
+    expect(status.yearToDate).toBe(3_606_000);
+    expect(status.projectedYearEnd).toBeCloseTo(3_576_000 + pace * 3);
+  });
+
+  it("usa o que já foi faturado no mês corrente quando passa do ritmo", () => {
+    const revenues = out2026.map((m) => (m.year === 2026 && m.month === 10 ? { ...m, revenue: 600_000 } : m));
+    const status = computeSimplesNacionalStatus(revenues, 2026, 10, ceiling);
+    const pace = (395_000 + 481_000 + 454_000) / 3;
+    expect(status.projectedYearEnd).toBeCloseTo(3_576_000 + 600_000 + pace * 2);
+  });
+
+  it("marca o mês de cada marco do ano, separando o que já aconteceu do projetado", () => {
+    const status = computeSimplesNacionalStatus(out2026, 2026, 10, ceiling);
+    const byKey = Object.fromEntries(status.milestones.map((m) => [m.key, m]));
+    expect(byKey.sublimite).toMatchObject({ value: 3_600_000, month: 10, projected: false });
+    expect(byKey.sublimite20).toMatchObject({ month: 11, projected: true });
+    expect(byKey.teto).toMatchObject({ value: 4_800_000, month: 12, projected: true });
+    expect(byKey.teto20).toMatchObject({ month: null, projected: false });
+  });
+
+  it("alerta pelo ano-calendário e pela projeção, mesmo com RBT12 abaixo do teto", () => {
+    const status = computeSimplesNacionalStatus(out2026, 2026, 10, ceiling);
+    expect(status.rbt12PercentOfCeiling).toBeLessThan(95);
+    expect(status.projectedYearEndPercentOfCeiling).toBeGreaterThan(100);
+    expect(status.alertLevel).toBe("critico");
   });
 
   it("returns null projection when the input has no closed month at all", () => {
