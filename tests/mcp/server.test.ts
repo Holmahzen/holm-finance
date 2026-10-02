@@ -40,6 +40,7 @@ describe("servidor MCP", () => {
       "fechamento_do_mes",
       "fluxo_de_caixa",
       "lucratividade_produtos",
+      "margem_por_canal",
       "projecao_empresa",
       "recebiveis_mercado_livre",
       "resumo_do_mes",

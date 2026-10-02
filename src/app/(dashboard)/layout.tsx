@@ -44,6 +44,7 @@ const navGroups = [
       { href: "/produtos", label: "Produtos" },
       { href: "/custo-por-modelo", label: "Custo por modelo" },
       { href: "/lucratividade-produtos", label: "Lucratividade dos Produtos" },
+      { href: "/margem-por-canal", label: "Margem por canal" },
       { href: "/simulador-de-preco", label: "Simulador de preço" },
       { href: "/devolucoes", label: "Devoluções" },
       { href: "/vendas", label: "Vendas" },

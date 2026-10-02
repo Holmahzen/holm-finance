@@ -11,6 +11,7 @@ import { alertsHubService } from "@/services/alertsHubService";
 import { healthService } from "@/services/healthService";
 import { monthChecklistService } from "@/services/monthChecklistService";
 import { productReturnsService } from "@/services/productReturnsService";
+import { channelMarginService } from "@/services/channelMarginService";
 import { todayUTCInBrazil } from "@/lib/today";
 
 /**
@@ -199,6 +200,26 @@ export function buildMcpServer(): McpServer {
     async ({ meses, ate, limite }) => {
       const report = await productReturnsService.getReport(meses ?? 3, ate);
       return json({ ...report, models: report.models.slice(0, limite ?? 30), totalModels: report.models.length });
+    },
+  );
+
+  server.registerTool(
+    "margem_por_canal",
+    {
+      title: "Margem por canal de venda",
+      description:
+        "Margem de contribuição de Mercado Livre, Shopee e atacado/venda direta no período: receita, imposto, tarifas, custo de produção, Ads e Full, com os produtos de cada canal. Sem devoluções.",
+      inputSchema: {
+        meses: z.number().int().min(1).max(12).optional().describe("Quantos meses na janela. Padrão: 1."),
+        ate: z.string().regex(/^\d{4}-\d{2}$/).optional().describe("Último mês da janela, AAAA-MM. Padrão: mês passado."),
+        produtos: z.number().int().min(0).max(500).optional().describe("Máximo de produtos por canal. Padrão: 15."),
+      },
+      annotations: readOnly,
+    },
+    async ({ meses, ate, produtos }) => {
+      const report = await channelMarginService.getReport(meses ?? 1, ate);
+      const limit = produtos ?? 15;
+      return json({ ...report, channels: report.channels.map((c) => ({ ...c, products: c.products.slice(0, limit), totalProducts: c.products.length })) });
     },
   );
 
