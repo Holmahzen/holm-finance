@@ -6,10 +6,11 @@ import { SESSION_COOKIE, authEnv, isDevBypass, readSessionToken } from "@/lib/au
  * pro /login, API responde 401. Sem login configurado o acesso fica fechado
  * (exceto `next dev` local — ver isDevBypass).
  *
- * Fora do porteiro, de propósito: a própria tela/rota de login e o cron da
- * Vercel, que não tem cookie e se autentica sozinho por Bearer (CRON_SECRET).
+ * Fora do porteiro, de propósito: a própria tela/rota de login, o cron da
+ * Vercel e o MCP, que não têm cookie e se autenticam sozinhos por Bearer
+ * (CRON_SECRET / MCP_TOKEN).
  */
-const PUBLIC_EXACT = new Set(["/login", "/api/auth/login", "/api/auth/logout"]);
+const PUBLIC_EXACT = new Set(["/login", "/api/auth/login", "/api/auth/logout", "/api/mcp"]);
 const PUBLIC_PREFIXES = ["/api/cron/"];
 
 export default function proxy(req: NextRequest) {
