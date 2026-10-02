@@ -10,6 +10,7 @@ import { mercadoLivreReleaseService } from "@/services/mercadoLivreReleaseServic
 import { alertsHubService } from "@/services/alertsHubService";
 import { healthService } from "@/services/healthService";
 import { monthChecklistService } from "@/services/monthChecklistService";
+import { productReturnsService } from "@/services/productReturnsService";
 import { todayUTCInBrazil } from "@/lib/today";
 
 /**
@@ -180,6 +181,25 @@ export function buildMcpServer(): McpServer {
       annotations: readOnly,
     },
     async ({ mes }) => json(await monthChecklistService.getChecklist(mes)),
+  );
+
+  server.registerTool(
+    "devolucoes_por_produto",
+    {
+      title: "Devoluções por produto",
+      description:
+        "Peças e valor vendidos × devolvidos por modelo e tamanho, pelas notas fiscais de venda e de devolução, com a taxa de devolução. Devoluções com código que não vendeu no período vêm à parte.",
+      inputSchema: {
+        meses: z.number().int().min(1).max(12).optional().describe("Quantos meses na janela. Padrão: 3."),
+        ate: z.string().regex(/^\d{4}-\d{2}$/).optional().describe("Último mês da janela, AAAA-MM. Padrão: mês passado."),
+        limite: z.number().int().min(1).max(500).optional().describe("Máximo de modelos. Padrão: 30."),
+      },
+      annotations: readOnly,
+    },
+    async ({ meses, ate, limite }) => {
+      const report = await productReturnsService.getReport(meses ?? 3, ate);
+      return json({ ...report, models: report.models.slice(0, limite ?? 30), totalModels: report.models.length });
+    },
   );
 
   server.registerTool(

@@ -34,6 +34,7 @@ describe("servidor MCP", () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
       "alertas",
+      "devolucoes_por_produto",
       "dre",
       "dre_competencia",
       "fechamento_do_mes",

@@ -3,6 +3,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import type { ParsedFiscalNote } from "@/parsers/nfe/nfeParser";
 import type { FiscalItemRow, FiscalNoteDirection } from "@/domain/fiscalNotes";
 import type { NcmAuditRow } from "@/domain/ncmAudit";
+import type { ProductMovementRow } from "@/domain/productReturns";
 
 export type NoteToSave = ParsedFiscalNote & { direction: FiscalNoteDirection };
 
@@ -154,6 +155,34 @@ export const fiscalNoteRepository = {
       FROM "fiscal_note_items" i
       JOIN "fiscal_notes" n ON n."id" = i."noteId"
       WHERE n."issueMonth" >= ${fromMonth}`;
+  },
+
+  /** Itens com código do produto e quantidade, pra vendas × devoluções por produto. */
+  findProductRowsBetween(fromMonth: string, toMonth: string): Promise<ProductMovementRow[]> {
+    return prisma.$queryRaw<ProductMovementRow[]>`
+      SELECT
+        n."id" AS "noteId",
+        n."issueMonth",
+        n."direction"::text AS "direction",
+        n."purpose",
+        (n."cancelledAt" IS NOT NULL) AS "cancelled",
+        n."recipientUf",
+        n."intermediaryDocument",
+        n."issuerDocument",
+        n."issuerName",
+        n."issuerCrt",
+        i."ncm",
+        i."description",
+        i."cfop",
+        i."netValue"::float8 AS "netValue",
+        i."icmsCode",
+        i."icmsValue"::float8 AS "icmsValue",
+        i."simplesCreditValue"::float8 AS "simplesCreditValue",
+        i."productCode",
+        i."quantity"::float8 AS "quantity"
+      FROM "fiscal_note_items" i
+      JOIN "fiscal_notes" n ON n."id" = i."noteId"
+      WHERE n."issueMonth" >= ${fromMonth} AND n."issueMonth" <= ${toMonth}`;
   },
 
   /** Itens das notas de saída não canceladas, com o que a conferência de NCM precisa. */

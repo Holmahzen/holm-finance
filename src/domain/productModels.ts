@@ -128,7 +128,7 @@ function sameCost(a: PieceCost, b: PieceCost): boolean {
 }
 
 const SIZE_ORDER = ["PP", "P", "M", "G", "GG", "XG", "EG", "XGG", "EGG", "G1", "G2", "G3", "G4"];
-function sizeRank(size: string | null): number {
+export function sizeRank(size: string | null): number {
   if (size === null) return -1;
   if (/^\d+$/.test(size)) return Number(size);
   const i = SIZE_ORDER.indexOf(size);
