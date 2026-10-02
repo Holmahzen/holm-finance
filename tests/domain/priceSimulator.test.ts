@@ -1,0 +1,44 @@
+import { describe, it, expect } from "vitest";
+import { breakdownAt, currentBreakdown, fixedCostPerUnit, priceForMargin, type ModelEconomics } from "@/domain/priceSimulator";
+
+// 100 peças a R$ 50: sobraram R$ 30/peça depois de imposto, tarifa e frete;
+// custo de produção R$ 20; R$ 200 de Ads (4% da receita).
+const model: ModelEconomics = { units: 100, grossRevenue: 5000, beforeProductionCost: 3000, adSpend: 200, unitCost: 20 };
+const assumptions = { taxRate: 0.14, commissionRate: 0.14, includeAds: true };
+
+describe("priceSimulator", () => {
+  it("separa a parte fixa por peça do que a venda real descontou", () => {
+    // descontos R$ 20/peça; percentuais 28% de R$ 50 = R$ 14; fixo = R$ 6
+    expect(fixedCostPerUnit(model, assumptions)).toBeCloseTo(6);
+  });
+
+  it("no preço atual, reproduz a margem medida (sobra − custo − Ads)", () => {
+    const b = currentBreakdown(model, assumptions);
+    expect(b.contribution).toBeCloseTo(30 - 20 - 2);
+    expect(b.marginPercent).toBeCloseTo(8 / 50);
+  });
+
+  it("acha o preço que leva à margem pedida", () => {
+    const price = priceForMargin(model, assumptions, 0.18)!;
+    expect(breakdownAt(model, assumptions, price).marginPercent).toBeCloseTo(0.18);
+    // (6 + 20) / (1 − 0,14 − 0,14 − 0,04 − 0,18)
+    expect(price).toBeCloseTo(26 / 0.5);
+  });
+
+  it("com imposto maior, pede preço maior", () => {
+    const today = priceForMargin(model, assumptions, 0.18)!;
+    const higherTax = priceForMargin(model, assumptions, 0.18, 0.2)!;
+    expect(higherTax).toBeGreaterThan(today);
+    expect(breakdownAt(model, assumptions, higherTax, 0.2).marginPercent).toBeCloseTo(0.18);
+  });
+
+  it("sem Ads, a margem não desconta o TACOS", () => {
+    const b = currentBreakdown(model, { ...assumptions, includeAds: false });
+    expect(b.ads).toBe(0);
+    expect(b.marginPercent).toBeCloseTo(10 / 50);
+  });
+
+  it("devolve null quando nenhum preço chega na meta", () => {
+    expect(priceForMargin(model, assumptions, 0.7)).toBeNull();
+  });
+});

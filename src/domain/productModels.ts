@@ -94,6 +94,8 @@ export type ModelSkuInput = {
   grossRevenue: number;
   /** O que sobrou das vendas antes do custo de produção (ver computeSalesBasedMargin). */
   beforeProductionCost: number;
+  /** Investimento em Ads rateado pra esse SKU no período. */
+  adSpend?: number;
 };
 
 export type ModelSku = ModelSkuInput & { size: string | null; kit: ParsedSku["kit"] };
@@ -106,6 +108,7 @@ export type ProductModel = {
   quantity: number;
   grossRevenue: number;
   beforeProductionCost: number;
+  adSpend: number;
   /** "igual" quando todos os SKUs têm o mesmo custo, "diferente", "parcial" (alguns sem) ou "sem". */
   costStatus: "igual" | "diferente" | "parcial" | "sem";
   /** Custo que a tela sugere editar: o do SKU com custo que mais vendeu. */
@@ -169,6 +172,7 @@ export function buildProductModels(rows: ModelSkuInput[]): ProductModel[] {
     const quantity = skus.reduce((sum, s) => sum + s.quantity, 0);
     const grossRevenue = skus.reduce((sum, s) => sum + s.grossRevenue, 0);
     const beforeProductionCost = skus.reduce((sum, s) => sum + s.beforeProductionCost, 0);
+    const adSpend = skus.reduce((sum, s) => sum + (s.adSpend ?? 0), 0);
     const soldCosted = skus.filter((s) => s.quantity > 0 && s.cost !== null && totalCost(s.cost) > 0);
     const soldCostedRevenue = soldCosted.reduce((sum, s) => sum + s.grossRevenue, 0);
     const marginPercent =
@@ -185,6 +189,7 @@ export function buildProductModels(rows: ModelSkuInput[]): ProductModel[] {
       quantity,
       grossRevenue,
       beforeProductionCost,
+      adSpend,
       costStatus,
       referenceCost: reference?.cost ?? null,
       // Duas grafias do mesmo item (TOTAC.1001 e TO.TAC1001) apontam pro mesmo kit.

@@ -43,6 +43,7 @@ const navGroups = [
       { href: "/produtos", label: "Produtos" },
       { href: "/custo-por-modelo", label: "Custo por modelo" },
       { href: "/lucratividade-produtos", label: "Lucratividade dos Produtos" },
+      { href: "/simulador-de-preco", label: "Simulador de preço" },
       { href: "/vendas", label: "Vendas" },
       { href: "/recebiveis-ml", label: "Recebíveis ML" },
     ],

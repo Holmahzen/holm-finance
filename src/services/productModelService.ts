@@ -4,6 +4,8 @@ import { aggregateSalesBySku } from "@/domain/salesAggregation";
 import { FLEX_COST_PER_PACKAGE } from "@/domain/breakEven";
 import { buildProductModels, kitCost, normalizeKey, parseSku, type ModelSkuInput, type PieceCost } from "@/domain/productModels";
 import { todayUTCInBrazil } from "@/lib/today";
+import { mlAdSpendRepository } from "@/repositories/mlAdSpendRepository";
+import { allocateAdSpendBySku, overlapShare } from "@/domain/adSpendAllocation";
 
 /** Janela de vendas que a tela usa pra ordenar os modelos e mostrar a margem. */
 export const MODEL_SALES_DAYS = 90;
@@ -11,13 +13,25 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 async function loadRows(): Promise<ModelSkuInput[]> {
   const now = todayUTCInBrazil();
+  const start = new Date(now.getTime() - MODEL_SALES_DAYS * DAY_MS);
   const [products, sales] = await Promise.all([
     prisma.product.findMany({
       where: { sku: { not: null } },
       select: { id: true, sku: true, name: true, tecidoCost: true, costuraCost: true, aviamentosCost: true },
     }),
-    marketplaceSaleRepository.findByPeriod(new Date(now.getTime() - MODEL_SALES_DAYS * DAY_MS), now),
+    marketplaceSaleRepository.findByPeriod(start, now),
   ]);
+
+  // Ads do período, rateado por SKU como na Lucratividade.
+  const listingCodes = [...new Set(sales.map((s) => s.listingCode).filter((c): c is string => !!c))];
+  const adRows = listingCodes.length ? await mlAdSpendRepository.findByListingCodesAndPeriod(listingCodes, start, now) : [];
+  const adSpendBySku = allocateAdSpendBySku(
+    sales.map((s) => ({ sku: s.sku, listingCode: s.listingCode, grossRevenue: Number(s.grossRevenue) })),
+    adRows.map((r) => ({
+      listingCode: r.listingCode,
+      investimento: Number(r.investimento) * overlapShare(r.periodStart, r.periodEnd, start, now),
+    })),
+  );
 
   const aggregates = aggregateSalesBySku(
     sales.map((s) => ({
@@ -55,7 +69,13 @@ async function loadRows(): Promise<ModelSkuInput[]> {
     const beforeProductionCost = a.netRevenue + a.marketplaceCost - a.flexOrderCount * FLEX_COST_PER_PACKAGE;
     const existing = bySku.get(key);
     if (existing) {
-      bySku.set(key, { ...existing, quantity: a.quantity, grossRevenue: a.grossRevenue, beforeProductionCost });
+      bySku.set(key, {
+        ...existing,
+        quantity: a.quantity,
+        grossRevenue: a.grossRevenue,
+        beforeProductionCost,
+        adSpend: adSpendBySku.get(a.sku) ?? 0,
+      });
     } else {
       bySku.set(key, {
         sku: a.sku,
@@ -65,6 +85,7 @@ async function loadRows(): Promise<ModelSkuInput[]> {
         quantity: a.quantity,
         grossRevenue: a.grossRevenue,
         beforeProductionCost,
+        adSpend: adSpendBySku.get(a.sku) ?? 0,
       });
     }
   }
