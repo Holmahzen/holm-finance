@@ -21,7 +21,8 @@ function currentMonth(): string {
 }
 
 export const dreCompetenciaService = {
-  async getReport(requestedMonth?: string) {
+  /** `withTrend: false` pula a tendência de 12 meses — pra quem só precisa do mês (ex.: checklist). */
+  async getReport(requestedMonth?: string, { withTrend = true }: { withTrend?: boolean } = {}) {
     const from = shiftMonth(currentMonth(), -(HISTORY_MONTHS - 1));
     const [noteRows, apuracoes, services, fixedCosts] = await Promise.all([
       fiscalNoteRepository.findRowsSince(from),
@@ -96,6 +97,7 @@ export const dreCompetenciaService = {
     };
 
     const report = await build(month);
+    if (!withTrend) return { months, month, report, trend: [] };
     const trendMonths = months.slice(-TREND_MONTHS);
     const trend = await Promise.all(
       trendMonths.map(async (m) => {

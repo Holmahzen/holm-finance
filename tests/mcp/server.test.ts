@@ -36,6 +36,7 @@ describe("servidor MCP", () => {
       "alertas",
       "dre",
       "dre_competencia",
+      "fechamento_do_mes",
       "fluxo_de_caixa",
       "lucratividade_produtos",
       "projecao_empresa",

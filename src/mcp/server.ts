@@ -9,6 +9,7 @@ import { productProfitabilityService } from "@/services/productProfitabilityServ
 import { mercadoLivreReleaseService } from "@/services/mercadoLivreReleaseService";
 import { alertsHubService } from "@/services/alertsHubService";
 import { healthService } from "@/services/healthService";
+import { monthChecklistService } from "@/services/monthChecklistService";
 import { todayUTCInBrazil } from "@/lib/today";
 
 /**
@@ -165,6 +166,20 @@ export function buildMcpServer(): McpServer {
       annotations: readOnly,
     },
     async () => json(await alertsHubService.getAlerts()),
+  );
+
+  server.registerTool(
+    "fechamento_do_mes",
+    {
+      title: "Checklist de fechamento do mês",
+      description:
+        "O que já foi importado e conferido no mês (extratos, vendas, Ads, Full, notas, PGDAS, conciliação, categorias, SKUs sem custo, avisos da DRE) e o que falta. Sem mês, o mês passado.",
+      inputSchema: {
+        mes: z.string().regex(/^\d{4}-\d{2}$/).optional().describe("Mês no formato AAAA-MM (ex.: 2026-09). Padrão: mês passado."),
+      },
+      annotations: readOnly,
+    },
+    async ({ mes }) => json(await monthChecklistService.getChecklist(mes)),
   );
 
   server.registerTool(

@@ -8,6 +8,7 @@ const navGroups = [
     title: "Visão geral",
     items: [
       { href: "/", label: "Início" },
+      { href: "/fechamento-do-mes", label: "Fechamento do mês" },
       { href: "/alertas", label: "Alertas" },
       { href: "/saude-financeira", label: "Saúde Financeira" },
       { href: "/relatorio-mensal", label: "Relatório Mensal" },
