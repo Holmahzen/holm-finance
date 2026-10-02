@@ -11,8 +11,10 @@ export type ShopeeSaleRow = {
   quantity: number;
   grossRevenue: number;
   netRevenue: number;
-  /** Shopee não expõe um "custo do produto" próprio embutido na receita
-   * líquida (diferente do Mercado Turbo) — sempre 0 aqui. */
+  /** "Custo (-)" que o Mercado Turbo já descontou da "Margem Contrib." —
+   * igual ao relatório do Mercado Livre, guardado pra ser somado de volta
+   * antes de descontar o custo de produção do Holm Finance. 0 quando a
+   * coluna vem vazia. */
   marketplaceCost: number;
   customerName: string | null;
   status: string;
@@ -113,7 +115,9 @@ export function parseShopeeWorkbook(buffer: Buffer): ShopeeParseResult {
       quantity: Math.round(parseAmountCell(row["Qtde."])),
       grossRevenue: parseAmountCell(row["Faturamento SHP"]),
       netRevenue: parseAmountCell(row["Margem Contrib. (=)"]),
-      marketplaceCost: 0,
+      // Sem isso o custo de produção era descontado duas vezes nas vendas da
+      // Shopee (uma pelo Mercado Turbo, outra pelo Holm Finance).
+      marketplaceCost: isPlausibleAmount(row["Custo (-)"]) ? parseAmountCell(row["Custo (-)"]) : 0,
       customerName: null,
       status: DEFAULT_STATUS,
       listingCode: null,

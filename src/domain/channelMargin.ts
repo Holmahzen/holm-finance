@@ -8,9 +8,8 @@ import type { ProductMovementRow } from "@/domain/productReturns";
  * Margem de contribuição por canal de venda. Cada canal tem a sua fonte:
  * - Mercado Livre: relatório do Mercado Turbo, que já desconta imposto,
  *   tarifa e frete (mesma conta da Lucratividade), menos Flex, Ads e Full;
- * - Shopee: relatório do Mercado Turbo da Shopee, que desconta tarifa e frete
- *   mas vem SEM imposto (a coluna fica vazia) — o imposto entra aqui pela
- *   alíquota efetiva do DAS;
+ * - Shopee: relatório do Mercado Turbo da Shopee, que também já desconta
+ *   imposto, tarifa e frete;
  * - Atacado e venda direta: notas fiscais de venda sem intermediador — não
  *   tem tarifa de marketplace; desconta imposto e custo de produção. Frete e
  *   comissão de vendedor, se houver, não aparecem na nota e ficam de fora.
@@ -74,7 +73,7 @@ function finish(
 
 /**
  * Canal de marketplace pelo relatório do Mercado Turbo. `taxRate` só para
- * quando o relatório não traz o imposto descontado (Shopee).
+ * relatório que não traga o imposto descontado (0 quando já vem descontado).
  */
 export function marketplaceChannel(
   key: "mercadoLivre" | "shopee",
@@ -91,7 +90,7 @@ export function marketplaceChannel(
   let costedRevenue = 0;
   const products = aggregateSalesBySku(sales).map((s): ChannelProduct => {
     const cost = costOf(s.sku);
-    const skuTax = key === "shopee" ? s.grossRevenue * taxRate : 0;
+    const skuTax = s.grossRevenue * taxRate;
     const flex = s.flexOrderCount * FLEX_COST_PER_PACKAGE;
     const afterFees = s.netRevenue + s.marketplaceCost - flex - skuTax;
     fees += s.grossRevenue - (s.netRevenue + s.marketplaceCost) + flex;
@@ -118,7 +117,7 @@ export function marketplaceChannel(
       label: key === "shopee" ? "Shopee" : "Mercado Livre",
       source:
         key === "shopee"
-          ? "Relatório da Shopee (Mercado Turbo); imposto pela alíquota do DAS"
+          ? "Relatório da Shopee (Mercado Turbo), já com imposto; menos o custo de produção"
           : "Relatório do Mercado Livre (Mercado Turbo), já com imposto; menos Flex, Ads e Full",
       revenue: products.reduce((s, p) => s + p.revenue, 0),
       quantity: products.reduce((s, p) => s + p.quantity, 0),

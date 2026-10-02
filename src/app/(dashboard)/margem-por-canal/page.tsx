@@ -190,7 +190,7 @@ export default function MargemPorCanalPage() {
         {data && !loading && (
           <span className="pb-2 text-xs text-muted">
             {data.months === 1 ? monthLabel(data.to) : `${monthLabel(data.from)} a ${monthLabel(data.to)}`} · imposto de{" "}
-            {pct(data.taxRate)} ({data.taxRateSource}) na Shopee e no atacado
+            {pct(data.taxRate)} ({data.taxRateSource}) no atacado
           </span>
         )}
       </div>
@@ -221,7 +221,8 @@ export default function MargemPorCanalPage() {
           </div>
 
           <p className="max-w-prose text-xs text-muted">
-            No Mercado Livre o imposto já vem descontado pelo Mercado Turbo (por isso a linha de imposto não aparece).
+            No Mercado Livre e na Shopee o imposto já vem descontado pelo Mercado Turbo (por isso a linha de imposto não
+            aparece neles).
             No atacado, frete e comissão de vendedor não aparecem na nota fiscal: se você paga algum dos dois, a margem
             real é um pouco menor.
           </p>

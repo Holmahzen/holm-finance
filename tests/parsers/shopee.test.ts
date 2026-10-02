@@ -133,3 +133,17 @@ describe("parseShopeeWorkbook", () => {
     expect(() => parseShopeeWorkbook(buffer)).toThrow(/não contém linhas/);
   });
 });
+
+describe("parseShopeeWorkbook — custo do Mercado Turbo", () => {
+  it("guarda o Custo (-) em marketplaceCost pra não descontar o custo duas vezes", () => {
+    const buffer = buildWorkbookBuffer([makeRow({ "Custo (-)": 6.2, "Imposto (-)": 2.79, "Margem Contrib. (=)": 2.44 })]);
+    const { rows } = parseShopeeWorkbook(buffer);
+    expect(rows[0].marketplaceCost).toBeCloseTo(6.2);
+    expect(rows[0].netRevenue).toBeCloseTo(2.44);
+  });
+
+  it("Custo (-) vazio vira 0", () => {
+    const { rows } = parseShopeeWorkbook(buildWorkbookBuffer([makeRow()]));
+    expect(rows[0].marketplaceCost).toBe(0);
+  });
+});

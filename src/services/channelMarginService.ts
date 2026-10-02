@@ -55,15 +55,16 @@ export const channelMarginService = {
     const ads = adRows.reduce((sum, r) => sum + Number(r.investimento) * overlapShare(r.periodStart, r.periodEnd, start, end), 0);
 
     const channels = [
+      // Mercado Livre e Shopee: o Mercado Turbo já desconta o imposto (taxRate 0).
       marketplaceChannel(
         "mercadoLivre",
         sales.filter((s) => s.channel !== "Shopee").map(toAggregation),
         costs,
-        taxRate,
+        0,
         ads,
         Number(full._sum.amount ?? 0),
       ),
-      marketplaceChannel("shopee", sales.filter((s) => s.channel === "Shopee").map(toAggregation), costs, taxRate),
+      marketplaceChannel("shopee", sales.filter((s) => s.channel === "Shopee").map(toAggregation), costs, 0),
       directSalesChannel(noteRows, costs, taxRate),
     ];
 
