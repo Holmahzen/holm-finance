@@ -9,7 +9,9 @@ import { isMcpAuthorized } from "@/lib/mcpAuth";
  * sozinho por Bearer MCP_TOKEN, igual ao cron faz com CRON_SECRET.
  */
 async function handle(request: Request): Promise<Response> {
-  if (!isMcpAuthorized(request.headers.get("authorization"), process.env.MCP_TOKEN)) {
+  // Na Vercel a variável foi cadastrada em minúsculas; aceita os dois nomes.
+  const token = process.env.MCP_TOKEN ?? process.env.mcp_token;
+  if (!isMcpAuthorized(request.headers.get("authorization"), token)) {
     return Response.json(
       { jsonrpc: "2.0", error: { code: -32001, message: "não autorizado" }, id: null },
       { status: 401 },
