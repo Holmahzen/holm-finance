@@ -95,7 +95,8 @@ async function adsAndFull(w: MonthWindow): Promise<ChecklistItem[]> {
     prisma.mlFullCost.count({ where: { costDate: { gte: prevStart, lt: w.start } } }),
   ]);
   const expected = daysExpected(w);
-  const covered = coveredDays(adRows.map((r) => ({ start: r.periodStart, end: r.periodEnd })), w);
+  // Mesma folga de um dia dos relatórios de venda (fuso/fechamento do relatório).
+  const covered = Math.min(expected, coveredDays(adRows.map((r) => ({ start: r.periodStart, end: r.periodEnd })), w) + 1);
   const items: ChecklistItem[] = [
     {
       key: "ads",
@@ -239,8 +240,9 @@ async function reviews(w: MonthWindow, today: Date): Promise<ChecklistItem[]> {
 async function dreWarnings(w: MonthWindow): Promise<ChecklistItem[]> {
   const result = await dreCompetenciaService.getReport(w.month, { withTrend: false });
   if (result.month !== w.month || !result.report) return [];
-  // PGDAS e notas de serviço já são itens próprios do checklist.
-  const duplicated = /PGDAS|notas de serviço/i;
+  // PGDAS e notas de serviço já são itens próprios do checklist; a nota sobre
+  // data de competência é explicação permanente, não pendência.
+  const duplicated = /PGDAS|notas de serviço|vêm dos lançamentos/i;
   return result.report.warnings.filter((warning) => !duplicated.test(warning)).map((warning, i) => ({
     key: `dre-${i}`,
     group: "Avisos da DRE" as const,
