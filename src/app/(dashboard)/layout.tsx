@@ -41,6 +41,7 @@ const navGroups = [
     title: "Produtos & vendas",
     items: [
       { href: "/produtos", label: "Produtos" },
+      { href: "/custo-por-modelo", label: "Custo por modelo" },
       { href: "/lucratividade-produtos", label: "Lucratividade dos Produtos" },
       { href: "/vendas", label: "Vendas" },
       { href: "/recebiveis-ml", label: "Recebíveis ML" },
