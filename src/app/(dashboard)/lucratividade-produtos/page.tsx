@@ -179,9 +179,10 @@ export default function ProductProfitabilityPage() {
       <div>
         <h1 className="font-serif text-3xl text-foreground">Lucratividade dos Produtos</h1>
         <p className="max-w-prose text-sm text-muted">
-          Cruza quem vende mais (curva ABC pela receita) com quem dá lucro de verdade (margem já
-          cadastrada), pra saber onde proteger, onde ajustar preço e o que vale descontinuar — não só
-          o que mais vende.
+          Cruza quem vende mais (curva ABC pela receita) com quem dá lucro de verdade, pra saber onde
+          proteger, onde ajustar preço e o que vale descontinuar — não só o que mais vende. A margem
+          vem das vendas reais do período (preço, imposto, tarifa e frete do Mercado Turbo, menos o
+          Flex e o custo de tecido/costura/aviamentos cadastrado), não do preço digitado em Produtos.
         </p>
       </div>
 

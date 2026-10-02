@@ -6,7 +6,6 @@ import { dreService } from "@/services/dreService";
 import { aggregateSalesBySku } from "@/domain/salesAggregation";
 import { buildProfitabilityReport } from "@/domain/productProfitability";
 import { allocateAdSpendBySku } from "@/domain/adSpendAllocation";
-import type { ProductInput } from "@/domain/breakEven";
 
 export type PeriodResult = {
   receitaLiquida: number;
@@ -47,9 +46,9 @@ export const productProfitabilityService = {
     const start = month ? new Date(year, month - 1, 1) : new Date(year, 0, 1);
     const end = month ? new Date(year, month, 1) : new Date(year + 1, 0, 1);
 
-    const [sales, products, periodResult] = await Promise.all([
+    const [sales, productCosts, periodResult] = await Promise.all([
       marketplaceSaleRepository.findByPeriod(start, end),
-      productRepository.findActive(),
+      productRepository.getProductCostsBySku(),
       month
         ? dreService.getDRE(year, month).then((d): PeriodResult => ({
             receitaLiquida: d.receitaLiquida,
@@ -82,12 +81,15 @@ export const productProfitabilityService = {
         netRevenue: Number(s.netRevenue),
         marketplaceCost: Number(s.marketplaceCost),
         status: s.status,
+        shippingModality: s.shippingModality,
       })),
     );
 
-    const productBySku = new Map<string, ProductInput>(
-      products.filter((p) => p.sku).map((p) => [p.sku!, p]),
-    );
+    // Margem pela venda real (preço, imposto, tarifa e frete que o Mercado
+    // Turbo trouxe, menos o custo de produção cadastrado) — a mesma conta do
+    // Ponto de Equilíbrio. Antes usava preço e tarifa digitados em Produtos,
+    // que ficam desatualizados e davam margem bem acima da DRE.
+    const productionCostBySku = new Map(productCosts.map((c) => [c.sku, c]));
 
     // Um mesmo anúncio (MLB) costuma vender vários SKUs diferentes no
     // período (variações de tamanho/cor) — o investimento desse anúncio
@@ -115,7 +117,7 @@ export const productProfitabilityService = {
 
     const { rows, suggestedMarginThreshold } = buildProfitabilityReport(
       skus,
-      productBySku,
+      productionCostBySku,
       marginThreshold,
       adSpendBySku,
       fullCostBySku,

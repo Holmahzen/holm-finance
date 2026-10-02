@@ -1,4 +1,4 @@
-import { computeProductMargin, type ProductInput, type ProductMargin } from "@/domain/breakEven";
+import { computeSalesBasedMargin, type ProductionCost, type ProductMargin } from "@/domain/breakEven";
 import type { SkuSalesAggregate } from "@/domain/salesAggregation";
 
 /**
@@ -106,7 +106,7 @@ export function suggestMarginThreshold(margins: number[]): number {
 
 export function buildProfitabilityReport(
   skus: SkuSalesAggregate[],
-  productBySku: Map<string, ProductInput>,
+  productionCostBySku: Map<string, ProductionCost>,
   marginThreshold?: number,
   adSpendBySku: Map<string, number> = new Map(),
   fullCostBySku: Map<string, number> = new Map(),
@@ -115,8 +115,8 @@ export function buildProfitabilityReport(
 
   const marginBySku = new Map<string, ProductMargin | null>();
   for (const s of abc) {
-    const product = productBySku.get(s.sku);
-    marginBySku.set(s.sku, product ? computeProductMargin(product) : null);
+    const cost = productionCostBySku.get(s.sku);
+    marginBySku.set(s.sku, cost ? computeSalesBasedMargin(s, cost) : null);
   }
 
   const knownMargins = [...marginBySku.values()].filter((m): m is ProductMargin => m !== null).map((m) => m.marginPercent);

@@ -7,7 +7,7 @@ import {
   type SkuAbc,
 } from "@/domain/productProfitability";
 import type { SkuSalesAggregate } from "@/domain/salesAggregation";
-import type { ProductInput } from "@/domain/breakEven";
+import type { ProductionCost } from "@/domain/breakEven";
 
 function sku(overrides: Partial<SkuSalesAggregate> = {}): SkuSalesAggregate {
   return {
@@ -22,18 +22,13 @@ function sku(overrides: Partial<SkuSalesAggregate> = {}): SkuSalesAggregate {
   };
 }
 
-function product(overrides: Partial<ProductInput> = {}): ProductInput {
-  return {
-    salePrice: 100,
-    tecidoCost: 20,
-    costuraCost: 10,
-    aviamentosCost: 5,
-    marketplaceFee: 19,
-    shippingCost: 0,
-    packagingCost: 0,
-    avgMonthlyQuantity: 0,
-    ...overrides,
-  };
+function cost(overrides: Partial<ProductionCost> = {}): ProductionCost {
+  return { tecidoCost: 20, costuraCost: 10, aviamentosCost: 5, ...overrides };
+}
+
+/** 10 peças a R$ 100: sobram R$ 81/peça depois de imposto/tarifa/frete (Mercado Turbo). */
+function soldA1(overrides: Partial<SkuSalesAggregate> = {}): SkuSalesAggregate {
+  return sku({ sku: "A1", grossRevenue: 1000, quantity: 10, netRevenue: 500, marketplaceCost: 310, ...overrides });
 }
 
 describe("classifyAbc", () => {
@@ -104,12 +99,12 @@ describe("suggestMarginThreshold", () => {
 
 describe("buildProfitabilityReport", () => {
   it("junta vendas e custo, calcula contribuicao e classifica cada linha", () => {
-    const skus = [sku({ sku: "A1", grossRevenue: 1000, quantity: 10 })];
-    const products = new Map([["A1", product({ salePrice: 100, tecidoCost: 20, costuraCost: 10, aviamentosCost: 5, marketplaceFee: 19 })]]);
+    const skus = [soldA1()];
+    const products = new Map([["A1", cost()]]);
     const { rows } = buildProfitabilityReport(skus, products, 0.3);
     expect(rows).toHaveLength(1);
     expect(rows[0].hasCost).toBe(true);
-    expect(rows[0].marginValue).toBeCloseTo(46); // 100 - (20+10+5+19)
+    expect(rows[0].marginValue).toBeCloseTo(46); // (500 + 310) / 10 - (20+10+5)
     expect(rows[0].contribution).toBeCloseTo(460); // 46 * 10
     expect(rows[0].quadrant).toBe("ESTRELA"); // classe A (unico SKU) + margem 46% >= 30%
   });
@@ -123,10 +118,13 @@ describe("buildProfitabilityReport", () => {
   });
 
   it("usa a mediana como limite quando marginThreshold nao e informado", () => {
-    const skus: SkuSalesAggregate[] = [sku({ sku: "A1", grossRevenue: 600 }), sku({ sku: "A2", grossRevenue: 400 })];
+    const skus: SkuSalesAggregate[] = [
+      sku({ sku: "A1", grossRevenue: 600, netRevenue: 480, marketplaceCost: 0 }),
+      sku({ sku: "A2", grossRevenue: 400, netRevenue: 140, marketplaceCost: 0 }),
+    ];
     const products = new Map([
-      ["A1", product({ salePrice: 100, tecidoCost: 0, costuraCost: 0, aviamentosCost: 0, marketplaceFee: 20 })], // margem 80%
-      ["A2", product({ salePrice: 100, tecidoCost: 60, costuraCost: 0, aviamentosCost: 0, marketplaceFee: 20 })], // margem 20%
+      ["A1", cost({ tecidoCost: 0, costuraCost: 0, aviamentosCost: 0 })], // 480 / 600 = 80%
+      ["A2", cost({ tecidoCost: 60, costuraCost: 0, aviamentosCost: 0 })], // 80 / 400 = 20%
     ]);
     const { suggestedMarginThreshold } = buildProfitabilityReport(skus, products);
     expect(suggestedMarginThreshold).toBeCloseTo(0.5); // mediana entre 0.8 e 0.2
@@ -138,8 +136,8 @@ describe("buildProfitabilityReport", () => {
   });
 
   it("desconta o investimento em Ads da contribuicao quando o SKU tem gasto no periodo", () => {
-    const skus = [sku({ sku: "A1", grossRevenue: 1000, quantity: 10 })];
-    const products = new Map([["A1", product({ salePrice: 100, tecidoCost: 20, costuraCost: 10, aviamentosCost: 5, marketplaceFee: 19 })]]);
+    const skus = [soldA1()];
+    const products = new Map([["A1", cost()]]);
     const adSpendBySku = new Map([["A1", 150]]);
     const { rows } = buildProfitabilityReport(skus, products, 0.3, adSpendBySku);
     expect(rows[0].contribution).toBeCloseTo(460); // 46 * 10, sem desconto de Ads
@@ -148,24 +146,24 @@ describe("buildProfitabilityReport", () => {
   });
 
   it("adSpend e contributionAfterAds ficam zero/iguais a contribution quando nao ha gasto de Ads pro SKU", () => {
-    const skus = [sku({ sku: "A1", grossRevenue: 1000, quantity: 10 })];
-    const products = new Map([["A1", product({ salePrice: 100, tecidoCost: 20, costuraCost: 10, aviamentosCost: 5, marketplaceFee: 19 })]]);
+    const skus = [soldA1()];
+    const products = new Map([["A1", cost()]]);
     const { rows } = buildProfitabilityReport(skus, products, 0.3);
     expect(rows[0].adSpend).toBe(0);
     expect(rows[0].contributionAfterAds).toBeCloseTo(rows[0].contribution);
   });
 
   it("calcula adSharePercent como a fracao da contribuicao comida pelo Ads", () => {
-    const skus = [sku({ sku: "A1", grossRevenue: 1000, quantity: 10 })];
-    const products = new Map([["A1", product({ salePrice: 100, tecidoCost: 20, costuraCost: 10, aviamentosCost: 5, marketplaceFee: 19 })]]);
+    const skus = [soldA1()];
+    const products = new Map([["A1", cost()]]);
     const adSpendBySku = new Map([["A1", 230]]); // metade da contribuicao de 460
     const { rows } = buildProfitabilityReport(skus, products, 0.3, adSpendBySku);
     expect(rows[0].adSharePercent).toBeCloseTo(0.5);
   });
 
   it("adSharePercent fica null quando a contribuicao nao e positiva (produto ja deficitario sem contar Ads)", () => {
-    const skus = [sku({ sku: "A1", grossRevenue: 1000, quantity: 10 })];
-    const products = new Map([["A1", product({ salePrice: 100, tecidoCost: 90, costuraCost: 10, aviamentosCost: 5, marketplaceFee: 19 })]]); // margem negativa
+    const skus = [soldA1()];
+    const products = new Map([["A1", cost({ tecidoCost: 90 })]]); // 81 - 105: margem negativa
     const adSpendBySku = new Map([["A1", 50]]);
     const { rows } = buildProfitabilityReport(skus, products, 0.3, adSpendBySku);
     expect(rows[0].contribution).toBeLessThanOrEqual(0);
@@ -173,8 +171,8 @@ describe("buildProfitabilityReport", () => {
   });
 
   it("desconta o custo Full da contribuicao final quando o SKU teve custo Full no periodo", () => {
-    const skus = [sku({ sku: "A1", grossRevenue: 1000, quantity: 10 })];
-    const products = new Map([["A1", product({ salePrice: 100, tecidoCost: 20, costuraCost: 10, aviamentosCost: 5, marketplaceFee: 19 })]]);
+    const skus = [soldA1()];
+    const products = new Map([["A1", cost()]]);
     const adSpendBySku = new Map([["A1", 150]]);
     const fullCostBySku = new Map([["A1", 40]]);
     const { rows } = buildProfitabilityReport(skus, products, 0.3, adSpendBySku, fullCostBySku);
@@ -184,10 +182,17 @@ describe("buildProfitabilityReport", () => {
   });
 
   it("fullCost e contributionFinal ficam zero/iguais a contributionAfterAds quando nao ha custo Full pro SKU", () => {
-    const skus = [sku({ sku: "A1", grossRevenue: 1000, quantity: 10 })];
-    const products = new Map([["A1", product({ salePrice: 100, tecidoCost: 20, costuraCost: 10, aviamentosCost: 5, marketplaceFee: 19 })]]);
+    const skus = [soldA1()];
+    const products = new Map([["A1", cost()]]);
     const { rows } = buildProfitabilityReport(skus, products, 0.3);
     expect(rows[0].fullCost).toBe(0);
     expect(rows[0].contributionFinal).toBeCloseTo(rows[0].contributionAfterAds);
+  });
+
+  it("usa a venda real, não o preço do cadastro, e desconta o Flex", () => {
+    const { rows } = buildProfitabilityReport([soldA1({ flexOrderCount: 2 })], new Map([["A1", cost()]]), 0.3);
+    // (500 + 310 - 2 × 12,99) / 10 - 35
+    expect(rows[0].marginValue).toBeCloseTo((810 - 25.98) / 10 - 35);
+    expect(rows[0].marginPercent).toBeCloseTo(rows[0].marginValue / 100);
   });
 });
