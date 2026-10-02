@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { breakdownAt, currentBreakdown, fixedCostPerUnit, priceForMargin, type ModelEconomics } from "@/domain/priceSimulator";
+import {
+  breakdownAt,
+  currentBreakdown,
+  fixedCostPerUnit,
+  markupOf,
+  priceForMargin,
+  quickMarginAt,
+  quickPriceFor,
+  type ModelEconomics,
+} from "@/domain/priceSimulator";
 
 // 100 peças a R$ 50: sobraram R$ 30/peça depois de imposto, tarifa e frete;
 // custo de produção R$ 20; R$ 200 de Ads (4% da receita).
@@ -40,5 +49,26 @@ describe("priceSimulator", () => {
 
   it("devolve null quando nenhum preço chega na meta", () => {
     expect(priceForMargin(model, assumptions, 0.7)).toBeNull();
+  });
+});
+
+describe("calculadora rápida", () => {
+  const input = { unitCost: 20, fixedPerUnit: 6, taxRate: 0.14, commissionRate: 0.14, adsRate: 0.04 };
+
+  it("preço pra margem pedida e markup equivalente", () => {
+    const price = quickPriceFor(input, 0.18)!;
+    expect(price).toBeCloseTo(26 / 0.5);
+    expect(quickMarginAt(input, price).marginPercent).toBeCloseTo(0.18);
+    expect(markupOf(price, 20)).toBeCloseTo(2.6);
+  });
+
+  it("margem a partir de um preço digitado", () => {
+    // 50 × 0,68 − 6 − 20 = 8
+    expect(quickMarginAt(input, 50)).toEqual({ contribution: expect.closeTo(8), marginPercent: expect.closeTo(0.16) });
+  });
+
+  it("sem custo não há markup, e meta impossível não tem preço", () => {
+    expect(markupOf(50, 0)).toBeNull();
+    expect(quickPriceFor(input, 0.7)).toBeNull();
   });
 });

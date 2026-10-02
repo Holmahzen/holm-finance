@@ -92,3 +92,33 @@ export function priceForMargin(e: ModelEconomics, a: PriceAssumptions, target: n
   if (share <= 0.02) return null;
   return (fixedCostPerUnit(e, a) + e.unitCost) / share;
 }
+
+/**
+ * Calculadora rápida, sem venda real: custo da peça, despesas por peça em R$
+ * (tarifa fixa, frete, embalagem) e os percentuais sobre o preço.
+ */
+export type QuickPriceInput = {
+  unitCost: number;
+  fixedPerUnit: number;
+  taxRate: number;
+  commissionRate: number;
+  adsRate: number;
+};
+
+/** Preço pra margem `target` (o "markup divisor"); null se os percentuais já comem o preço todo. */
+export function quickPriceFor(i: QuickPriceInput, target: number): number | null {
+  const share = 1 - i.taxRate - i.commissionRate - i.adsRate - target;
+  if (share <= 0.02) return null;
+  return (i.unitCost + i.fixedPerUnit) / share;
+}
+
+/** Margem e sobra por peça a um preço. */
+export function quickMarginAt(i: QuickPriceInput, price: number): { contribution: number; marginPercent: number } {
+  const contribution = price * (1 - i.taxRate - i.commissionRate - i.adsRate) - i.fixedPerUnit - i.unitCost;
+  return { contribution, marginPercent: price > 0 ? contribution / price : 0 };
+}
+
+/** Markup multiplicador: por quanto multiplicar o custo da peça pra chegar no preço. */
+export function markupOf(price: number, unitCost: number): number | null {
+  return unitCost > 0 ? price / unitCost : null;
+}

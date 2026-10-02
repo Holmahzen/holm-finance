@@ -6,8 +6,11 @@ import { formatBRL } from "@/lib/format";
 import {
   breakdownAt,
   currentBreakdown,
+  markupOf,
   ML_FREE_SHIPPING_THRESHOLD,
   priceForMargin,
+  quickMarginAt,
+  quickPriceFor,
   type ModelEconomics,
   type PriceAssumptions,
   type UnitBreakdown,
@@ -78,7 +81,9 @@ function marginTone(v: number, target: number) {
   return "text-emerald-400";
 }
 
-function Increase({ from, to }: { from: number; to: number | null }) {
+const markupLabel = (v: number | null) => (v === null ? "—" : `× ${v.toFixed(2).replace(".", ",")}`);
+
+function Increase({ from, to, unitCost }: { from: number; to: number | null; unitCost: number }) {
   if (to === null) return <span className="text-red-400">não chega</span>;
   const change = to / from - 1;
   return (
@@ -88,6 +93,7 @@ function Increase({ from, to }: { from: number; to: number | null }) {
         {change > 0 ? "+" : ""}
         {pct(change)}
       </span>
+      <span className="ml-1 text-xs text-muted">{markupLabel(markupOf(to, unitCost))}</span>
       {from < ML_FREE_SHIPPING_THRESHOLD && to >= ML_FREE_SHIPPING_THRESHOLD && (
         <span className="ml-1 text-xs text-amber-300" title="Cruza a faixa de frete grátis do ML: o custo de frete muda">
           ⚠ R$ 79
@@ -180,6 +186,104 @@ function Tester({ row, assumptions, target, tax2027 }: { row: Row; assumptions: 
   );
 }
 
+function QuickCalculator({ settings }: { settings: Settings }) {
+  const [cost, setCost] = useState("20");
+  const [fixed, setFixed] = useState("6,75");
+  const [ads, setAds] = useState("4,5");
+  const [testPrice, setTestPrice] = useState("");
+  const num = (v: string) => Number(v.replace(",", ".")) || 0;
+  const input = {
+    unitCost: num(cost),
+    fixedPerUnit: num(fixed),
+    taxRate: toFraction(settings.taxToday),
+    commissionRate: toFraction(settings.commission),
+    adsRate: toFraction(ads),
+  };
+  const target = toFraction(settings.target);
+  const price = quickPriceFor(input, target);
+  const price2027 = quickPriceFor({ ...input, taxRate: toFraction(settings.tax2027) }, target);
+  const tested = num(testPrice) > 0 ? quickMarginAt(input, num(testPrice)) : null;
+  const inputClass =
+    "w-28 rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none";
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="rounded-lg border border-border bg-surface p-4 text-sm text-muted">
+        <strong className="text-foreground">Markup ou margem?</strong> São a mesma conta vista de lados diferentes.{" "}
+        <strong className="text-foreground">Markup</strong> é por quanto você multiplica o custo da peça;{" "}
+        <strong className="text-foreground">margem</strong> é quanto sobra de cada venda. No marketplace, comece pela
+        margem: comissão, imposto e Ads são % do <em>preço</em> e crescem junto com ele — por isso um markup fixo pode dar
+        prejuízo. Aqui você escolhe a margem e a calculadora devolve o preço e o markup equivalente.
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
+        <div className="flex flex-wrap items-end gap-4">
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted">
+            Custo da peça (R$)
+            <input value={cost} onChange={(e) => setCost(e.target.value)} inputMode="decimal" className={inputClass} />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted">
+            Tarifa fixa + frete por peça (R$)
+            <input value={fixed} onChange={(e) => setFixed(e.target.value)} inputMode="decimal" className={inputClass} />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted">
+            Ads (% da venda)
+            <input value={ads} onChange={(e) => setAds(e.target.value)} inputMode="decimal" className={inputClass} />
+          </label>
+        </div>
+        <p className="text-xs text-muted">
+          Usa as premissas de cima: margem desejada de {settings.target}%, imposto de {settings.taxToday}% (e{" "}
+          {settings.tax2027}% em 2027) e comissão de {settings.commission}%. A tarifa fixa e o frete por peça você confere
+          na calculadora de custos do Mercado Livre para o anúncio (abaixo de R$ 79 costuma ser a tarifa fixa; acima, o
+          frete grátis).
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="rounded-lg border border-gold/40 bg-surface p-4">
+          <span className="text-xs font-medium tracking-wide text-muted uppercase">
+            Preço para {settings.target}% de margem — hoje
+          </span>
+          <p className="font-serif text-3xl text-gold">{price !== null ? formatBRL(price) : "não chega"}</p>
+          <span className="text-sm text-foreground">
+            markup {markupLabel(price !== null ? markupOf(price, input.unitCost) : null)}
+          </span>
+          {price !== null && price >= ML_FREE_SHIPPING_THRESHOLD && (
+            <p className="mt-1 text-xs text-amber-300">Acima de R$ 79: o frete grátis passa a ser seu — confira o valor fixo.</p>
+          )}
+        </div>
+        <div className="rounded-lg border border-border bg-surface p-4">
+          <span className="text-xs font-medium tracking-wide text-muted uppercase">Com o imposto de 2027</span>
+          <p className="font-serif text-3xl text-foreground">{price2027 !== null ? formatBRL(price2027) : "não chega"}</p>
+          <span className="text-sm text-muted">
+            markup {markupLabel(price2027 !== null ? markupOf(price2027, input.unitCost) : null)}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-4 rounded-lg border border-border bg-surface p-4">
+        <label className="flex flex-col gap-1 text-xs font-medium text-muted">
+          Ou teste um preço (R$)
+          <input
+            value={testPrice}
+            onChange={(e) => setTestPrice(e.target.value)}
+            inputMode="decimal"
+            placeholder="ex.: 59,90"
+            className={inputClass}
+          />
+        </label>
+        {tested && (
+          <p className="pb-1 text-sm text-foreground">
+            Sobra {formatBRL(tested.contribution)} por peça —{" "}
+            <span className={marginTone(tested.marginPercent, target)}>{pct(tested.marginPercent)} de margem</span>, markup{" "}
+            {markupLabel(markupOf(num(testPrice), input.unitCost))}.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function SimuladorDePrecoPage() {
   const [data, setData] = useState<{ days: number; models: ProductModel[] } | null>(null);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
@@ -187,6 +291,7 @@ export default function SimuladorDePrecoPage() {
   const [onlyBelow, setOnlyBelow] = useState(true);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState<string | null>(null);
+  const [tab, setTab] = useState<"modelos" | "calculadora">("modelos");
 
   useEffect(() => {
     fetch("/api/products/models")
@@ -301,6 +406,27 @@ export default function SimuladorDePrecoPage() {
         </p>
       </div>
 
+      <div className="flex gap-2 border-b border-border">
+        {(
+          [
+            ["modelos", "Por modelo (vendas reais)"],
+            ["calculadora", "Calculadora rápida (markup)"],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm ${tab === key ? "border-gold text-gold" : "border-transparent text-muted hover:text-foreground"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "calculadora" ? (
+        <QuickCalculator settings={settings} />
+      ) : (
+        <>
       {data && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-lg border border-border bg-surface p-4">
@@ -356,6 +482,7 @@ export default function SimuladorDePrecoPage() {
                 <th className="py-2 text-right font-medium">Peças/mês</th>
                 <th className="py-2 text-right font-medium">Preço médio</th>
                 <th className="py-2 text-right font-medium">Custo da peça</th>
+                <th className="py-2 text-right font-medium">Markup hoje</th>
                 <th className="py-2 text-right font-medium">Margem hoje</th>
                 <th className="py-2 pl-4 font-medium">Preço p/ {settings.target}% hoje</th>
                 <th className="py-2 pl-4 font-medium">Preço p/ {settings.target}% em 2027</th>
@@ -378,14 +505,15 @@ export default function SimuladorDePrecoPage() {
                       <td className="py-2 text-right tabular-nums">{Math.round(r.economics.units)}</td>
                       <td className="py-2 text-right tabular-nums">{formatBRL(now.price)}</td>
                       <td className="py-2 text-right tabular-nums">{formatBRL(r.economics.unitCost)}</td>
+                      <td className="py-2 text-right tabular-nums text-muted">{markupLabel(markupOf(now.price, r.economics.unitCost))}</td>
                       <td className={`py-2 text-right tabular-nums font-medium ${marginTone(now.marginPercent, target)}`}>
                         {pct(now.marginPercent)}
                       </td>
                       <td className="py-2 pl-4">
-                        <Increase from={now.price} to={priceForMargin(r.economics, assumptions, target)} />
+                        <Increase from={now.price} to={priceForMargin(r.economics, assumptions, target)} unitCost={r.economics.unitCost} />
                       </td>
                       <td className="py-2 pl-4">
-                        <Increase from={now.price} to={priceForMargin(r.economics, assumptions, target, tax2027)} />
+                        <Increase from={now.price} to={priceForMargin(r.economics, assumptions, target, tax2027)} unitCost={r.economics.unitCost} />
                       </td>
                       <td className="py-2 pl-4 text-right">
                         <button
@@ -398,7 +526,7 @@ export default function SimuladorDePrecoPage() {
                     </tr>
                     {open === r.key && (
                       <tr>
-                        <td colSpan={8} className="py-3">
+                        <td colSpan={9} className="py-3">
                           <Tester row={r} assumptions={assumptions} target={target} tax2027={tax2027} />
                         </td>
                       </tr>
@@ -409,6 +537,8 @@ export default function SimuladorDePrecoPage() {
             </tbody>
           </table>
         </div>
+      )}
+        </>
       )}
     </div>
   );
