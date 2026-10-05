@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { formatBRL } from "@/lib/format";
+import { itemKeys, normalizeKey } from "@/domain/productModels";
 
 type PieceCost = { tecidoCost: number; costuraCost: number; aviamentosCost: number };
 
@@ -14,6 +15,8 @@ type ModelSku = {
   grossRevenue: number;
   beforeProductionCost: number;
   size: string | null;
+  kit: { quantity: number; itemSku: string } | null;
+  suggestedCost: PieceCost | null;
 };
 
 type ProductModel = {
@@ -25,6 +28,8 @@ type ProductModel = {
   grossRevenue: number;
   costStatus: "igual" | "diferente" | "parcial" | "sem";
   referenceCost: PieceCost | null;
+  suggestedCost: PieceCost | null;
+  suggestedFrom: string | null;
   kits: { sku: string; quantity: number; itemSku: string }[];
   marginPercent: number | null;
 };
@@ -51,7 +56,9 @@ function marginTone(v: number | null) {
 }
 
 function Editor({ model, onSaved, onCancel }: { model: ProductModel; onSaved: (msg: string) => void; onCancel: () => void }) {
-  const ref = model.referenceCost;
+  // Kit sem custo abre já calculado: quantidade do SKU × custo do item.
+  const ref = model.referenceCost ?? model.suggestedCost;
+  const fromKit = model.referenceCost === null && model.suggestedCost !== null;
   const [tecido, setTecido] = useState(ref ? String(ref.tecidoCost) : "");
   const [costura, setCostura] = useState(ref ? String(ref.costuraCost) : "");
   const [aviamentos, setAviamentos] = useState(ref ? String(ref.aviamentosCost) : "");
@@ -75,10 +82,10 @@ function Editor({ model, onSaved, onCancel }: { model: ProductModel; onSaved: (m
     return contribution / revenue;
   }, [model.skus, selected, unitCost]);
 
-  const normalize = (t: string) => t.toUpperCase().replace(/[^A-Z0-9]/g, "");
   const kits = model.kits.filter((k) =>
-    model.skus.some((s) => selected.has(s.sku) && normalize(s.sku) === normalize(k.itemSku)),
+    model.skus.some((s) => selected.has(s.sku) && itemKeys(s.sku).includes(normalizeKey(k.itemSku))),
   );
+  const kitSku = model.skus.find((s) => s.kit && s.suggestedCost);
 
   function toggle(sku: string) {
     setSelected((prev) => {
@@ -136,6 +143,12 @@ function Editor({ model, onSaved, onCancel }: { model: ProductModel; onSaved: (m
           <span className={`font-serif text-xl ${marginTone(preview)}`}>{pct(preview)}</span>
         </div>
       </div>
+      {fromKit && kitSku?.kit && (
+        <p className="text-xs text-emerald-400">
+          Calculado: {kitSku.kit.quantity} × o custo de {model.suggestedFrom} ({formatBRL(total(model.suggestedCost) / kitSku.kit.quantity)} por peça ={" "}
+          {formatBRL(total(model.suggestedCost))}). É só conferir e salvar.
+        </p>
+      )}
       <p className="text-xs text-muted">
         Se não souber separar, pode pôr o custo inteiro em um campo só — a divisão só importa pra planejar compra
         de tecido e aviamento.
@@ -300,6 +313,9 @@ export default function CustoPorModeloPage() {
                     </td>
                     <td className="py-2 pl-4">
                       <span className="tabular-nums text-foreground">{m.referenceCost ? formatBRL(total(m.referenceCost)) : "—"}</span>
+                      {!m.referenceCost && m.suggestedCost && (
+                        <span className="ml-2 text-xs text-emerald-400">calculado {formatBRL(total(m.suggestedCost))}</span>
+                      )}
                       <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${STATUS_BADGE[m.costStatus].className}`}>
                         {STATUS_BADGE[m.costStatus].label}
                       </span>

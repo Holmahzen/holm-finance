@@ -104,4 +104,40 @@ describe("buildProductModels", () => {
     expect(item.skus.map((s) => s.sku)).toEqual(["TO.TAC1001", "TOTAC.1001"]);
     expect(item.kits).toEqual([{ sku: "2.TOTAC1001", quantity: 2, itemSku: "TOTAC1001" }]);
   });
+
+  describe("custo calculado do kit sem custo", () => {
+    const unit = { tecidoCost: 0.16, costuraCost: 1.1, aviamentosCost: 1.65 };
+
+    it("multiplica a quantidade do SKU pelo custo do item unitário V-", () => {
+      const models = buildProductModels([
+        row({ sku: "V-TO1001", cost: unit, quantity: 840, grossRevenue: 100 }),
+        row({ sku: "15.TO1001", quantity: 1, grossRevenue: 97.9 }),
+      ]);
+      const kit = models.find((m) => m.key === "15.TO1001")!;
+      expect(kit.costStatus).toBe("sem");
+      expect(kit.suggestedFrom).toBe("V-TO1001");
+      expect(kit.suggestedCost).toEqual({ tecidoCost: 2.4, costuraCost: 16.5, aviamentosCost: 24.75 });
+    });
+
+    it("prefere o item que mais vendeu quando TO1001 e V-TO1001 existem", () => {
+      const [kit] = buildProductModels([
+        row({ sku: "TO1001", cost: { ...unit, tecidoCost: 9 }, quantity: 0 }),
+        row({ sku: "V-TO1001", cost: unit, quantity: 840 }),
+        row({ sku: "15.TO1001" }),
+      ]).filter((m) => m.key === "15.TO1001");
+      expect(kit.suggestedFrom).toBe("V-TO1001");
+      expect(kit.suggestedCost?.tecidoCost).toBe(2.4);
+    });
+
+    it("liga os kits ao modelo do V- e não sugere nada se o kit já tem custo ou o item não tem", () => {
+      const models = buildProductModels([
+        row({ sku: "V-TO1001", cost: unit }),
+        row({ sku: "5.TO1001", cost: { tecidoCost: 0.8, costuraCost: 5.5, aviamentosCost: 8.25 } }),
+        row({ sku: "10.TOTAC1001" }),
+      ]);
+      expect(models.find((m) => m.key === "VTO1001")!.kits.map((k) => k.sku)).toEqual(["5.TO1001"]);
+      expect(models.find((m) => m.key === "5.TO1001")!.suggestedCost).toBeNull();
+      expect(models.find((m) => m.key === "10.TOTAC1001")!.suggestedCost).toBeNull();
+    });
+  });
 });

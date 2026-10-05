@@ -39,6 +39,18 @@ export type ParsedSku = {
   kit: { quantity: number; itemSku: string } | null;
 };
 
+/**
+ * Chaves pelas quais um SKU pode ser "o item" de um kit. O item unitário
+ * costuma vender como V-TO1001 enquanto os kits se chamam 5.TO1001 (= 5 ×
+ * TO1001): os dois são o mesmo item.
+ */
+export function itemKeys(sku: string): string[] {
+  const upper = sku.trim().toUpperCase();
+  const keys = [normalizeKey(upper)];
+  if (/^V[-._]/.test(upper)) keys.push(normalizeKey(upper.slice(2)));
+  return keys;
+}
+
 function stripSeparator(base: string): string {
   return base.replace(/[.\-_]$/, "");
 }
@@ -98,7 +110,14 @@ export type ModelSkuInput = {
   adSpend?: number;
 };
 
-export type ModelSku = ModelSkuInput & { size: string | null; kit: ParsedSku["kit"] };
+export type ModelSku = ModelSkuInput & {
+  size: string | null;
+  kit: ParsedSku["kit"];
+  /** Kit sem custo próprio: quantidade × custo do item (ex.: 15 × custo de V-TO1001). */
+  suggestedCost: PieceCost | null;
+  /** SKU do item de onde saiu a sugestão. */
+  suggestedFrom: string | null;
+};
 
 export type ProductModel = {
   key: string;
@@ -113,6 +132,9 @@ export type ProductModel = {
   costStatus: "igual" | "diferente" | "parcial" | "sem";
   /** Custo que a tela sugere editar: o do SKU com custo que mais vendeu. */
   referenceCost: PieceCost | null;
+  /** Kit sem custo: o custo calculado pela quantidade do SKU × custo do item (null se não for kit ou o item não tem custo). */
+  suggestedCost: PieceCost | null;
+  suggestedFrom: string | null;
   /** Kits de quantidade (5.X) cujo item é um SKU deste modelo. */
   kits: { sku: string; quantity: number; itemSku: string }[];
   /** Margem real no período com o custo atual; null sem venda ou sem custo. */
@@ -137,11 +159,27 @@ export function sizeRank(size: string | null): number {
 
 export function buildProductModels(rows: ModelSkuInput[]): ProductModel[] {
   const parsedBySku = new Map(rows.map((r) => [r.sku.trim().toUpperCase(), parseSku(r.sku)]));
+
+  // SKUs com custo, por chave de item: é de onde sai o custo sugerido dos kits.
+  const costedByItemKey = new Map<string, ModelSkuInput[]>();
+  for (const r of rows) {
+    if (!r.cost || totalCost(r.cost) <= 0) continue;
+    if (parsedBySku.get(r.sku.trim().toUpperCase())!.kit) continue;
+    for (const key of itemKeys(r.sku)) costedByItemKey.set(key, [...(costedByItemKey.get(key) ?? []), r]);
+  }
+  const suggestFor = (parsed: ParsedSku, own: PieceCost | null) => {
+    if (!parsed.kit || (own && totalCost(own) > 0)) return { suggestedCost: null, suggestedFrom: null };
+    const candidates = costedByItemKey.get(normalizeKey(parsed.kit.itemSku)) ?? [];
+    const item = [...candidates].sort((a, b) => b.quantity - a.quantity)[0];
+    if (!item) return { suggestedCost: null, suggestedFrom: null };
+    return { suggestedCost: kitCost(item.cost!, parsed.kit.quantity), suggestedFrom: item.sku };
+  };
+
   const groups = new Map<string, ModelSku[]>();
   for (const r of rows) {
     const parsed = parsedBySku.get(r.sku.trim().toUpperCase())!;
     const list = groups.get(parsed.modelKey) ?? [];
-    list.push({ ...r, size: parsed.size, kit: parsed.kit });
+    list.push({ ...r, size: parsed.size, kit: parsed.kit, ...suggestFor(parsed, r.cost) });
     groups.set(parsed.modelKey, list);
   }
 
@@ -168,6 +206,7 @@ export function buildProductModels(rows: ModelSkuInput[]): ProductModel[] {
             : "diferente";
     const reference = [...costed].sort((a, b) => b.quantity - a.quantity)[0] ?? null;
     const top = [...skus].sort((a, b) => b.grossRevenue - a.grossRevenue)[0];
+    const suggested = skus.find((s) => s.suggestedCost !== null) ?? null;
 
     const quantity = skus.reduce((sum, s) => sum + s.quantity, 0);
     const grossRevenue = skus.reduce((sum, s) => sum + s.grossRevenue, 0);
@@ -192,8 +231,14 @@ export function buildProductModels(rows: ModelSkuInput[]): ProductModel[] {
       adSpend,
       costStatus,
       referenceCost: reference?.cost ?? null,
+      suggestedCost: suggested?.suggestedCost ?? null,
+      suggestedFrom: suggested?.suggestedFrom ?? null,
       // Duas grafias do mesmo item (TOTAC.1001 e TO.TAC1001) apontam pro mesmo kit.
-      kits: [...new Map(skus.flatMap((s) => kitsByItemSku.get(normalizeKey(s.sku)) ?? []).map((k) => [k.sku, k])).values()],
+      kits: [
+        ...new Map(
+          skus.flatMap((s) => itemKeys(s.sku).flatMap((key) => kitsByItemSku.get(key) ?? [])).map((k) => [k.sku, k]),
+        ).values(),
+      ],
       marginPercent,
     });
   }

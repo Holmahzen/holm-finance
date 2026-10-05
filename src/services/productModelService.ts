@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { marketplaceSaleRepository } from "@/repositories/marketplaceSaleRepository";
 import { aggregateSalesBySku } from "@/domain/salesAggregation";
 import { FLEX_COST_PER_PACKAGE } from "@/domain/breakEven";
-import { buildProductModels, kitCost, normalizeKey, parseSku, type ModelSkuInput, type PieceCost } from "@/domain/productModels";
+import { buildProductModels, itemKeys, kitCost, normalizeKey, parseSku, type ModelSkuInput, type PieceCost } from "@/domain/productModels";
 import { todayUTCInBrazil } from "@/lib/today";
 import { mlAdSpendRepository } from "@/repositories/mlAdSpendRepository";
 import { allocateAdSpendBySku, overlapShare } from "@/domain/adSpendAllocation";
@@ -112,7 +112,7 @@ export const productModelService = {
     if (!model) throw new Error(`Modelo ${input.modelKey} não encontrado.`);
 
     const wanted = new Set(input.skus.map((s) => s.trim().toUpperCase()));
-    const wantedItems = new Set(input.skus.map(normalizeKey));
+    const wantedItems = new Set(input.skus.flatMap(itemKeys));
     const targets: { row: ModelSkuInput; cost: PieceCost }[] = model.skus
       .filter((s) => wanted.has(s.sku.trim().toUpperCase()))
       .map((s) => ({ row: s, cost: input.cost }));
