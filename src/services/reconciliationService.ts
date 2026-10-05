@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { reconciliationMatchRepository } from "@/repositories/reconciliationMatchRepository";
 import { matchEntriesToTransactions, rejectedPairKey } from "@/matching/reconciliationMatcher";
 import { NotFoundError, DomainError } from "@/domain/errors";
+import { competenceDateFromMonth } from "@/domain/competence";
 
 /** Quantos upserts de sugestão vão ao banco de uma vez. */
 const LOTE_UPSERT = 10;
@@ -159,7 +160,13 @@ export const reconciliationService = {
     });
   },
 
-  async createEntryFromTransaction(importedTransactionId: string, categoryId?: string) {
+  /**
+   * `competenceMonth` ("AAAA-MM") é o mês a que o lançamento pertence quando
+   * difere do mês do pagamento (ex.: costureira de setembro paga em 02/10).
+   * Sem ele, a DRE usa a data do pagamento, como sempre.
+   */
+  async createEntryFromTransaction(importedTransactionId: string, categoryId?: string, competenceMonth?: string) {
+    const competenceDate = competenceMonth ? competenceDateFromMonth(competenceMonth) : undefined;
     const transaction = await prisma.importedTransaction.findUnique({
       where: { id: importedTransactionId },
     });
@@ -179,6 +186,7 @@ export const reconciliationService = {
           description: transaction.parsedCounterpartyName || transaction.memo,
           amount: transaction.amount.abs(),
           dueDate: transaction.postedAt,
+          competenceDate,
           status: "PAID",
           paidAt: transaction.postedAt,
           paidAmount: transaction.amount.abs(),
@@ -211,13 +219,17 @@ export const reconciliationService = {
     });
   },
 
-  async createEntriesFromTransactions(items: { transactionId: string; categoryId?: string }[]) {
+  async createEntriesFromTransactions(
+    items: { transactionId: string; categoryId?: string; competenceMonth?: string }[],
+  ) {
     const BATCH_SIZE = 10;
     let created = 0;
     for (let i = 0; i < items.length; i += BATCH_SIZE) {
       const batch = items.slice(i, i + BATCH_SIZE);
       await Promise.all(
-        batch.map((item) => this.createEntryFromTransaction(item.transactionId, item.categoryId)),
+        batch.map((item) =>
+          this.createEntryFromTransaction(item.transactionId, item.categoryId, item.competenceMonth),
+        ),
       );
       created += batch.length;
     }

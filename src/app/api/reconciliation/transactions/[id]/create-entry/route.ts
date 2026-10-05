@@ -9,7 +9,11 @@ export async function POST(
   const { id } = await ctx.params;
   const body = await request.json().catch(() => ({}));
   try {
-    const result = await reconciliationService.createEntryFromTransaction(id, body?.categoryId);
+    const result = await reconciliationService.createEntryFromTransaction(
+      id,
+      body?.categoryId,
+      body?.competenceMonth || undefined,
+    );
     return NextResponse.json(result, { status: 201 });
   } catch (err) {
     if (err instanceof DomainError) {

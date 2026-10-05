@@ -59,6 +59,8 @@ export default function ReconciliationPage() {
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [rules, setRules] = useState<CategoryRule[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Record<string, string>>({});
+  // Mês "AAAA-MM" a que o lançamento pertence quando difere do mês do pagamento.
+  const [selectedCompetence, setSelectedCompetence] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [running, setRunning] = useState(false);
@@ -225,7 +227,10 @@ export default function ReconciliationPage() {
     await fetch(`/api/reconciliation/transactions/${transactionId}/create-entry`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ categoryId: selectedCategory[transactionId] || undefined }),
+      body: JSON.stringify({
+        categoryId: selectedCategory[transactionId] || undefined,
+        competenceMonth: selectedCompetence[transactionId] || undefined,
+      }),
     });
     await refresh();
   }
@@ -244,6 +249,7 @@ export default function ReconciliationPage() {
     const items = withCategory.map((t) => ({
       transactionId: t.id,
       categoryId: selectedCategory[t.id],
+      competenceMonth: selectedCompetence[t.id] || undefined,
     }));
     await fetch("/api/reconciliation/transactions/create-entries-bulk", {
       method: "POST",
@@ -471,6 +477,12 @@ export default function ReconciliationPage() {
                     <th className="py-2 font-medium">Memo</th>
                     <th className="py-2 font-medium">Valor</th>
                     <th className="py-2 font-medium">Categoria</th>
+                    <th
+                      className="py-2 font-medium"
+                      title="Só preencha quando a despesa pertence a outro mês que não o do pagamento (ex.: costureira de setembro paga em outubro). Vazio = mês do pagamento."
+                    >
+                      Competência
+                    </th>
                     <th className="py-2 font-medium"></th>
                   </tr>
                 </thead>
@@ -506,6 +518,17 @@ export default function ReconciliationPage() {
                               </Fragment>
                             ))}
                         </select>
+                      </td>
+                      <td className="py-2">
+                        <input
+                          type="month"
+                          value={selectedCompetence[t.id] ?? ""}
+                          onChange={(e) =>
+                            setSelectedCompetence((prev) => ({ ...prev, [t.id]: e.target.value }))
+                          }
+                          title="Vazio = mês do pagamento"
+                          className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground focus:border-gold focus:outline-none"
+                        />
                       </td>
                       <td className="py-2">
                         <button
