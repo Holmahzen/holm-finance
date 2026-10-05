@@ -90,6 +90,7 @@ type ImportResult = {
   newNotes: number;
   updatedNotes: number;
   cancellations: number;
+  serviceNotes: { newInvoices: number; existingInvoices: number };
   ignored: { reason: string; count: number; example: string }[];
 };
 
@@ -175,11 +176,22 @@ function mergeResults(a: ImportResult, b: ImportResult): ImportResult {
     newNotes: a.newNotes + b.newNotes,
     updatedNotes: a.updatedNotes + b.updatedNotes,
     cancellations: a.cancellations + b.cancellations,
+    serviceNotes: {
+      newInvoices: a.serviceNotes.newInvoices + b.serviceNotes.newInvoices,
+      existingInvoices: a.serviceNotes.existingInvoices + b.serviceNotes.existingInvoices,
+    },
     ignored: [...ignored.values()],
   };
 }
 
-const EMPTY_RESULT: ImportResult = { files: 0, newNotes: 0, updatedNotes: 0, cancellations: 0, ignored: [] };
+const EMPTY_RESULT: ImportResult = {
+  files: 0,
+  newNotes: 0,
+  updatedNotes: 0,
+  cancellations: 0,
+  serviceNotes: { newInvoices: 0, existingInvoices: 0 },
+  ignored: [],
+};
 
 function mergePdfResults(a: PdfImportResult | null, b: PdfImportResult): PdfImportResult {
   if (!a) return b;
@@ -313,7 +325,8 @@ function ImportPanel({ onImported, compact }: { onImported: () => void; compact:
           Pode ser o .zip que o Tiny exporta, XMLs soltos ou os dois — notas de venda, de devolução do
           Mercado Livre e de compra de fornecedores. Arquivos de cancelamento também são lidos. Os PDFs
           &quot;Demonstrativo de Nota Fiscal&quot; que o Mercado Livre manda (tarifas, envios, Mercado Pago)
-          entram pelo mesmo botão. Importar a mesma nota de novo não duplica.
+          entram pelo mesmo botão, assim como o XML da NFS-e de frete da J3 Envios (Barueri). Importar a
+          mesma nota de novo não duplica.
         </p>
       </div>
 
@@ -358,6 +371,14 @@ function ImportPanel({ onImported, compact }: { onImported: () => void; compact:
             {result.updatedNotes > 0 && `, ${int(result.updatedNotes)} que já estavam no sistema`}
             {result.cancellations > 0 && `, ${int(result.cancellations)} cancelamentos`}.
           </p>
+          {result.serviceNotes.newInvoices + result.serviceNotes.existingInvoices > 0 && (
+            <p className="text-emerald-400">
+              Notas de serviço de frete (Barueri): {int(result.serviceNotes.newInvoices)} novas
+              {result.serviceNotes.existingInvoices > 0 &&
+                `, ${int(result.serviceNotes.existingInvoices)} que já estavam no sistema`}
+              .
+            </p>
+          )}
           {result.ignored.map((i) => (
             <p key={i.reason} className="text-amber-300">
               {int(i.count)} {i.count === 1 ? "arquivo ignorado" : "arquivos ignorados"}: {i.reason}{" "}
