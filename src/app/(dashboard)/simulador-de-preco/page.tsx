@@ -44,9 +44,9 @@ type Row = {
   partialCost: boolean;
 };
 
-type Settings = { target: string; taxToday: string; tax2027: string; commission: string; includeAds: boolean };
+type Settings = { target: string; taxToday: string; tax2027: string; commission: string; includeAds: boolean; fixedAbove79: string };
 
-const DEFAULT_SETTINGS: Settings = { target: "18", taxToday: "14", tax2027: "14", commission: "14", includeAds: true };
+const DEFAULT_SETTINGS: Settings = { target: "18", taxToday: "14", tax2027: "14", commission: "14", includeAds: true, fixedAbove79: "" };
 const STORAGE_KEY = "simulador-de-preco:premissas";
 
 const total = (c: PieceCost | null) => (c ? c.tecidoCost + c.costuraCost + c.aviamentosCost : 0);
@@ -177,8 +177,9 @@ function Tester({ row, assumptions, target, tax2027 }: { row: Row; assumptions: 
         {current.price < ML_FREE_SHIPPING_THRESHOLD && p >= ML_FREE_SHIPPING_THRESHOLD && (
           <span className="text-amber-300">
             {" "}
-            Esse preço cruza R$ 79: o frete grátis passa a ser seu e a parte fixa muda — confira na calculadora de custos do
-            Mercado Livre antes.
+            {assumptions.fixedAboveFreeShipping != null
+              ? `Esse preço cruza R$ 79: a parte fixa usa o seu valor de ${formatBRL(assumptions.fixedAboveFreeShipping)} por peça (campo em Premissas).`
+              : "Esse preço cruza R$ 79: o frete grátis passa a ser seu e a parte fixa muda — informe a média em Premissas ou confira na calculadora de custos do Mercado Livre."}
           </span>
         )}
       </p>
@@ -324,6 +325,7 @@ export default function SimuladorDePrecoPage() {
     taxRate: toFraction(settings.taxToday),
     commissionRate: toFraction(settings.commission),
     includeAds: settings.includeAds,
+    fixedAboveFreeShipping: settings.fixedAbove79.trim() ? Number(settings.fixedAbove79.replace(",", ".")) || 0 : null,
   };
 
   const rows = useMemo(
@@ -390,6 +392,10 @@ export default function SimuladorDePrecoPage() {
           <label className="flex flex-col gap-1 text-xs font-medium text-muted">
             Comissão do marketplace (%)
             <input value={settings.commission} onChange={set("commission")} inputMode="decimal" className={inputClass} />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted">
+            Tarifa, frete e embalagem acima de R$ 79 (R$ por peça)
+            <input value={settings.fixedAbove79} onChange={set("fixedAbove79")} inputMode="decimal" placeholder="média que você conhece" className={inputClass} />
           </label>
           <label className="flex items-center gap-2 pb-2 text-sm text-foreground">
             <input type="checkbox" checked={settings.includeAds} onChange={set("includeAds")} />

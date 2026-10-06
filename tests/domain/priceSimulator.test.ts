@@ -72,3 +72,26 @@ describe("calculadora rápida", () => {
     expect(quickPriceFor(input, 0.7)).toBeNull();
   });
 });
+
+describe("parte fixa acima de R$ 79 informada pela usuária", () => {
+  const withFixed = { ...assumptions, fixedAboveFreeShipping: 20 };
+
+  it("só vale quando o preço testado cruza R$ 79", () => {
+    expect(breakdownAt(model, withFixed, 60).fixedPerUnit).toBeCloseTo(6); // abaixo: segue a medida
+    expect(breakdownAt(model, withFixed, 90).fixedPerUnit).toBeCloseTo(20); // acima: o valor informado
+    expect(breakdownAt(model, assumptions, 90).fixedPerUnit).toBeCloseTo(6); // sem valor informado: mantém
+  });
+
+  it("não troca a parte fixa de quem já vende acima de R$ 79", () => {
+    const expensive: ModelEconomics = { units: 10, grossRevenue: 1000, beforeProductionCost: 600, adSpend: 0, unitCost: 30 };
+    expect(breakdownAt(expensive, withFixed, 120).fixedPerUnit).toBeCloseTo(fixedCostPerUnit(expensive, withFixed));
+  });
+
+  it("o preço pra margem alta usa a parte fixa de cima", () => {
+    // sem a regra: 26 / 0,28 = 92,86; com R$ 20 fixos: (20 + 20) / 0,28 = 142,86
+    expect(priceForMargin(model, withFixed, 0.4)!).toBeCloseTo(40 / 0.28);
+    expect(priceForMargin(model, assumptions, 0.4)!).toBeCloseTo(26 / 0.28);
+    // margem baixa fica abaixo de R$ 79: nada muda
+    expect(priceForMargin(model, withFixed, 0.18)!).toBeCloseTo(52);
+  });
+});

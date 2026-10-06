@@ -28,6 +28,12 @@ export type PriceAssumptions = {
   commissionRate: number;
   /** Desconta o Ads (TACOS do período) da margem. */
   includeAds: boolean;
+  /**
+   * Tarifa fixa + frete + Flex + embalagem por peça (R$) a usar quando o preço testado
+   * passa de R$ 79 e o modelo hoje vende abaixo disso — aí o frete grátis vira custo seu
+   * e a parte medida nas vendas reais deixa de valer. null/ausente: mantém a medida.
+   */
+  fixedAboveFreeShipping?: number | null;
 };
 
 /** Faixa do Mercado Livre a partir da qual o frete grátis fica por conta do vendedor. */
@@ -48,10 +54,21 @@ function currentPrice(e: ModelEconomics): number {
   return e.units > 0 ? e.grossRevenue / e.units : 0;
 }
 
+/** O valor informado pela usuária só vale ao cruzar R$ 79 de baixo pra cima; quem já vende acima tem a parte fixa medida. */
+function usesFreeShippingFixed(e: ModelEconomics, a: PriceAssumptions, atPrice?: number): boolean {
+  return (
+    a.fixedAboveFreeShipping != null &&
+    atPrice !== undefined &&
+    atPrice >= ML_FREE_SHIPPING_THRESHOLD &&
+    currentPrice(e) < ML_FREE_SHIPPING_THRESHOLD
+  );
+}
+
 /** Parte fixa por peça, deduzida do que a venda real descontou além do percentual. */
-export function fixedCostPerUnit(e: ModelEconomics, a: PriceAssumptions): number {
+export function fixedCostPerUnit(e: ModelEconomics, a: PriceAssumptions, atPrice?: number): number {
   if (e.units <= 0) return 0;
   const price = currentPrice(e);
+  if (usesFreeShippingFixed(e, a, atPrice)) return a.fixedAboveFreeShipping as number;
   const deductionsPerUnit = (e.grossRevenue - e.beforeProductionCost) / e.units;
   return Math.max(0, deductionsPerUnit - (a.taxRate + a.commissionRate) * price);
 }
@@ -64,7 +81,7 @@ export function adsRate(e: ModelEconomics, a: PriceAssumptions): number {
 export function breakdownAt(e: ModelEconomics, a: PriceAssumptions, price: number, taxRate = a.taxRate): UnitBreakdown {
   const tax = taxRate * price;
   const commission = a.commissionRate * price;
-  const fixedPerUnit = fixedCostPerUnit(e, a);
+  const fixedPerUnit = fixedCostPerUnit(e, a, price);
   const ads = adsRate(e, a) * price;
   const contribution = price - tax - commission - fixedPerUnit - ads - e.unitCost;
   return {
@@ -90,7 +107,12 @@ export function currentBreakdown(e: ModelEconomics, a: PriceAssumptions): UnitBr
 export function priceForMargin(e: ModelEconomics, a: PriceAssumptions, target: number, taxRate = a.taxRate): number | null {
   const share = 1 - taxRate - a.commissionRate - adsRate(e, a) - target;
   if (share <= 0.02) return null;
-  return (fixedCostPerUnit(e, a) + e.unitCost) / share;
+  const price = (fixedCostPerUnit(e, a) + e.unitCost) / share;
+  if (a.fixedAboveFreeShipping == null || currentPrice(e) >= ML_FREE_SHIPPING_THRESHOLD || price < ML_FREE_SHIPPING_THRESHOLD) return price;
+  // Passaria de R$ 79: vale a parte fixa informada pra esse patamar. Se mesmo assim
+  // R$ 79 já der a margem, esse é o preço; senão, o preço sai com a parte nova.
+  const above = (a.fixedAboveFreeShipping + e.unitCost) / share;
+  return Math.max(ML_FREE_SHIPPING_THRESHOLD, above);
 }
 
 /**
