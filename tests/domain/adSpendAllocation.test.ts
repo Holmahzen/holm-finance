@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { allocateAdSpendBySku, overlapShare } from "@/domain/adSpendAllocation";
+import { allocateAdSpendBySku, overlapShare, ownedShareByReport } from "@/domain/adSpendAllocation";
 
 describe("allocateAdSpendBySku", () => {
   it("da o investimento inteiro ao SKU quando o anuncio so vendeu um SKU no periodo", () => {
@@ -82,5 +82,46 @@ describe("overlapShare", () => {
 
   it("relatório fora do período não conta", () => {
     expect(overlapShare(d("2026-08-01"), d("2026-08-31"), d("2026-09-01"), d("2026-10-01"))).toBe(0);
+  });
+});
+
+describe("ownedShareByReport", () => {
+  const d = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
+  const rep = (start: string, end: string, campaignName = "C1", listingCode = "MLB1") => ({
+    listingCode,
+    campaignName,
+    periodStart: d(start),
+    periodEnd: d(end),
+  });
+
+  it("nao mexe em relatorios que nao se sobrepoem", () => {
+    const shares = ownedShareByReport([rep("2026-07-01", "2026-07-31"), rep("2026-08-01", "2026-08-31")]);
+    expect(shares).toEqual([1, 1]);
+  });
+
+  it("zera o relatorio contido em outro e corta o trecho repetido (caso real de setembro/2026)", () => {
+    // 01–17, 01–20 e 17–29 do mesmo anuncio.
+    const shares = ownedShareByReport([
+      rep("2026-09-01", "2026-09-17"),
+      rep("2026-09-01", "2026-09-20"),
+      rep("2026-09-17", "2026-09-29"),
+    ]);
+    expect(shares[2]).toBeCloseTo(1); // termina mais tarde: fica inteiro
+    expect(shares[1]).toBeCloseTo(16 / 20); // 1–16 (17–20 ja e do 17–29)
+    expect(shares[0]).toBeCloseTo(0); // 1–17 inteiro ja coberto
+  });
+
+  it("separa por anuncio e por campanha", () => {
+    const shares = ownedShareByReport([
+      rep("2026-09-01", "2026-09-20", "C1", "MLB1"),
+      rep("2026-09-01", "2026-09-20", "C2", "MLB1"),
+      rep("2026-09-01", "2026-09-20", "C1", "MLB2"),
+    ]);
+    expect(shares).toEqual([1, 1, 1]);
+  });
+
+  it("relatorios identicos: so um conta", () => {
+    const shares = ownedShareByReport([rep("2026-09-01", "2026-09-20"), rep("2026-09-01", "2026-09-20")]);
+    expect(shares.reduce((a, b) => a + b, 0)).toBeCloseTo(1);
   });
 });

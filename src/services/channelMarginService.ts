@@ -4,7 +4,7 @@ import { fiscalNoteRepository } from "@/repositories/fiscalNoteRepository";
 import { pgdasRepository } from "@/repositories/pgdasRepository";
 import { productRepository } from "@/repositories/productRepository";
 import { shiftMonth } from "@/domain/fiscalNotes";
-import { overlapShare } from "@/domain/adSpendAllocation";
+import { overlapShare, ownedShareByReport } from "@/domain/adSpendAllocation";
 import { directSalesChannel, marketplaceChannel } from "@/domain/channelMargin";
 import { todayUTCInBrazil } from "@/lib/today";
 
@@ -31,7 +31,7 @@ export const channelMarginService = {
       productRepository.getProductCostsBySku(),
       prisma.mlAdSpend.findMany({
         where: { periodStart: { lt: end }, periodEnd: { gte: start } },
-        select: { periodStart: true, periodEnd: true, investimento: true },
+        select: { listingCode: true, campaignName: true, periodStart: true, periodEnd: true, investimento: true },
       }),
       prisma.mlFullCost.aggregate({ where: { costDate: { gte: start, lt: end } }, _sum: { amount: true } }),
     ]);
@@ -52,7 +52,8 @@ export const channelMarginService = {
       status: s.status,
       shippingModality: s.shippingModality,
     });
-    const ads = adRows.reduce((sum, r) => sum + Number(r.investimento) * overlapShare(r.periodStart, r.periodEnd, start, end), 0);
+    const ownedAd = ownedShareByReport(adRows);
+    const ads = adRows.reduce((sum, r, i) => sum + Number(r.investimento) * overlapShare(r.periodStart, r.periodEnd, start, end) * ownedAd[i], 0);
 
     const channels = [
       // Mercado Livre e Shopee: o Mercado Turbo já desconta o imposto (taxRate 0).

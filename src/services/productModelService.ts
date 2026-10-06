@@ -5,7 +5,7 @@ import { FLEX_COST_PER_PACKAGE } from "@/domain/breakEven";
 import { buildProductModels, itemKeys, kitCost, normalizeKey, parseSku, type ModelSkuInput, type PieceCost } from "@/domain/productModels";
 import { todayUTCInBrazil } from "@/lib/today";
 import { mlAdSpendRepository } from "@/repositories/mlAdSpendRepository";
-import { allocateAdSpendBySku, overlapShare } from "@/domain/adSpendAllocation";
+import { allocateAdSpendBySku, overlapShare, ownedShareByReport } from "@/domain/adSpendAllocation";
 
 /** Janela de vendas que a tela usa pra ordenar os modelos e mostrar a margem. */
 export const MODEL_SALES_DAYS = 90;
@@ -25,11 +25,12 @@ async function loadRows(): Promise<ModelSkuInput[]> {
   // Ads do período, rateado por SKU como na Lucratividade.
   const listingCodes = [...new Set(sales.map((s) => s.listingCode).filter((c): c is string => !!c))];
   const adRows = listingCodes.length ? await mlAdSpendRepository.findByListingCodesAndPeriod(listingCodes, start, now) : [];
+  const ownedAd = ownedShareByReport(adRows);
   const adSpendBySku = allocateAdSpendBySku(
     sales.map((s) => ({ sku: s.sku, listingCode: s.listingCode, grossRevenue: Number(s.grossRevenue) })),
-    adRows.map((r) => ({
+    adRows.map((r, i) => ({
       listingCode: r.listingCode,
-      investimento: Number(r.investimento) * overlapShare(r.periodStart, r.periodEnd, start, now),
+      investimento: Number(r.investimento) * overlapShare(r.periodStart, r.periodEnd, start, now) * ownedAd[i],
     })),
   );
 

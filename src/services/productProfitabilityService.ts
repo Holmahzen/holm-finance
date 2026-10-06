@@ -5,7 +5,7 @@ import { mlFullCostRepository } from "@/repositories/mlFullCostRepository";
 import { dreService } from "@/services/dreService";
 import { aggregateSalesBySku } from "@/domain/salesAggregation";
 import { buildProfitabilityReport } from "@/domain/productProfitability";
-import { allocateAdSpendBySku, overlapShare } from "@/domain/adSpendAllocation";
+import { allocateAdSpendBySku, overlapShare, ownedShareByReport } from "@/domain/adSpendAllocation";
 
 export type PeriodResult = {
   receitaLiquida: number;
@@ -101,8 +101,10 @@ export const productProfitabilityService = {
     // Relatório exportado com período maior que o consultado (ex.: ago+set
     // olhando só setembro) entra só com a parte dos dias que cai no período.
     const saleShares = sales.map((s) => ({ sku: s.sku, listingCode: s.listingCode, grossRevenue: Number(s.grossRevenue) }));
-    const prorated = adSpendRows.map((r) => {
-      const share = overlapShare(r.periodStart, r.periodEnd, start, end);
+    // Relatórios com períodos que se repetem (01–17, 01–20, 17–29…) não podem ser somados inteiros.
+    const owned = ownedShareByReport(adSpendRows);
+    const prorated = adSpendRows.map((r, i) => {
+      const share = overlapShare(r.periodStart, r.periodEnd, start, end) * owned[i];
       return { listingCode: r.listingCode, investimento: Number(r.investimento) * share, receita: Number(r.receita) * share };
     });
     const adSpendBySku = allocateAdSpendBySku(saleShares, prorated);
