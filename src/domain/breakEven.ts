@@ -62,6 +62,8 @@ export type ProductionCost = {
   tecidoCost: number;
   costuraCost: number;
   aviamentosCost: number;
+  /** Embalagem por peça — sai da margem da venda real, junto do custo de produção. */
+  packagingCost?: number;
 };
 
 /**
@@ -78,7 +80,7 @@ export function computeSalesBasedMargin(
 ): ProductMargin {
   const salePrice = sale.quantity > 0 ? sale.grossRevenue / sale.quantity : 0;
   const productionCostPerUnit = productionCost
-    ? productionCost.tecidoCost + productionCost.costuraCost + productionCost.aviamentosCost
+    ? productionCost.tecidoCost + productionCost.costuraCost + productionCost.aviamentosCost + (productionCost.packagingCost ?? 0)
     : 0;
   const flexShippingCost = sale.flexOrderCount * FLEX_COST_PER_PACKAGE;
   const netRevenueBeforeProductionCost = sale.netRevenue + sale.marketplaceCost - flexShippingCost;

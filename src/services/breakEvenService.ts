@@ -110,7 +110,7 @@ export const breakEvenService = {
               aviamentosCost: productionCost?.aviamentosCost ?? 0,
               marketplaceFee: 0,
               shippingCost: 0,
-              packagingCost: 0,
+              packagingCost: productionCost?.packagingCost ?? 0,
               avgMonthlyQuantity: s.quantity,
               ...margin,
             };

@@ -17,7 +17,7 @@ async function loadRows(): Promise<ModelSkuInput[]> {
   const [products, sales] = await Promise.all([
     prisma.product.findMany({
       where: { sku: { not: null } },
-      select: { id: true, sku: true, name: true, tecidoCost: true, costuraCost: true, aviamentosCost: true },
+      select: { id: true, sku: true, name: true, tecidoCost: true, costuraCost: true, aviamentosCost: true, packagingCost: true },
     }),
     marketplaceSaleRepository.findByPeriod(start, now),
   ]);
@@ -48,6 +48,8 @@ async function loadRows(): Promise<ModelSkuInput[]> {
   );
 
   const bySku = new Map<string, ModelSkuInput>();
+  // Embalagem por peça: não é custo de produção do modelo, então entra como desconto da venda (como o Flex).
+  const packagingBySku = new Map(products.map((p) => [p.sku!.trim().toUpperCase(), Number(p.packagingCost)]));
   for (const p of products) {
     bySku.set(p.sku!.trim().toUpperCase(), {
       sku: p.sku!,
@@ -67,7 +69,8 @@ async function loadRows(): Promise<ModelSkuInput[]> {
     const key = a.sku.trim().toUpperCase();
     // Mesma conta do Ponto de Equilíbrio: o que sobrou da venda no Mercado
     // Turbo, com o custo dele somado de volta e o Flex descontado.
-    const beforeProductionCost = a.netRevenue + a.marketplaceCost - a.flexOrderCount * FLEX_COST_PER_PACKAGE;
+    const beforeProductionCost =
+      a.netRevenue + a.marketplaceCost - a.flexOrderCount * FLEX_COST_PER_PACKAGE - a.quantity * (packagingBySku.get(key) ?? 0);
     const existing = bySku.get(key);
     if (existing) {
       bySku.set(key, {

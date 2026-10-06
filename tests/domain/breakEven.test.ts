@@ -100,6 +100,15 @@ describe("computeSalesBasedMargin", () => {
     expect(result.marginValue).toBeCloseTo(80); // 110 - 30
   });
 
+  it("subtracts the packaging cost per unit together with the production cost", () => {
+    // 80/un líquido - (20+8+2) produção - 2,50 embalagem
+    const result = computeSalesBasedMargin(
+      { quantity: 10, grossRevenue: 1000, netRevenue: 800, marketplaceCost: 0, flexOrderCount: 0 },
+      { tecidoCost: 20, costuraCost: 8, aviamentosCost: 2, packagingCost: 2.5 },
+    );
+    expect(result.marginValue).toBeCloseTo(47.5);
+  });
+
   it("falls back to the marketplace's net margin when there's no registered production cost", () => {
     const result = computeSalesBasedMargin(
       { quantity: 10, grossRevenue: 1000, netRevenue: 800, marketplaceCost: 0, flexOrderCount: 0 },

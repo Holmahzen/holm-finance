@@ -41,13 +41,14 @@ export const productRepository = {
   async getProductCostsBySku() {
     const products = await prisma.product.findMany({
       where: { sku: { not: null }, isActive: true },
-      select: { sku: true, tecidoCost: true, costuraCost: true, aviamentosCost: true },
+      select: { sku: true, tecidoCost: true, costuraCost: true, aviamentosCost: true, packagingCost: true },
     });
     return products.map((p) => ({
       sku: p.sku!,
       tecidoCost: Number(p.tecidoCost),
       costuraCost: Number(p.costuraCost),
       aviamentosCost: Number(p.aviamentosCost),
+      packagingCost: Number(p.packagingCost),
     }));
   },
 };

@@ -49,7 +49,7 @@ export type ChannelMargin = {
   products: ChannelProduct[];
 };
 
-const unitCostOf = (c: ProductionCost) => c.tecidoCost + c.costuraCost + c.aviamentosCost;
+const unitCostOf = (c: ProductionCost) => c.tecidoCost + c.costuraCost + c.aviamentosCost + (c.packagingCost ?? 0);
 
 function costLookup(costs: Map<string, ProductionCost>) {
   const normalized = new Map<string, ProductionCost>();
