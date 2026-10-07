@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   addMonthsUTC,
+  installmentDateAt,
   plannedPurchaseMovements,
   splitInstallments,
   suggestPurchase,
@@ -104,5 +105,31 @@ describe("suggestPurchase", () => {
 
   it("sem tecido, costuraPerTecido é null (não divide por zero)", () => {
     expect(suggestPurchase({ ...base, tecido: 0 }, 80)?.costuraPerTecido).toBeNull();
+  });
+});
+
+describe("datas digitadas das parcelas", () => {
+  const today = utc(2026, 10, 7);
+  const end = utc(2026, 12, 31);
+
+  it("usa a data de cada parcela quando há uma por parcela", () => {
+    const p = { dueDate: utc(2026, 10, 14), installments: 3, installmentDates: [utc(2026, 10, 14), utc(2026, 11, 20), utc(2026, 12, 5)] };
+    expect(installmentDateAt(p, 1)).toEqual(utc(2026, 11, 20));
+    expect(installmentDateAt(p, 2)).toEqual(utc(2026, 12, 5));
+  });
+
+  it("sem datas digitadas (ou número diferente de parcelas), segue mensal", () => {
+    expect(installmentDateAt({ dueDate: utc(2026, 10, 14), installments: 2 }, 1)).toEqual(utc(2026, 11, 14));
+    expect(installmentDateAt({ dueDate: utc(2026, 10, 14), installments: 3, installmentDates: [utc(2026, 10, 14)] }, 1)).toEqual(utc(2026, 11, 14));
+  });
+
+  it("a projeção usa as datas digitadas", () => {
+    const m = plannedPurchaseMovements(
+      [{ kind: "MATERIAL", label: "Tecido", amount: 7800, dueDate: utc(2026, 10, 14), installments: 2, installmentDates: [utc(2026, 10, 14), utc(2026, 12, 2)] }],
+      today,
+      end,
+    );
+    expect(m.map((x) => x.date)).toEqual([utc(2026, 10, 14), utc(2026, 12, 2)]);
+    expect(m.map((x) => x.amount)).toEqual([-3900, -3900]);
   });
 });

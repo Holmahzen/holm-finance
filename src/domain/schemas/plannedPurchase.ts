@@ -8,9 +8,14 @@ export const createPlannedPurchaseSchema = z.object({
   amount: z.coerce.number().positive("Valor deve ser maior que zero"),
   dueDate: z.coerce.date(),
   installments: z.coerce.number().int().min(1).max(12).default(1),
+  // Datas das parcelas quando não são mensais (uma por parcela, em qualquer ordem).
+  installmentDates: z.array(z.coerce.date()).optional(),
   // Estimativa da costura que essa compra gera (normalmente só pra tecido).
   costuraAmount: z.coerce.number().positive().optional(),
   costuraDueDate: z.coerce.date().optional(),
+}).refine((v) => !v.installmentDates || v.installmentDates.length === v.installments, {
+  message: "Informe uma data para cada parcela.",
+  path: ["installmentDates"],
 });
 
 export type CreatePlannedPurchaseInput = z.infer<typeof createPlannedPurchaseSchema>;

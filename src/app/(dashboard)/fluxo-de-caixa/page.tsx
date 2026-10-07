@@ -56,6 +56,7 @@ type PlannedPurchase = {
   amount: number;
   dueDate: string;
   installments: number;
+  installmentDates: string[];
   parentId: string | null;
 };
 
@@ -363,6 +364,13 @@ function addDaysISO(iso: string, days: number): string {
   return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 }
 
+/** Mesma regra do servidor: soma meses sem estourar o fim do mês (31/01 + 1 = 28/02). */
+function addMonthsISO(iso: string, months: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(y, m - 1 + months + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m - 1 + months, Math.min(d, lastDay))).toISOString().slice(0, 10);
+}
+
 function todayISO(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -391,6 +399,8 @@ function PlannedPurchasesPanel({
   const [amount, setAmount] = useState("");
   const [dueDate, setDueDate] = useState(() => addDaysISO(todayISO(), 7));
   const [installments, setInstallments] = useState("1");
+  // Datas digitadas das parcelas 2, 3… (índice 1, 2…); sem valor, vale a mensal.
+  const [customDates, setCustomDates] = useState<Record<number, string>>({});
   const [withCostura, setWithCostura] = useState(true);
   const [costuraAmount, setCosturaAmount] = useState("");
   const [costuraDate, setCosturaDate] = useState("");
@@ -414,6 +424,10 @@ function PlannedPurchasesPanel({
   const costuraDateValue = costuraDate || addDaysISO(dueDate, 15);
   const sendCostura = type === "TECIDO" && withCostura && Number(costuraValue) > 0;
 
+  const installmentCount = Math.min(12, Math.max(1, Math.floor(Number(installments)) || 1));
+  const installmentDateValue = (i: number) => customDates[i] ?? addMonthsISO(dueDate, i);
+  const hasCustomDates = installmentCount > 1 && Array.from({ length: installmentCount - 1 }, (_, k) => k + 1).some((i) => customDates[i]);
+
   async function handleAdd(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -427,6 +441,7 @@ function PlannedPurchasesPanel({
         amount,
         dueDate,
         installments,
+        installmentDates: hasCustomDates ? Array.from({ length: installmentCount }, (_, i) => (i === 0 ? dueDate : installmentDateValue(i))) : undefined,
         costuraAmount: sendCostura ? costuraValue : undefined,
         costuraDueDate: sendCostura ? costuraDateValue : undefined,
       }),
@@ -438,6 +453,7 @@ function PlannedPurchasesPanel({
       return;
     }
     setAmount("");
+    setCustomDates({});
     setCosturaAmount("");
     setCosturaTouched(false);
     setCosturaDate("");
@@ -565,6 +581,18 @@ function PlannedPurchasesPanel({
                 className={`w-20 ${inputClass}`}
               />
             </div>
+            {installmentCount > 1 &&
+              Array.from({ length: installmentCount - 1 }, (_, k) => k + 1).map((i) => (
+                <div key={i} className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-muted">Parcela {i + 1} em</label>
+                  <input
+                    type="date"
+                    value={installmentDateValue(i)}
+                    onChange={(e) => setCustomDates((prev) => ({ ...prev, [i]: e.target.value }))}
+                    className={inputClass}
+                  />
+                </div>
+              ))}
             {type === "TECIDO" && (
               <div className="flex flex-wrap items-end gap-3 rounded border border-border/60 px-3 py-2">
                 <label className="flex items-center gap-2 pb-1.5 text-sm text-foreground">
@@ -630,7 +658,10 @@ function PlannedPurchasesPanel({
                       <div className="flex flex-wrap items-center justify-between gap-2 text-amber-300">
                         <span>
                           {m.label} — {formatBRL(m.amount)}
-                          {m.installments > 1 ? ` em ${m.installments}x` : ""} · a partir de {formatDate(m.dueDate)}
+                          {m.installments > 1 ? ` em ${m.installments}x` : ""} ·{" "}
+                          {m.installments > 1 && m.installmentDates.length === m.installments
+                            ? `parcelas em ${m.installmentDates.map((d) => formatDate(d).slice(0, 5)).join(", ")}`
+                            : `a partir de ${formatDate(m.dueDate)}`}
                         </span>
                         <span className="flex gap-3 text-xs">
                           <button type="button" onClick={() => handleConfirm(m)} className="font-medium text-emerald-400 hover:underline">

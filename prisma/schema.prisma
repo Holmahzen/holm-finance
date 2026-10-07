@@ -910,6 +910,8 @@ model PlannedPurchase {
   amount         Decimal           @db.Decimal(14, 2)
   dueDate        DateTime
   installments   Int               @default(1)
+  /** Data de cada parcela, quando não são mensais a partir de dueDate. Vazio = mensais. */
+  installmentDates DateTime[]      @default([])
   parentId       String?
   parent         PlannedPurchase?  @relation("PlannedPurchaseChildren", fields: [parentId], references: [id], onDelete: SetNull)
   children       PlannedPurchase[] @relation("PlannedPurchaseChildren")

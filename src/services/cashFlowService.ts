@@ -125,6 +125,7 @@ export const cashFlowService = {
         amount: Number(p.amount),
         dueDate: p.dueDate,
         installments: p.installments,
+        installmentDates: p.installmentDates,
       })),
       todayUTC,
       windowEnd,
@@ -241,6 +242,7 @@ export const cashFlowService = {
         amount: Number(p.amount),
         dueDate: p.dueDate.toISOString().slice(0, 10),
         installments: p.installments,
+        installmentDates: p.installmentDates.map((d) => d.toISOString().slice(0, 10)),
         parentId: p.parentId,
       })),
       withPlanned: {

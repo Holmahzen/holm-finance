@@ -9,6 +9,8 @@ export type PlannedPurchaseLike = {
   amount: number;
   dueDate: Date;
   installments: number;
+  /** Datas digitadas, uma por parcela. Vazio/ausente: mensais a partir de `dueDate`. */
+  installmentDates?: Date[];
 };
 
 /** Soma `months` meses em UTC, sem estourar o fim do mês (31/01 + 1 mês = 28/02). */
@@ -21,6 +23,16 @@ export function addMonthsUTC(date: Date, months: number): Date {
 
 export function addDaysUTC(date: Date, days: number): Date {
   return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
+}
+
+/** Vencimento da parcela `i` (0 = primeira): a data digitada, se houver uma por parcela; senão, mensal. */
+export function installmentDateAt(
+  p: { dueDate: Date; installments: number; installmentDates?: Date[] },
+  i: number,
+): Date {
+  const typed = p.installmentDates;
+  if (typed && typed.length === Math.max(1, p.installments)) return typed[i];
+  return addMonthsUTC(p.dueDate, i);
 }
 
 /** Divide em parcelas de centavos exatos; a diferença de arredondamento vai pra última. */
@@ -49,7 +61,7 @@ export function plannedPurchaseMovements(
     const parts = p.kind === "COSTURA" ? [p.amount] : splitInstallments(p.amount, p.installments);
 
     parts.forEach((value, i) => {
-      const raw = addMonthsUTC(p.dueDate, i);
+      const raw = installmentDateAt(p, i);
       const date = raw < today ? today : raw;
       if (date >= windowEnd) return;
       const suffix = parts.length > 1 ? ` ${i + 1}/${parts.length}` : "";

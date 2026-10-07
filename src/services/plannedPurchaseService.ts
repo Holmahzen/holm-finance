@@ -3,7 +3,7 @@ import { categoryRepository } from "@/repositories/categoryRepository";
 import { counterpartyRepository } from "@/repositories/counterpartyRepository";
 import { entryService } from "@/services/entryService";
 import { DomainError, NotFoundError } from "@/domain/errors";
-import { addMonthsUTC, splitInstallments } from "@/domain/plannedPurchase";
+import { installmentDateAt, splitInstallments } from "@/domain/plannedPurchase";
 import type { CreatePlannedPurchaseInput } from "@/domain/schemas/plannedPurchase";
 
 const LABELS = { TECIDO: "Tecido", AVIAMENTOS: "Aviamentos", OUTRO: "Compra" } as const;
@@ -24,14 +24,17 @@ export const plannedPurchaseService = {
     }
 
     const label = input.label ?? LABELS[input.type];
+    // Datas digitadas ficam em ordem; a primeira é o vencimento que a lista mostra.
+    const installmentDates = input.installmentDates ? [...input.installmentDates].sort((a, b) => a.getTime() - b.getTime()) : [];
     const purchase = await plannedPurchaseRepository.create({
       kind: "MATERIAL",
       label: counterparty ? `${label} (${counterparty.name})` : label,
       categoryId: category?.id,
       counterpartyId: input.counterpartyId,
       amount: input.amount,
-      dueDate: input.dueDate,
+      dueDate: installmentDates[0] ?? input.dueDate,
       installments: input.installments,
+      installmentDates,
     });
 
     if (input.costuraAmount && input.costuraDueDate) {
@@ -82,7 +85,7 @@ export const plannedPurchaseService = {
           type: "PAYABLE",
           description: parts.length > 1 ? `${item.label} (${i + 1}/${parts.length})` : item.label,
           amount: parts[i],
-          dueDate: addMonthsUTC(item.dueDate, i),
+          dueDate: installmentDateAt(item, i),
           categoryId: item.categoryId ?? undefined,
           counterpartyId: item.counterpartyId ?? undefined,
         }),
