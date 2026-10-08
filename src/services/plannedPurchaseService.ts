@@ -4,6 +4,7 @@ import { counterpartyRepository } from "@/repositories/counterpartyRepository";
 import { entryService } from "@/services/entryService";
 import { DomainError, NotFoundError } from "@/domain/errors";
 import { installmentDateAt, splitInstallments } from "@/domain/plannedPurchase";
+import { weekendPaymentDate } from "@/domain/businessDays";
 import type { CreatePlannedPurchaseInput } from "@/domain/schemas/plannedPurchase";
 
 const LABELS = { TECIDO: "Tecido", AVIAMENTOS: "Aviamentos", OUTRO: "Compra" } as const;
@@ -86,6 +87,7 @@ export const plannedPurchaseService = {
           description: parts.length > 1 ? `${item.label} (${i + 1}/${parts.length})` : item.label,
           amount: parts[i],
           dueDate: installmentDateAt(item, i),
+          plannedPaymentDate: weekendPaymentDate(installmentDateAt(item, i)),
           categoryId: item.categoryId ?? undefined,
           counterpartyId: item.counterpartyId ?? undefined,
         }),

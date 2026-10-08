@@ -1,6 +1,7 @@
 import { fixedCostRepository } from "@/repositories/fixedCostRepository";
 import { entryRepository } from "@/repositories/entryRepository";
 import { NotFoundError, DomainError } from "@/domain/errors";
+import { weekendPaymentDate } from "@/domain/businessDays";
 import { computeFixedCostDueDates, type FixedCostFrequency } from "@/domain/fixedCostSchedule";
 import type {
   CreateFixedCostInput,
@@ -110,6 +111,7 @@ export const fixedCostService = {
           description: fc.description,
           amount: fc.amount,
           dueDate,
+          plannedPaymentDate: fc.type === "PAYABLE" ? weekendPaymentDate(dueDate) : undefined,
           categoryId: fc.categoryId,
           counterpartyId: fc.counterpartyId,
           fixedCostId: fc.id,

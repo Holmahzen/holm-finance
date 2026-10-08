@@ -13,6 +13,7 @@ import {
 import { aggregateSalesBySku, isExcludedSaleStatus } from "@/domain/salesAggregation";
 import { computeCogsBySku, computeMaterialSpendSplit } from "@/domain/cogs";
 import { plannedPurchaseMovements, suggestPurchase } from "@/domain/plannedPurchase";
+import { payBeforeWeekend } from "@/domain/businessDays";
 import { estimateFlexInvoices } from "@/domain/flexEstimate";
 import { FLEX_COST_PER_PACKAGE } from "@/domain/breakEven";
 import { todayUTCInBrazil } from "@/lib/today";
@@ -60,7 +61,8 @@ export const cashFlowService = {
     const movements: CashFlowMovement[] = [];
 
     for (const e of entries) {
-      const rawDate = e.plannedPaymentDate ?? e.dueDate;
+      // Pagamento que cairia no fim de semana é adiantado para a sexta (a Holm não paga sábado/domingo).
+      const rawDate = e.plannedPaymentDate ?? (e.type === "PAYABLE" ? payBeforeWeekend(e.dueDate) : e.dueDate);
       // Vencidos (data no passado) ainda não foram pagos — jogamos pra hoje
       // em vez de sumir da projeção, já que esse dinheiro pode entrar/sair
       // a qualquer momento a partir de agora.

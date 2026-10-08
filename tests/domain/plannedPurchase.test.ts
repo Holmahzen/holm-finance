@@ -44,9 +44,9 @@ describe("plannedPurchaseMovements", () => {
       today,
       end,
     );
-    // parcelas em 10/10, 10/11, 10/12: só a primeira cabe em 30 dias
+    // parcelas em 10/10 (sábado → adianta para sexta 09/10), 10/11, 10/12: só a primeira cabe em 30 dias
     expect(m).toHaveLength(1);
-    expect(m[0]).toMatchObject({ date: utc(2026, 10, 10), amount: -100, planned: true });
+    expect(m[0]).toMatchObject({ date: utc(2026, 10, 9), amount: -100, planned: true });
     expect(m[0].label).toContain("planejado 1/3");
   });
 

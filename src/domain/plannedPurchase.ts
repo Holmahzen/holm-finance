@@ -1,5 +1,6 @@
 import type { CashFlowMovement } from "@/domain/cashFlow";
 import type { CogsResult } from "@/domain/cogs";
+import { payBeforeWeekend } from "@/domain/businessDays";
 
 export type PlannedPurchaseKind = "MATERIAL" | "COSTURA";
 
@@ -61,7 +62,7 @@ export function plannedPurchaseMovements(
     const parts = p.kind === "COSTURA" ? [p.amount] : splitInstallments(p.amount, p.installments);
 
     parts.forEach((value, i) => {
-      const raw = installmentDateAt(p, i);
+      const raw = payBeforeWeekend(installmentDateAt(p, i));
       const date = raw < today ? today : raw;
       if (date >= windowEnd) return;
       const suffix = parts.length > 1 ? ` ${i + 1}/${parts.length}` : "";
