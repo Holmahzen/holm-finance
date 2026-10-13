@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { readWorkbook } from "@/parsers/excel/readWorkbook";
 import { parseAmountCell } from "@/parsers/excel/amountAndDate";
 
 export type MlFullCostType = "ARMAZENAMENTO" | "COLETA" | "ARMAZENAMENTO_PROLONGADO" | "RETIRADA";
@@ -101,7 +102,7 @@ function parseSheet(sheet: XLSX.WorkSheet, type: MlFullCostType): { rows: MlFull
 }
 
 export function parseMlFullCostWorkbook(buffer: Buffer): MlFullCostParseResult {
-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+  const workbook = readWorkbook(buffer);
 
   const rows: MlFullCostRow[] = [];
   let skippedRows = 0;

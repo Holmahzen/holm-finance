@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { readWorkbook } from "@/parsers/excel/readWorkbook";
 import { parseAmountCell, parseDateCell } from "@/parsers/excel/amountAndDate";
 
 export type ShopeeSaleRow = {
@@ -67,7 +68,7 @@ function isPlausibleAmount(value: unknown): boolean {
 }
 
 export function parseShopeeWorkbook(buffer: Buffer): ShopeeParseResult {
-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+  const workbook = readWorkbook(buffer);
   const sheet = pickSheet(workbook);
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null });
 

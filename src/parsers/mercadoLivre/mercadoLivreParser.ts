@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { readWorkbook } from "@/parsers/excel/readWorkbook";
 import { parseAmountCell } from "@/parsers/excel/amountAndDate";
 import { parseFullPtBrDate, parsePtBrDayMonth } from "@/parsers/mercadoLivre/ptBrDate";
 
@@ -100,7 +101,7 @@ function isMoneyRow(row: unknown[], read: Reader): boolean {
 export const PACKAGE_SKU = "PACOTE-ML";
 
 export function parseMercadoLivreWorkbook(buffer: Buffer): MercadoLivreParseResult {
-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+  const workbook = readWorkbook(buffer);
   const sheet = pickSheet(workbook);
   const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: null });
 

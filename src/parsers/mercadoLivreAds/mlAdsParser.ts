@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { readWorkbook } from "@/parsers/excel/readWorkbook";
 import { parseAmountCell } from "@/parsers/excel/amountAndDate";
 
 export type MlAdSpendRow = {
@@ -72,7 +73,7 @@ function pickSheet(workbook: XLSX.WorkBook): XLSX.WorkSheet {
 }
 
 export function parseMlAdsWorkbook(buffer: Buffer): MlAdsParseResult {
-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+  const workbook = readWorkbook(buffer);
   const sheet = pickSheet(workbook);
   const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: null });
 

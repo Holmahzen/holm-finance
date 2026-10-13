@@ -129,3 +129,20 @@ describe("parseMercadoTurboWorkbook", () => {
     expect(() => parseMercadoTurboWorkbook(buffer)).toThrow(/não contém linhas/);
   });
 });
+
+describe("parseMercadoTurboWorkbook em CSV", () => {
+  it("lê valores e datas no padrão brasileiro (67,56 não vira 6.756; 09/10 não vira 10 de setembro)", () => {
+    const csv = [
+      "ID da venda,SKU,Anúncio,Data,Qtd.,Faturamento ML,Margem Contrib. (=),Status Pedido,Custo (-)",
+      '#2000018918084666,COUM.1000G,Conjunto,09/10/2026,1,"67,56","5,02",Pago,"23,30"',
+      '#2000018917384514,SAIA1000.1000,Saia,12/10/2026,2,"1.142,82","80,10",Pago,"0,00"',
+    ].join("\n");
+    const { rows } = parseMercadoTurboWorkbook(Buffer.from(csv, "utf8"));
+    expect(rows).toHaveLength(2);
+    expect(rows[0].grossRevenue).toBeCloseTo(67.56);
+    expect(rows[0].marketplaceCost).toBeCloseTo(23.3);
+    expect(rows[0].saleDate.toISOString().slice(0, 10)).toBe("2026-10-09");
+    expect(rows[1].grossRevenue).toBeCloseTo(1142.82);
+    expect(rows[1].saleDate.toISOString().slice(0, 10)).toBe("2026-10-12");
+  });
+});

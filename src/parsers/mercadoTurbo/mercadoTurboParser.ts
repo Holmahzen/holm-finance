@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { readWorkbook } from "@/parsers/excel/readWorkbook";
 import { parseAmountCell, parseDateCell } from "@/parsers/excel/amountAndDate";
 
 export type MercadoTurboSaleRow = {
@@ -51,7 +52,7 @@ function cellString(row: Record<string, unknown>, header: string): string {
 }
 
 export function parseMercadoTurboWorkbook(buffer: Buffer): MercadoTurboParseResult {
-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+  const workbook = readWorkbook(buffer);
   const sheet = pickSheet(workbook);
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null });
 

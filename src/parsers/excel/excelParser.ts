@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { readWorkbook } from "@/parsers/excel/readWorkbook";
 import crypto from "node:crypto";
 import { mapHeaders, detectFormat } from "./columnMapping";
 import { parseAmountCell, parseDateCell } from "./amountAndDate";
@@ -91,7 +92,7 @@ export function parseExcel(buffer: Buffer): ExcelStatement {
   let rows: Record<string, unknown>[];
 
   if (isBinarySpreadsheet(buffer)) {
-    const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+    const workbook = readWorkbook(buffer);
     const sheet = pickSheet(workbook);
     const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: null });
     rows = matrixToRows(matrix, false);
