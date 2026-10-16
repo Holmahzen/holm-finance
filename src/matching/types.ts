@@ -5,6 +5,12 @@ export type MatchableEntry = {
   dueDate: Date;
   counterpartyName?: string | null;
   counterpartyDocument?: string | null;
+  /**
+   * Pagamento que costuma sair com valor diferente do lançamento (costureira:
+   * peças entregues até o dia do Pix). Só é sugerido com o CPF/CNPJ do Pix igual
+   * ao da contraparte; a diferença aparece nos motivos.
+   */
+  flexibleAmount?: boolean;
 };
 
 export type MatchableTransaction = {

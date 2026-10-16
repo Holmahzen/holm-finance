@@ -49,6 +49,14 @@ type ApplyRulesResult = {
   breakdown: { categoryName: string; count: number }[];
 };
 
+/** `amount_diff_+112.50` vira um texto que a analista entende; os demais motivos seguem como vêm. */
+function reasonLabel(reason: string): string {
+  const m = /^amount_diff_([+-])(d+.d{2})$/.exec(reason);
+  if (!m) return reason;
+  const value = Number(m[2]).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  return `Pix ${m[1] === "+" ? "acima" : "abaixo"} do lançamento em ${value}`;
+}
+
 export default function ReconciliationPage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [unmatched, setUnmatched] = useState<UnmatchedTransaction[]>([]);
@@ -314,7 +322,7 @@ export default function ReconciliationPage() {
                       </td>
                       <td className="py-2 text-gold">{(m.matchScore * 100).toFixed(0)}%</td>
                       <td className="py-2 text-xs text-muted">
-                        {m.matchReasons.join(", ")}
+                        {m.matchReasons.map(reasonLabel).join(", ")}
                       </td>
                       <td className="py-2">
                         <div className="flex gap-2">

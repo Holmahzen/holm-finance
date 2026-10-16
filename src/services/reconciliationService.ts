@@ -41,6 +41,8 @@ export const reconciliationService = {
         dueDate: e.dueDate,
         counterpartyName: e.counterparty?.name,
         counterpartyDocument: e.counterparty?.document,
+        // Costureira é paga conforme as peças entregues: o Pix quase nunca bate com o lançamento.
+        flexibleAmount: e.category?.name === "Costura",
       })),
       transactions.map((t) => ({
         id: t.id,

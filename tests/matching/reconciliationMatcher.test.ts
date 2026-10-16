@@ -129,3 +129,36 @@ describe("matchEntriesToTransactions", () => {
     expect(result[0].importedTransactionId).toBe("tx-leonardo");
   });
 });
+
+describe("lançamentos de valor flexível (costureira)", () => {
+  const costureira = (o: Partial<MatchableEntry> = {}) =>
+    entry({ id: "cost-1", amount: "2703.75", counterpartyName: "ROSIMEIRE", counterpartyDocument: "17941492873", flexibleAmount: true, ...o });
+  const pix = (o: Partial<MatchableTransaction> = {}) =>
+    transaction({ id: "pix-1", amount: "-2816.25", parsedDocument: "17941492873", parsedCounterpartyName: "ROSIMEIRE DE SOUZA VIEIRA", ...o });
+
+  it("sugere o par pelo documento mesmo com valor diferente, mostrando a diferença", () => {
+    const [c] = matchEntriesToTransactions([costureira()], [pix()]);
+    expect(c.entryId).toBe("cost-1");
+    expect(c.reasons).toContain("amount_diff_+112.50");
+    expect(c.reasons).toContain("counterparty_exact");
+  });
+
+  it("não sugere valor diferente sem o documento batendo", () => {
+    expect(matchEntriesToTransactions([costureira()], [pix({ parsedDocument: "00000000000" })])).toHaveLength(0);
+  });
+
+  it("não sugere valor diferente em lançamento comum", () => {
+    expect(matchEntriesToTransactions([costureira({ flexibleAmount: false })], [pix()])).toHaveLength(0);
+  });
+
+  it("não sugere quando a diferença passa de 25%", () => {
+    expect(matchEntriesToTransactions([costureira()], [pix({ amount: "-4000.00" })])).toHaveLength(0);
+  });
+
+  it("valor exato com documento ganha do valor diferente", () => {
+    const exato = costureira({ id: "exato", amount: "2816.25" });
+    const result = matchEntriesToTransactions([costureira(), exato], [pix()]);
+    expect(result).toHaveLength(1);
+    expect(result[0].entryId).toBe("exato");
+  });
+});

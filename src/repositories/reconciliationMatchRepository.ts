@@ -50,7 +50,7 @@ export const reconciliationMatchRepository = {
         reconciliationMatch: null,
         ...(type ? { type } : {}),
       },
-      include: { counterparty: true },
+      include: { counterparty: true, category: true },
     });
   },
 

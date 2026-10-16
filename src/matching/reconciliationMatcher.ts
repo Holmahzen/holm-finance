@@ -4,6 +4,7 @@ import {
   dateProximityScore,
   daysBetween,
   DOCUMENT_MATCH_RANK_PRIORITY,
+  FLEXIBLE_AMOUNT_MAX_DIFF,
 } from "./matchScoring";
 import type { MatchableEntry, MatchableTransaction, MatchCandidate } from "./types";
 
@@ -47,7 +48,15 @@ export function matchEntriesToTransactions(
     for (const entry of entries) {
       if (rejectedPairs.has(rejectedPairKey(entry.id, transaction.id))) continue;
       if (!directionMatches(entry, transaction)) continue;
-      if (!amountMatches(entry, transaction)) continue;
+      const exactAmount = amountMatches(entry, transaction);
+      const amountDiff = Math.abs(Number(transaction.amount)) - Number(entry.amount);
+      const flexibleOk =
+        !exactAmount &&
+        entry.flexibleAmount === true &&
+        entry.type === "PAYABLE" &&
+        Number(entry.amount) > 0 &&
+        Math.abs(amountDiff) <= Number(entry.amount) * FLEXIBLE_AMOUNT_MAX_DIFF;
+      if (!exactAmount && !flexibleOk) continue;
 
       const daysDiff = daysBetween(transaction.postedAt, entry.dueDate);
       const dateScore = dateProximityScore(daysDiff);
@@ -61,7 +70,13 @@ export function matchEntriesToTransactions(
       const score = Math.min(1, dateScore + bonus);
       if (score < MIN_SUGGEST_THRESHOLD) continue;
 
-      const reasons = ["exact_amount", `date_${Math.round(Math.abs(daysDiff))}d`];
+      // Valor diferente só vale com o CPF/CNPJ do Pix batendo exato: sem o documento
+      // não há como saber se é a mesma pessoa.
+      if (flexibleOk && matched !== "document") continue;
+
+      const reasons = exactAmount
+        ? ["exact_amount", `date_${Math.round(Math.abs(daysDiff))}d`]
+        : [`amount_diff_${amountDiff >= 0 ? "+" : "-"}${Math.abs(amountDiff).toFixed(2)}`, `date_${Math.round(Math.abs(daysDiff))}d`];
       if (matched === "document") reasons.push("counterparty_exact");
       if (matched === "name") reasons.push("counterparty_similar");
 
@@ -69,7 +84,10 @@ export function matchEntriesToTransactions(
       // documento batendo exato pesa muito mais que proximidade de data,
       // pra não perder pro "coincidiu a data" quando duas pessoas diferentes
       // têm lançamento/pagamento do mesmo valor na mesma janela.
-      const rankScore = dateScore + (matched === "document" ? DOCUMENT_MATCH_RANK_PRIORITY : bonus);
+      // Valor diferente perde de qualquer par com valor exato + documento, mas ganha de
+      // coincidência de data/valor sem documento.
+      const rankScore =
+        dateScore + (matched === "document" ? DOCUMENT_MATCH_RANK_PRIORITY : bonus) - (exactAmount ? 0 : 5);
 
       candidates.push({
         entryId: entry.id,

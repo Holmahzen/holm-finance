@@ -14,6 +14,8 @@ export const COUNTERPARTY_BONUS = 0.2;
 export const DOCUMENT_MATCH_RANK_PRIORITY = 10;
 export const NAME_SIMILARITY_THRESHOLD = 0.7;
 export const AMOUNT_TOLERANCE = 0.01;
+/** Quanto o Pix pode diferir do lançamento (fração do valor) para ainda ser sugerido, em lançamentos de valor flexível. */
+export const FLEXIBLE_AMOUNT_MAX_DIFF = 0.25;
 
 export function dateProximityScore(daysDiff: number, windowDays = DATE_WINDOW_DAYS): number {
   const abs = Math.abs(daysDiff);
