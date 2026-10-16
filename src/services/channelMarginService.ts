@@ -51,6 +51,7 @@ export const channelMarginService = {
       marketplaceCost: Number(s.marketplaceCost),
       status: s.status,
       shippingModality: s.shippingModality,
+      cartId: s.cartId,
     });
     const ownedAd = ownedShareByReport(adRows);
     const ads = adRows.reduce((sum, r, i) => sum + Number(r.investimento) * overlapShare(r.periodStart, r.periodEnd, start, end) * ownedAd[i], 0);

@@ -10,7 +10,7 @@ import {
   aggregateProjectionByWeek,
   type CashFlowMovement,
 } from "@/domain/cashFlow";
-import { aggregateSalesBySku, isExcludedSaleStatus } from "@/domain/salesAggregation";
+import { aggregateSalesBySku, flexPackageWeights, isExcludedSaleStatus } from "@/domain/salesAggregation";
 import { computeCogsBySku, computeMaterialSpendSplit } from "@/domain/cogs";
 import { plannedPurchaseMovements, suggestPurchase } from "@/domain/plannedPurchase";
 import { payBeforeWeekend } from "@/domain/businessDays";
@@ -94,10 +94,12 @@ export const cashFlowService = {
     // pelas vendas Flex já importadas, até virar o lançamento real.
     const validRecentSales = recentSales.filter((s) => !isExcludedSaleStatus(s.status));
     const flexByDayMap = new Map<number, number>();
-    for (const sale of validRecentSales) {
-      if ((sale.shippingModality ?? "").trim().toLowerCase() !== "flex") continue;
+    // Pacotes, não linhas do Turbo: vendas Flex do mesmo carrinho saem num pacote só.
+    const flexWeights = flexPackageWeights(validRecentSales);
+    for (const [i, sale] of validRecentSales.entries()) {
+      if (!flexWeights[i]) continue;
       const key = sale.saleDate.getTime();
-      flexByDayMap.set(key, (flexByDayMap.get(key) ?? 0) + 1);
+      flexByDayMap.set(key, (flexByDayMap.get(key) ?? 0) + flexWeights[i]);
     }
     const flexByDay = [...flexByDayMap.entries()].map(([t, flexCount]) => ({ date: new Date(t), flexCount }));
     movements.push(

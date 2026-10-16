@@ -22,6 +22,8 @@ export type MercadoTurboSaleRow = {
    * código do anúncio juntos, por isso é a ponte pra cruzar com o gasto de
    * Ads (que só vem com o código, nunca com o SKU). */
   listingCode: string | null;
+  /** "ID do Carrinho" — vendas do mesmo carrinho viajam no mesmo pacote. */
+  cartId: string | null;
 };
 
 export type MercadoTurboParseResult = {
@@ -95,6 +97,7 @@ export function parseMercadoTurboWorkbook(buffer: Buffer): MercadoTurboParseResu
       customerName: cellString(row, "Nome do Comprador") || null,
       status: cellString(row, "Status Pedido"),
       listingCode: cellString(row, "Código") || null,
+      cartId: cellString(row, "ID do Carrinho").replace(/^#/, "") || null,
     });
   }
 

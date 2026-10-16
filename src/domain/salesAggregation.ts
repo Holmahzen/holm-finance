@@ -7,6 +7,8 @@ export type SaleForAggregation = {
   marketplaceCost: number;
   status: string;
   shippingModality?: string | null;
+  /** Vendas com o mesmo carrinho viajam num pacote só. */
+  cartId?: string | null;
 };
 
 export type SkuSalesAggregate = {
@@ -43,23 +45,44 @@ export function isExcludedSaleStatus(
  * status excluído (cancelado/devolução parcial, por padrão) não entram na
  * soma — contá-los infla receita e margem com vendas que não se concretizaram.
  */
+/**
+ * Peso de cada venda na contagem de pacotes Flex: 0 se não é Flex (ou foi excluída);
+ * 1 se viaja sozinha; 1/n se divide o pacote com outras n−1 vendas Flex do mesmo
+ * carrinho. A soma dos pesos é o número de pacotes que a transportadora cobra.
+ * Vale para a lista inteira passada — carrinho cortado no meio do período conta
+ * pelo que está na lista.
+ */
+export function flexPackageWeights(
+  sales: { status: string; shippingModality?: string | null; cartId?: string | null }[],
+  excludedStatuses: string[] = DEFAULT_EXCLUDED_SALE_STATUSES,
+): number[] {
+  const isFlex = (s: { status: string; shippingModality?: string | null }) =>
+    !isExcludedSaleStatus(s.status, excludedStatuses) && (s.shippingModality ?? "").trim().toLowerCase() === "flex";
+  const inCart = new Map<string, number>();
+  for (const s of sales) {
+    if (isFlex(s) && s.cartId) inCart.set(s.cartId, (inCart.get(s.cartId) ?? 0) + 1);
+  }
+  return sales.map((s) => (!isFlex(s) ? 0 : s.cartId ? 1 / (inCart.get(s.cartId) ?? 1) : 1));
+}
+
 export function aggregateSalesBySku(
   sales: SaleForAggregation[],
   excludedStatuses: string[] = DEFAULT_EXCLUDED_SALE_STATUSES,
 ): SkuSalesAggregate[] {
   const bySku = new Map<string, SkuSalesAggregate>();
+  const flexWeights = flexPackageWeights(sales, excludedStatuses);
 
-  for (const sale of sales) {
+  for (const [index, sale] of sales.entries()) {
     if (isExcludedSaleStatus(sale.status, excludedStatuses)) continue;
 
-    const isFlex = sale.shippingModality === "Flex";
+    const flexWeight = flexWeights[index];
     const existing = bySku.get(sale.sku);
     if (existing) {
       existing.quantity += sale.quantity;
       existing.grossRevenue += sale.grossRevenue;
       existing.netRevenue += sale.netRevenue;
       existing.marketplaceCost += sale.marketplaceCost;
-      existing.flexOrderCount += isFlex ? 1 : 0;
+      existing.flexOrderCount += flexWeight;
     } else {
       bySku.set(sale.sku, {
         sku: sale.sku,
@@ -68,7 +91,7 @@ export function aggregateSalesBySku(
         grossRevenue: sale.grossRevenue,
         netRevenue: sale.netRevenue,
         marketplaceCost: sale.marketplaceCost,
-        flexOrderCount: isFlex ? 1 : 0,
+        flexOrderCount: flexWeight,
       });
     }
   }

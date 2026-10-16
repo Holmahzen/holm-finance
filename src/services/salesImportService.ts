@@ -80,6 +80,7 @@ export const salesImportService = {
             customerName: r.customerName,
             status: r.status,
             listingCode: r.listingCode,
+            cartId: r.cartId,
             importBatchId: batch.id,
           })),
           tx,

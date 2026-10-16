@@ -492,9 +492,13 @@ model MarketplaceSale {
    * cruza uma venda com o gasto de Ads daquele anúncio em MlAdSpend, já que
    * nenhum relatório de venda traz SKU e investimento em Ads juntos. */
   listingCode      String?
+  /** "ID do Carrinho" do Mercado Turbo: vendas do mesmo carrinho saem num pacote só,
+   * então o Flex (cobrado por pacote) é contado por carrinho, não por linha. */
+  cartId           String?
 
   @@index([saleDate])
   @@index([listingCode])
+  @@index([cartId])
   @@map("marketplace_sales")
 }
 

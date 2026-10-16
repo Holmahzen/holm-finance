@@ -44,6 +44,7 @@ async function loadRows(): Promise<ModelSkuInput[]> {
       marketplaceCost: Number(s.marketplaceCost),
       status: s.status,
       shippingModality: s.shippingModality,
+      cartId: s.cartId,
     })),
   );
 

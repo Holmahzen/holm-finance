@@ -4,6 +4,7 @@ import {
   isExcludedSaleStatus,
   computeRevenueInTransit,
   groupSalesByModality,
+  flexPackageWeights,
 } from "@/domain/salesAggregation";
 
 const utcDay = (day: number) => new Date(Date.UTC(2026, 7, day));
@@ -174,5 +175,30 @@ describe("computeRevenueInTransit", () => {
       20,
     );
     expect(result).toEqual({ fromDay: 20, salesCount: 0, grossRevenue: 0, netRevenue: 0 });
+  });
+});
+
+describe("pacotes Flex por carrinho", () => {
+  const flex = (cartId: string | null, o: Record<string, unknown> = {}) => ({ sku: "A", productName: "A", quantity: 1, grossRevenue: 50, netRevenue: 10, marketplaceCost: 0, status: "Pago", shippingModality: "Flex", cartId, ...o });
+
+  it("duas vendas Flex do mesmo carrinho contam um pacote só", () => {
+    const w = flexPackageWeights([flex("C1"), flex("C1"), flex("C2"), flex(null)]);
+    expect(w.reduce((a, b) => a + b, 0)).toBeCloseTo(3); // C1 (1) + C2 (1) + sem carrinho (1)
+  });
+
+  it("não conta o que não é Flex nem o cancelado", () => {
+    const w = flexPackageWeights([flex("C1", { shippingModality: "Full" }), flex("C2", { status: "Cancelado" }), flex("C3")]);
+    expect(w).toEqual([0, 0, 1]);
+  });
+
+  it("cancelado no carrinho não divide o pacote", () => {
+    const w = flexPackageWeights([flex("C1"), flex("C1", { status: "Cancelado" })]);
+    expect(w).toEqual([1, 0]);
+  });
+
+  it("a agregação por SKU soma os pacotes (fração por carrinho), não as linhas", () => {
+    const [a, b] = aggregateSalesBySku([flex("C1", { sku: "A" }), flex("C1", { sku: "B" }), flex("C2", { sku: "A" })]).sort((x, y) => x.sku.localeCompare(y.sku));
+    expect(a.flexOrderCount).toBeCloseTo(1.5);
+    expect(b.flexOrderCount).toBeCloseTo(0.5);
   });
 });
