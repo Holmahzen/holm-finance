@@ -95,3 +95,18 @@ describe("parte fixa acima de R$ 79 informada pela usuária", () => {
     expect(priceForMargin(model, withFixed, 0.18)!).toBeCloseTo(52);
   });
 });
+
+describe("imposto real maior que o que o Turbo desconta", () => {
+  it("a margem no preço atual cai a diferença sobre o preço", () => {
+    const base = currentBreakdown(model, assumptions);
+    const real = currentBreakdown(model, { ...assumptions, taxRate: 0.15, measuredTaxRate: 0.14 });
+    // preço R$ 50: 1 ponto percentual = R$ 0,50 a menos por peça
+    expect(base.contribution - real.contribution).toBeCloseTo(0.5);
+  });
+
+  it("sem measuredTaxRate, o imposto informado é o que o Turbo desconta (nada muda na margem atual)", () => {
+    const a = currentBreakdown(model, assumptions);
+    const b = currentBreakdown(model, { ...assumptions, taxRate: 0.15 });
+    expect(b.contribution).toBeCloseTo(a.contribution);
+  });
+});

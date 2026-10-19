@@ -44,10 +44,12 @@ type Row = {
   partialCost: boolean;
 };
 
-type Settings = { target: string; taxToday: string; tax2027: string; commission: string; includeAds: boolean; fixedAbove79: string };
+type Settings = { target: string; taxToday: string; turboTax: string; tax2027: string; commission: string; includeAds: boolean; fixedAbove79: string };
 
-const DEFAULT_SETTINGS: Settings = { target: "18", taxToday: "14", tax2027: "14", commission: "14", includeAds: true, fixedAbove79: "" };
+const DEFAULT_SETTINGS: Settings = { target: "18", taxToday: "15", turboTax: "14", tax2027: "14", commission: "14", includeAds: true, fixedAbove79: "" };
 const STORAGE_KEY = "simulador-de-preco:premissas";
+/** Marca que o imposto salvo (14%, o padrão antigo) já foi atualizado para 15% (alíquota efetiva do DAS de set/2026: 14,44%). */
+const TAX_UPDATE_KEY = "simulador-de-preco:imposto-15";
 
 const total = (c: PieceCost | null) => (c ? c.tecidoCost + c.costuraCost + c.aviamentosCost : 0);
 const pct = (v: number) => `${(v * 100).toFixed(1).replace(".", ",")}%`;
@@ -301,7 +303,14 @@ export default function SimuladorDePrecoPage() {
         // Premissas salvas só depois de montar a tela (o servidor não tem localStorage).
         try {
           const saved = window.localStorage.getItem(STORAGE_KEY);
-          if (saved) setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(saved) });
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (!window.localStorage.getItem(TAX_UPDATE_KEY)) {
+              if (parsed.taxToday === "14") parsed.taxToday = "15";
+              window.localStorage.setItem(TAX_UPDATE_KEY, "1");
+            }
+            setSettings({ ...DEFAULT_SETTINGS, ...parsed });
+          }
         } catch {
           // sem armazenamento local: fica com o padrão
         }
@@ -323,6 +332,7 @@ export default function SimuladorDePrecoPage() {
   const tax2027 = toFraction(settings.tax2027);
   const assumptions: PriceAssumptions = {
     taxRate: toFraction(settings.taxToday),
+    measuredTaxRate: toFraction(settings.turboTax),
     commissionRate: toFraction(settings.commission),
     includeAds: settings.includeAds,
     fixedAboveFreeShipping: settings.fixedAbove79.trim() ? Number(settings.fixedAbove79.replace(",", ".")) || 0 : null,
@@ -382,8 +392,12 @@ export default function SimuladorDePrecoPage() {
             <input value={settings.target} onChange={set("target")} inputMode="decimal" className={inputClass} />
           </label>
           <label className="flex flex-col gap-1 text-xs font-medium text-muted">
-            Imposto hoje (%)
+            Imposto real hoje (%)
             <input value={settings.taxToday} onChange={set("taxToday")} inputMode="decimal" className={inputClass} />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted">
+            Imposto que o Turbo já desconta (%)
+            <input value={settings.turboTax} onChange={set("turboTax")} inputMode="decimal" className={inputClass} />
           </label>
           <label className="flex flex-col gap-1 text-xs font-medium text-muted">
             Imposto em 2027 (%)
@@ -403,8 +417,9 @@ export default function SimuladorDePrecoPage() {
           </label>
         </div>
         <p className="max-w-prose text-xs text-muted">
-          <strong className="text-foreground">Imposto hoje</strong> é o percentual configurado no Mercado Turbo (o que ele
-          desconta de cada venda). <strong className="text-foreground">Imposto em 2027</strong>: troque pelo número que o
+          <strong className="text-foreground">Imposto real hoje</strong> é a alíquota efetiva do DAS (14,44% em setembro/2026,
+          subindo). <strong className="text-foreground">Imposto que o Turbo já desconta</strong> é o percentual configurado
+          lá (o que ele tira de cada venda): se for menor que o real, a margem atual mostrada já considera a diferença. <strong className="text-foreground">Imposto em 2027</strong>: troque pelo número que o
           contador passar para depois da saída do Simples. A <strong className="text-foreground">comissão</strong> é a parte
           da tarifa do marketplace que cresce com o preço; o resto (tarifa fixa, frete, Flex) o simulador tira das suas
           vendas reais. O preço médio inclui o frete pago pelo comprador quando há — use como referência e confira o preço

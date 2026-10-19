@@ -22,8 +22,14 @@ export type ModelEconomics = {
 };
 
 export type PriceAssumptions = {
-  /** Imposto que o Mercado Turbo desconta hoje (fração, ex.: 0.14). */
+  /** Imposto real sobre o preço (fração, ex.: 0.15 — a alíquota efetiva do DAS). */
   taxRate: number;
+  /**
+   * Imposto que o Mercado Turbo JÁ descontou nas vendas medidas (fração). É com ele que a parte
+   * fixa é separada dos descontos; se for menor que `taxRate`, a margem no preço atual cai a
+   * diferença. Ausente: igual a `taxRate` (o Turbo desconta o imposto real).
+   */
+  measuredTaxRate?: number;
   /** Comissão do marketplace que cresce com o preço (fração). */
   commissionRate: number;
   /** Desconta o Ads (TACOS do período) da margem. */
@@ -70,7 +76,7 @@ export function fixedCostPerUnit(e: ModelEconomics, a: PriceAssumptions, atPrice
   const price = currentPrice(e);
   if (usesFreeShippingFixed(e, a, atPrice)) return a.fixedAboveFreeShipping as number;
   const deductionsPerUnit = (e.grossRevenue - e.beforeProductionCost) / e.units;
-  return Math.max(0, deductionsPerUnit - (a.taxRate + a.commissionRate) * price);
+  return Math.max(0, deductionsPerUnit - ((a.measuredTaxRate ?? a.taxRate) + a.commissionRate) * price);
 }
 
 export function adsRate(e: ModelEconomics, a: PriceAssumptions): number {
