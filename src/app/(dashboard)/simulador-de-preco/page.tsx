@@ -44,9 +44,9 @@ type Row = {
   partialCost: boolean;
 };
 
-type Settings = { target: string; taxToday: string; turboTax: string; tax2027: string; commission: string; includeAds: boolean; fixedAbove79: string };
+type Settings = { target: string; taxAuto: boolean; taxToday: string; turboTax: string; tax2027: string; commission: string; includeAds: boolean; fixedAbove79: string };
 
-const DEFAULT_SETTINGS: Settings = { target: "18", taxToday: "15", turboTax: "14", tax2027: "14", commission: "14", includeAds: true, fixedAbove79: "" };
+const DEFAULT_SETTINGS: Settings = { target: "18", taxAuto: true, taxToday: "15", turboTax: "14", tax2027: "14", commission: "14", includeAds: true, fixedAbove79: "" };
 const STORAGE_KEY = "simulador-de-preco:premissas";
 /** Marca que o imposto salvo (14%, o padrão antigo) já foi atualizado para 15% (alíquota efetiva do DAS de set/2026: 14,44%). */
 const TAX_UPDATE_KEY = "simulador-de-preco:imposto-15";
@@ -290,11 +290,20 @@ function QuickCalculator({ settings }: { settings: Settings }) {
 export default function SimuladorDePrecoPage() {
   const [data, setData] = useState<{ days: number; models: ProductModel[] } | null>(null);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  // Alíquota efetiva do último extrato do PGDAS-D (null: sem extrato ou ainda carregando).
+  const [autoTax, setAutoTax] = useState<{ period: string; rate: number } | null>(null);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [onlyBelow, setOnlyBelow] = useState(true);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const [tab, setTab] = useState<"modelos" | "calculadora">("modelos");
+
+  useEffect(() => {
+    fetch("/api/simples-nacional/aliquota")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => setAutoTax(json))
+      .catch(() => setAutoTax(null));
+  }, []);
 
   useEffect(() => {
     fetch("/api/products/models")
@@ -331,7 +340,7 @@ export default function SimuladorDePrecoPage() {
   const target = toFraction(settings.target);
   const tax2027 = toFraction(settings.tax2027);
   const assumptions: PriceAssumptions = {
-    taxRate: toFraction(settings.taxToday),
+    taxRate: settings.taxAuto && autoTax ? Math.round(autoTax.rate * 10000) / 10000 : toFraction(settings.taxToday),
     measuredTaxRate: toFraction(settings.turboTax),
     commissionRate: toFraction(settings.commission),
     includeAds: settings.includeAds,
@@ -365,7 +374,7 @@ export default function SimuladorDePrecoPage() {
   );
 
   const set = (key: keyof Settings) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setSettings((s) => ({ ...s, [key]: key === "includeAds" ? e.target.checked : e.target.value }));
+    setSettings((s) => ({ ...s, [key]: key === "includeAds" || key === "taxAuto" ? e.target.checked : e.target.value }));
   const inputClass =
     "w-24 rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none";
 
@@ -393,7 +402,17 @@ export default function SimuladorDePrecoPage() {
           </label>
           <label className="flex flex-col gap-1 text-xs font-medium text-muted">
             Imposto real hoje (%)
-            <input value={settings.taxToday} onChange={set("taxToday")} inputMode="decimal" className={inputClass} />
+            <input
+              value={settings.taxAuto && autoTax ? (autoTax.rate * 100).toFixed(2).replace(".", ",") : settings.taxToday}
+              onChange={set("taxToday")}
+              disabled={settings.taxAuto && !!autoTax}
+              inputMode="decimal"
+              className={`${inputClass} disabled:opacity-60`}
+            />
+          </label>
+          <label className="flex items-center gap-2 pb-2 text-sm text-foreground">
+            <input type="checkbox" checked={settings.taxAuto} onChange={set("taxAuto")} />
+            {autoTax ? `Usar a alíquota do último extrato (${autoTax.period.slice(5)}/${autoTax.period.slice(0, 4)})` : "Usar a alíquota do último extrato (nenhum extrato importado)"}
           </label>
           <label className="flex flex-col gap-1 text-xs font-medium text-muted">
             Imposto que o Turbo já desconta (%)
@@ -417,8 +436,8 @@ export default function SimuladorDePrecoPage() {
           </label>
         </div>
         <p className="max-w-prose text-xs text-muted">
-          <strong className="text-foreground">Imposto real hoje</strong> é a alíquota efetiva do DAS (14,44% em setembro/2026,
-          subindo). <strong className="text-foreground">Imposto que o Turbo já desconta</strong> é o percentual configurado
+          <strong className="text-foreground">Imposto real hoje</strong> é a alíquota efetiva do DAS, lida do último extrato do
+          PGDAS-D importado (desmarque a caixa para digitar o seu). <strong className="text-foreground">Imposto que o Turbo já desconta</strong> é o percentual configurado
           lá (o que ele tira de cada venda): se for menor que o real, a margem atual mostrada já considera a diferença. <strong className="text-foreground">Imposto em 2027</strong>: troque pelo número que o
           contador passar para depois da saída do Simples. A <strong className="text-foreground">comissão</strong> é a parte
           da tarifa do marketplace que cresce com o preço; o resto (tarifa fixa, frete, Flex) o simulador tira das suas
