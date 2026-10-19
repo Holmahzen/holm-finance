@@ -310,41 +310,84 @@ export default function SimplesNacionalPage() {
         <p className="text-sm text-muted">Carregando...</p>
       ) : (
         <>
-          {report.official && (
-            <div className="rounded-lg border border-gold/40 bg-surface p-4">
-              <div className="flex flex-wrap items-end justify-between gap-4">
-                <div>
-                  <span className="text-xs font-medium tracking-wide text-gold uppercase">
-                    RBT12 oficial — apuração de {periodLabel(report.official.period)}
-                  </span>
-                  <p className="font-serif text-3xl text-gold">{formatBRL(report.official.rbt12)}</p>
-                  <p className="text-xs text-muted">
-                    Receita dos 12 meses anteriores a {periodLabel(report.official.period)}, como está no extrato
-                    do PGDAS-D. É esse número que define a faixa do Simples.
-                  </p>
+          {report.official && (() => {
+            const official = report.official;
+            const [offYear, offMonth] = official.period.split("-").map(Number);
+            const current = report.apuracoes.find((a) => a.period === official.period);
+            const previous = report.apuracoes.find((a) => a.period === `${offMonth === 1 ? offYear - 1 : offYear}-${String(offMonth === 1 ? 12 : offMonth - 1).padStart(2, "0")}`);
+            const rate = current && current.revenue > 0 ? current.taxes.total / current.revenue : null;
+            const previousRate = previous && previous.revenue > 0 ? previous.taxes.total / previous.revenue : null;
+            const monthsLeft = 12 - offMonth;
+            const roomToCeiling = Math.max(0, report.ceiling - official.rba);
+            const sublimit = official.sublimit ?? report.sublimit;
+            return (
+              <div className="rounded-lg border border-gold/40 bg-surface p-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <span className="text-xs font-medium tracking-wide text-gold uppercase">
+                      Faturado no ano (RBA) — decide os limites · até {periodLabel(official.period)}
+                    </span>
+                    <p className="font-serif text-3xl text-gold">{formatBRL(official.rba)}</p>
+                    <p className="text-xs text-muted">
+                      Receita bruta acumulada de janeiro a {periodLabel(official.period)}, do extrato do PGDAS-D. É ela que
+                      confere o sublimite e o teto do Simples.
+                    </p>
+                    <ul className="mt-2 flex flex-col gap-1 text-sm">
+                      <li className="text-foreground">
+                        Sublimite de {formatBRL(sublimit)}:{" "}
+                        {official.rba > sublimit ? (
+                          <span className="text-red-400">passou em {formatBRL(official.rba - sublimit)}</span>
+                        ) : (
+                          <span className="text-amber-300">faltam {formatBRL(sublimit - official.rba)}</span>
+                        )}
+                      </li>
+                      <li className="text-foreground">
+                        Teto de {formatBRL(report.ceiling)}: faltam <span className="text-gold-soft">{formatBRL(roomToCeiling)}</span>
+                        {monthsLeft > 0 && (
+                          <span className="text-muted">
+                            {" "}
+                            — dá {formatBRL(roomToCeiling / monthsLeft)}/mês até dezembro
+                          </span>
+                        )}
+                      </li>
+                    </ul>
+                  </div>
+                  <div className="md:text-right">
+                    <span className="text-xs font-medium tracking-wide text-muted uppercase">
+                      RBT12 — define a alíquota · apuração de {periodLabel(official.period)}
+                    </span>
+                    <p className="font-serif text-2xl text-foreground">{formatBRL(official.rbt12)}</p>
+                    <p className="text-xs text-muted">
+                      Receita dos 12 meses anteriores. Define a faixa do Simples e, por isso, a alíquota do DAS — não é o
+                      que confere os limites.
+                    </p>
+                    {rate !== null && (
+                      <p className="mt-2 text-sm text-foreground">
+                        Alíquota efetiva: <span className="font-medium text-gold">{pct(rate)}</span>
+                        {previousRate !== null && (
+                          <span className={rate > previousRate ? "text-red-400" : "text-emerald-400"}>
+                            {" "}
+                            ({rate > previousRate ? "+" : ""}
+                            {((rate - previousRate) * 100).toFixed(2).replace(".", ",")} p.p. vs. mês anterior)
+                          </span>
+                        )}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <div className="text-right">
-                  <span className="text-xs font-medium tracking-wide text-muted uppercase">
-                    Faturado no ano (oficial)
-                  </span>
-                  <p className="font-serif text-2xl text-foreground">{formatBRL(report.official.rba)}</p>
-                  <p className="text-xs text-muted">
-                    {(report.official.rba / report.ceiling * 100).toFixed(1)}% do teto
+                {official.rba > sublimit && (
+                  <p className="mt-3 rounded-md border border-amber-400/40 bg-amber-400/10 p-3 text-sm text-amber-100">
+                    O faturado no ano passou do sublimite de {formatBRL(sublimit)}.{" "}
+                    {official.icmsBlocked
+                      ? "O extrato já diz que a empresa está impedida de recolher ICMS no DAS: ele passa a ser pago por guia estadual."
+                      : official.rba > sublimit * 1.2
+                        ? "Passou em mais de 20%: pela regra, o ICMS sai do DAS já no mês seguinte. Confirme com o contador."
+                        : "O extrato ainda diz que o ICMS continua no DAS — pela regra, o impedimento vale a partir de janeiro do ano seguinte. Confirme com o contador."}
                   </p>
-                </div>
+                )}
               </div>
-              {report.official.sublimit != null && report.official.rba > report.official.sublimit && (
-                <p className="mt-3 rounded-md border border-amber-400/40 bg-amber-400/10 p-3 text-sm text-amber-100">
-                  O faturado no ano passou do sublimite de {formatBRL(report.official.sublimit)}.{" "}
-                  {report.official.icmsBlocked
-                    ? "O extrato já diz que a empresa está impedida de recolher ICMS no DAS: ele passa a ser pago por guia estadual."
-                    : report.official.rba > report.official.sublimit * 1.2
-                      ? "Passou em mais de 20%: pela regra, o ICMS sai do DAS já no mês seguinte. Confirme com o contador."
-                      : "O extrato ainda diz que o ICMS continua no DAS — pela regra, o impedimento vale a partir de janeiro do ano seguinte. Confirme com o contador."}
-                </p>
-              )}
-            </div>
-          )}
+            );
+          })()}
 
           <div className={`rounded-lg border p-4 ${ALERT_STYLES[report.alertLevel].border} ${ALERT_STYLES[report.alertLevel].bg}`}>
             <div className="flex flex-wrap items-end justify-between gap-4">
@@ -493,10 +536,9 @@ export default function SimplesNacionalPage() {
               </div>
               <div className="text-right">
                 <span className="font-serif text-2xl text-gold">{formatBRL(report.rbt12)}</span>
-                <p className="text-xs text-muted">{report.rbt12PercentOfCeiling.toFixed(1)}% do teto</p>
+                <p className="text-xs text-muted">só define a alíquota; os limites vão pelo faturado no ano</p>
               </div>
             </div>
-            <ProgressBar percent={report.rbt12PercentOfCeiling} colorClass="bg-gold" />
           </div>
 
           {report.apuracoes.length > 0 && (
