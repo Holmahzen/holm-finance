@@ -554,6 +554,26 @@ enum MlFullCostType {
  * três (coleta, armazenamento prolongado, retirada) trazem, e são essas que
  * entram na Lucratividade dos Produtos.
  */
+/**
+ * Resumo do Relatório de Faturamento do Mercado Livre por ciclo: uma linha por tipo de tarifa e por
+ * "descontado da operação" (SIM = tirado do repasse, NAO = vai na fatura a pagar, NA = cancelada/não se
+ * aplica). Reimportar o mesmo ciclo substitui as linhas.
+ */
+model MlBillingSummary {
+  id          String   @id @default(cuid())
+  periodStart DateTime @db.Date
+  periodEnd   DateTime @db.Date
+  detail      String
+  deducted    String
+  tariffCount Int
+  amount      Decimal  @db.Decimal(14, 2)
+  importedAt  DateTime @default(now())
+
+  @@unique([periodStart, periodEnd, detail, deducted])
+  @@index([periodEnd])
+  @@map("ml_billing_summaries")
+}
+
 model MlFullCost {
   id          String         @id @default(cuid())
   type        MlFullCostType
