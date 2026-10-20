@@ -29,8 +29,8 @@ describe("marketplaceChannel", () => {
   it("com imposto já descontado no relatório, tira só Flex, Ads e Full", () => {
     const ch = marketplaceChannel("mercadoLivre", [sale({ shippingModality: "Flex", quantity: 1, grossRevenue: 20, netRevenue: 12 })], costs, 0, 1, 0.5);
     expect(ch.tax).toBe(0);
-    // 12 − 12,99 de Flex − 6 de custo − 1 de Ads − 0,5 de Full
-    expect(ch.contribution).toBeCloseTo(12 - 12.99 - 6 - 1 - 0.5);
+    // 12 − 12,99 × 1,06 de Flex − 6 de custo − 1 de Ads − 0,5 de Full
+    expect(ch.contribution).toBeCloseTo(12 - 12.99 * 1.06 - 6 - 1 - 0.5);
   });
 
   it("SKU sem custo entra na receita mas não na margem", () => {

@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { marketplaceSaleRepository } from "@/repositories/marketplaceSaleRepository";
 import { aggregateSalesBySku } from "@/domain/salesAggregation";
-import { FLEX_COST_PER_PACKAGE } from "@/domain/breakEven";
+import { FLEX_COST_PER_COUNTED_PACKAGE } from "@/domain/breakEven";
 import { buildProductModels, itemKeys, kitCost, normalizeKey, parseSku, type ModelSkuInput, type PieceCost } from "@/domain/productModels";
 import { todayUTCInBrazil } from "@/lib/today";
 import { mlAdSpendRepository } from "@/repositories/mlAdSpendRepository";
@@ -71,7 +71,7 @@ async function loadRows(): Promise<ModelSkuInput[]> {
     // Mesma conta do Ponto de Equilíbrio: o que sobrou da venda no Mercado
     // Turbo, com o custo dele somado de volta e o Flex descontado.
     const beforeProductionCost =
-      a.netRevenue + a.marketplaceCost - a.flexOrderCount * FLEX_COST_PER_PACKAGE - a.quantity * (packagingBySku.get(key) ?? 0);
+      a.netRevenue + a.marketplaceCost - a.flexOrderCount * FLEX_COST_PER_COUNTED_PACKAGE - a.quantity * (packagingBySku.get(key) ?? 0);
     const existing = bySku.get(key);
     if (existing) {
       bySku.set(key, {

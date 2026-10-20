@@ -109,6 +109,15 @@ describe("computeSalesBasedMargin", () => {
     expect(result.marginValue).toBeCloseTo(47.5);
   });
 
+  it("charges Flex per counted package with the 6% of billed-but-not-counted packages", () => {
+    // 10 peças, 5 pedidos Flex: 5 × 12,99 × 1,06 = 68,847 de Flex; sobra (800 − 68,847)/10 por peça
+    const result = computeSalesBasedMargin(
+      { quantity: 10, grossRevenue: 1000, netRevenue: 800, marketplaceCost: 0, flexOrderCount: 5 },
+      null,
+    );
+    expect(result.marginValue).toBeCloseTo((800 - 5 * 12.99 * 1.06) / 10);
+  });
+
   it("falls back to the marketplace's net margin when there's no registered production cost", () => {
     const result = computeSalesBasedMargin(
       { quantity: 10, grossRevenue: 1000, netRevenue: 800, marketplaceCost: 0, flexOrderCount: 0 },
@@ -136,14 +145,14 @@ describe("computeSalesBasedMargin", () => {
     expect(result.marginPercent).toBe(0);
   });
 
-  it("subtracts R$12.99 per Flex order from the pool before splitting per unit", () => {
-    // netRevenue/unit sem Flex seria 800/10=80; 2 pedidos Flex custam 2*12.99=25.98 no total,
-    // diluídos pelas 10 unidades = 2.598/un a menos.
+  it("subtracts R$12.99 (+6%) per Flex order from the pool before splitting per unit", () => {
+    // netRevenue/unit sem Flex seria 800/10=80; 2 pedidos Flex custam 2*12.99*1.06=27.5388 no total,
+    // diluídos pelas 10 unidades = 2.75388/un a menos.
     const result = computeSalesBasedMargin(
       { quantity: 10, grossRevenue: 1000, netRevenue: 800, marketplaceCost: 0, flexOrderCount: 2 },
       null,
     );
-    expect(result.marginValue).toBeCloseTo(80 - 25.98 / 10);
+    expect(result.marginValue).toBeCloseTo(80 - (2 * 12.99 * 1.06) / 10);
   });
 });
 

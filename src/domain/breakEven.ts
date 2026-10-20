@@ -58,6 +58,17 @@ export type SkuSalesInput = {
  * importado do Mercado Turbo, por isso é descontado à parte aqui. */
 export const FLEX_COST_PER_PACKAGE = 12.99;
 
+/**
+ * A transportadora cobra mais pacotes do que os pedidos Flex que o Turbo mostra como válidos: pacote
+ * coletado de venda que depois foi cancelada ou devolvida continua na fatura. Em 01–15/10/2026 foram
+ * 409 pacotes cobrados contra 384 contados por carrinho (+6,5%). O acréscimo de 6% aproxima as
+ * estimativas da fatura real.
+ */
+export const FLEX_BILLED_EXTRA = 0.06;
+
+/** Custo por pacote CONTADO nas vendas (já com o acréscimo dos pacotes cobrados e não contados). */
+export const FLEX_COST_PER_COUNTED_PACKAGE = FLEX_COST_PER_PACKAGE * (1 + FLEX_BILLED_EXTRA);
+
 export type ProductionCost = {
   tecidoCost: number;
   costuraCost: number;
@@ -82,7 +93,7 @@ export function computeSalesBasedMargin(
   const productionCostPerUnit = productionCost
     ? productionCost.tecidoCost + productionCost.costuraCost + productionCost.aviamentosCost + (productionCost.packagingCost ?? 0)
     : 0;
-  const flexShippingCost = sale.flexOrderCount * FLEX_COST_PER_PACKAGE;
+  const flexShippingCost = sale.flexOrderCount * FLEX_COST_PER_COUNTED_PACKAGE;
   const netRevenueBeforeProductionCost = sale.netRevenue + sale.marketplaceCost - flexShippingCost;
   const marginValue =
     sale.quantity > 0 ? netRevenueBeforeProductionCost / sale.quantity - productionCostPerUnit : 0;

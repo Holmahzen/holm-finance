@@ -15,7 +15,7 @@ import { computeCogsBySku, computeMaterialSpendSplit } from "@/domain/cogs";
 import { plannedPurchaseMovements, suggestPurchase } from "@/domain/plannedPurchase";
 import { payBeforeWeekend } from "@/domain/businessDays";
 import { estimateFlexInvoices } from "@/domain/flexEstimate";
-import { FLEX_COST_PER_PACKAGE } from "@/domain/breakEven";
+import { FLEX_COST_PER_COUNTED_PACKAGE } from "@/domain/breakEven";
 import { todayUTCInBrazil } from "@/lib/today";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -112,7 +112,7 @@ export const cashFlowService = {
           null,
         ),
         paceFlexPerDay: flexByDay.reduce((sum, d) => sum + d.flexCount, 0) / 30,
-        feePerPackage: FLEX_COST_PER_PACKAGE,
+        feePerPackage: FLEX_COST_PER_COUNTED_PACKAGE,
         flexEntries: flexEntryRows.map((e) => ({ date: e.dueDate, amount: Number(e.amount) })),
       }),
     );

@@ -614,7 +614,7 @@ export default function VendasPage() {
                     </span>
                     <span className="text-xs text-muted">
                       {modalityReport.byModality.find((b) => b.modality === "Flex")?.count ?? 0} pedidos Flex
-                      × {formatBRL(FLEX_COST_PER_PACKAGE)} — compare com o valor real da fatura da
+                      × {formatBRL(FLEX_COST_PER_PACKAGE)} + 6% de pacotes cobrados e não contados — compare com o valor real da fatura da
                       transportadora quando ela chegar (pode haver uma pequena diferença se algum pedido do
                       último dia entrar na próxima quinzena, ou se algum pedido do período foi cancelado
                       depois).

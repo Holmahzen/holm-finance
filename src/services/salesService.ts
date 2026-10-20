@@ -1,6 +1,6 @@
 import { marketplaceSaleRepository } from "@/repositories/marketplaceSaleRepository";
 import { isExcludedSaleStatus, groupSalesByModality } from "@/domain/salesAggregation";
-import { FLEX_COST_PER_PACKAGE } from "@/domain/breakEven";
+import { FLEX_COST_PER_COUNTED_PACKAGE } from "@/domain/breakEven";
 
 function buildReport(sales: Awaited<ReturnType<typeof marketplaceSaleRepository.findByPeriod>>) {
   // Cancelado/devolução parcial continuam listados na tabela pro histórico,
@@ -21,7 +21,7 @@ function buildReport(sales: Awaited<ReturnType<typeof marketplaceSaleRepository.
   );
 
   const flexBucket = byModality.find((b) => b.modality === "Flex");
-  const flexExpectedInvoice = flexBucket ? flexBucket.count * FLEX_COST_PER_PACKAGE : 0;
+  const flexExpectedInvoice = flexBucket ? flexBucket.count * FLEX_COST_PER_COUNTED_PACKAGE : 0;
 
   return {
     totalGrossRevenue,

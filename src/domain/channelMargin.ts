@@ -1,4 +1,4 @@
-import { FLEX_COST_PER_PACKAGE, type ProductionCost } from "@/domain/breakEven";
+import { FLEX_COST_PER_COUNTED_PACKAGE, type ProductionCost } from "@/domain/breakEven";
 import { aggregateSalesBySku, type SaleForAggregation } from "@/domain/salesAggregation";
 import { rowKind } from "@/domain/fiscalNotes";
 import { normalizeKey } from "@/domain/productModels";
@@ -91,7 +91,7 @@ export function marketplaceChannel(
   const products = aggregateSalesBySku(sales).map((s): ChannelProduct => {
     const cost = costOf(s.sku);
     const skuTax = s.grossRevenue * taxRate;
-    const flex = s.flexOrderCount * FLEX_COST_PER_PACKAGE;
+    const flex = s.flexOrderCount * FLEX_COST_PER_COUNTED_PACKAGE;
     const afterFees = s.netRevenue + s.marketplaceCost - flex - skuTax;
     fees += s.grossRevenue - (s.netRevenue + s.marketplaceCost) + flex;
     tax += skuTax;

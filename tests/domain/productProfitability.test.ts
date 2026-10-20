@@ -191,8 +191,8 @@ describe("buildProfitabilityReport", () => {
 
   it("usa a venda real, não o preço do cadastro, e desconta o Flex", () => {
     const { rows } = buildProfitabilityReport([soldA1({ flexOrderCount: 2 })], new Map([["A1", cost()]]), 0.3);
-    // (500 + 310 - 2 × 12,99) / 10 - 35
-    expect(rows[0].marginValue).toBeCloseTo((810 - 25.98) / 10 - 35);
+    // (500 + 310 - 2 × 12,99 × 1,06) / 10 - 35  (Flex com +6% de pacotes cobrados e não contados)
+    expect(rows[0].marginValue).toBeCloseTo((810 - 2 * 12.99 * 1.06) / 10 - 35);
     expect(rows[0].marginPercent).toBeCloseTo(rows[0].marginValue / 100);
   });
 
