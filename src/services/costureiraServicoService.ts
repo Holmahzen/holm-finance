@@ -68,6 +68,12 @@ export const costureiraServicoService = {
     };
   },
 
+  // Serviços já ligados a um lançamento (pago ou pendente), pra mostrar de onde veio cada pagamento.
+  async listLaunched(counterpartyId: string) {
+    await getCounterpartyOrThrow(counterpartyId);
+    return costureiraServicoRepository.findByCounterparty(counterpartyId);
+  },
+
   async create(input: CreateCostureiraServicoInput) {
     const counterparty = await getCounterpartyOrThrow(input.counterpartyId);
     const category = await resolveCategoryFor(counterparty);

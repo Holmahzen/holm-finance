@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useMemo, useState, type FormEvent } from "react";
 import { formatBRL } from "@/lib/format";
 
 type Counterparty = { id: string; name: string; isCostureira: boolean };
@@ -8,6 +8,7 @@ type Account = { id: string; name: string };
 
 type Servico = {
   id: string;
+  entryId?: string | null;
   date: string;
   amount: string;
   description: string | null;
@@ -71,6 +72,8 @@ export default function PagamentoCostureirasPage() {
   const [pendencia, setPendencia] = useState<Pendencia | null>(null);
   const [historico, setHistorico] = useState<Entry[] | null>(null);
   const [loadingPendentes, setLoadingPendentes] = useState(false);
+  const [servicosPorPagamento, setServicosPorPagamento] = useState<Record<string, Servico[]>>({});
+  const [expandedPagamentoId, setExpandedPagamentoId] = useState<string | null>(null);
 
   const costureiras = useMemo(() => counterparties.filter((c) => c.isCostureira), [counterparties]);
   const selectedCostureira = costureiras.find((c) => c.id === counterpartyId);
@@ -98,6 +101,7 @@ export default function PagamentoCostureirasPage() {
     if (!id) {
       setPendencia(null);
       setHistorico(null);
+      setServicosPorPagamento({});
       return;
     }
     setLoadingPendentes(true);
@@ -109,6 +113,15 @@ export default function PagamentoCostureirasPage() {
       `/api/entries?counterpartyId=${id}&categoryId=${pendenciaData.categoryId}&status=PAID`,
     ).then((r) => r.json());
     entries.sort((a, b) => (b.paidAt ?? "").localeCompare(a.paidAt ?? ""));
+    const lancados: Servico[] = await fetch(`/api/costureira-servicos?counterpartyId=${id}&lancados=1`).then((r) =>
+      r.json(),
+    );
+    const porPagamento: Record<string, Servico[]> = {};
+    for (const servico of lancados) {
+      if (servico.entryId) (porPagamento[servico.entryId] ??= []).push(servico);
+    }
+    setServicosPorPagamento(porPagamento);
+    setExpandedPagamentoId(null);
     setHistorico(entries);
     setLoadingPendentes(false);
   }
@@ -438,15 +451,63 @@ export default function PagamentoCostureirasPage() {
                       <tr className="border-b border-border text-muted">
                         <th className="py-2 font-medium">Data</th>
                         <th className="py-2 font-medium">Valor</th>
+                        <th className="py-2 font-medium">Serviços</th>
+                        <th className="py-2 font-medium"></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {historico.map((h) => (
-                        <tr key={h.id} className="border-b border-border/50">
-                          <td className="py-2">{h.paidAt ? formatDate(h.paidAt) : "—"}</td>
-                          <td className="py-2">{formatBRL(h.paidAmount ?? h.amount)}</td>
-                        </tr>
-                      ))}
+                      {historico.map((h) => {
+                        const servicos = servicosPorPagamento[h.id] ?? [];
+                        const expanded = expandedPagamentoId === h.id;
+                        return (
+                          <Fragment key={h.id}>
+                            <tr className="border-b border-border/50">
+                              <td className="py-2">{h.paidAt ? formatDate(h.paidAt) : "—"}</td>
+                              <td className="py-2">{formatBRL(h.paidAmount ?? h.amount)}</td>
+                              <td className="py-2 text-muted">
+                                {servicos.length > 0
+                                  ? `${servicos.length} serviço${servicos.length > 1 ? "s" : ""}`
+                                  : "sem detalhe"}
+                              </td>
+                              <td className="py-2 text-right">
+                                {servicos.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedPagamentoId(expanded ? null : h.id)}
+                                    className="text-xs font-medium text-gold hover:text-gold-soft hover:underline"
+                                  >
+                                    {expanded ? "Ocultar serviços" : "Ver serviços"}
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                            {expanded && (
+                              <tr className="border-b border-border/50">
+                                <td colSpan={4} className="pb-3">
+                                  <table className="mt-1 w-full text-left text-sm">
+                                    <thead>
+                                      <tr className="border-b border-border text-muted">
+                                        <th className="py-1 font-medium">Data do serviço</th>
+                                        <th className="py-1 font-medium">Descrição</th>
+                                        <th className="py-1 font-medium">Valor</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {servicos.map((s) => (
+                                        <tr key={s.id} className="border-b border-border/50">
+                                          <td className="py-1">{formatDate(s.date)}</td>
+                                          <td className="py-1 text-muted">{s.description || "—"}</td>
+                                          <td className="py-1">{formatBRL(s.amount)}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

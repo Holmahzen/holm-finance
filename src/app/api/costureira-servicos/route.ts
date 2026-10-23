@@ -9,6 +9,9 @@ export async function GET(request: NextRequest) {
   if (!counterpartyId) {
     return NextResponse.json({ error: "counterpartyId é obrigatório." }, { status: 400 });
   }
+  if (searchParams.get("lancados") === "1") {
+    return NextResponse.json(await costureiraServicoService.listLaunched(counterpartyId));
+  }
   const pendentes = await costureiraServicoService.listPending(counterpartyId);
   return NextResponse.json(pendentes);
 }

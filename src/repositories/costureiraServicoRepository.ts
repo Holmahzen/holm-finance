@@ -15,6 +15,13 @@ export const costureiraServicoRepository = {
     });
   },
 
+  findByCounterparty(counterpartyId: string) {
+    return prisma.costureiraServico.findMany({
+      where: { counterpartyId, entryId: { not: null } },
+      orderBy: { date: "asc" },
+    });
+  },
+
   findById(id: string) {
     return prisma.costureiraServico.findUnique({ where: { id } });
   },
