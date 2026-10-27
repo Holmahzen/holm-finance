@@ -450,7 +450,8 @@ export default function PagamentoCostureirasPage() {
                       <tbody>
                         {gruposPendentes.map(([dateKey, grupo]) => {
                           const unico = grupo.length === 1 ? grupo[0] : null;
-                          const expanded = expandedPendenteDate === dateKey;
+                          // Com um item só não há o que abrir (o aberto de antes sobrava ao excluir os outros).
+                          const expanded = !unico && expandedPendenteDate === dateKey;
                           const totalGrupo = grupo.reduce((sum, s) => sum + Number(s.amount), 0);
                           return (
                             <Fragment key={dateKey}>
