@@ -86,6 +86,7 @@ export const costureiraServicoService = {
         date: input.date,
         amount: input.amount,
         description: input.description,
+        quantity: input.quantity,
         entryId: openEntry.id,
       });
       await syncEntryTotal(openEntry.id, category.name, counterparty.name);
@@ -112,6 +113,7 @@ export const costureiraServicoService = {
       date: input.date,
       amount: input.amount,
       description: input.description,
+      quantity: input.quantity,
       entryId: entry.id,
     });
   },

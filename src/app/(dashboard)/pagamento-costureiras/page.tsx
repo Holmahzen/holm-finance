@@ -12,6 +12,7 @@ type Servico = {
   date: string;
   amount: string;
   description: string | null;
+  quantity?: number | null;
 };
 
 type Pendencia = {
@@ -39,6 +40,12 @@ function formatDate(value: string) {
   return new Date(value).toLocaleDateString("pt-BR", { timeZone: "UTC" });
 }
 
+// Soma das peças do dia; "—" quando nenhum item informou quantidade.
+function qtdGrupo(grupo: Servico[]) {
+  const comQtd = grupo.filter((s) => s.quantity);
+  return comQtd.length === 0 ? "—" : String(comQtd.reduce((sum, s) => sum + (s.quantity ?? 0), 0));
+}
+
 function isOverdue(dueDate: string) {
   return new Date(dueDate) < new Date(todayLocalDateString());
 }
@@ -52,7 +59,7 @@ export default function PagamentoCostureirasPage() {
 
   // lançar serviço
   const [servicoData, setServicoData] = useState(todayLocalDateString());
-  const [servicoItens, setServicoItens] = useState<{ descricao: string; valor: string }[]>([{ descricao: "", valor: "" }]);
+  const [servicoItens, setServicoItens] = useState<{ qtd: string; descricao: string; valor: string }[]>([{ qtd: "", descricao: "", valor: "" }]);
   const [servicoDueDate, setServicoDueDate] = useState("");
   const [savingServico, setSavingServico] = useState(false);
   const [servicoError, setServicoError] = useState<string | null>(null);
@@ -156,6 +163,7 @@ export default function PagamentoCostureirasPage() {
           date: servicoData,
           amount: item.valor,
           description: item.descricao.trim() || undefined,
+          quantity: item.qtd || undefined,
           dueDate: i === 0 && !pendencia?.entryId ? servicoDueDate : undefined,
         }),
       });
@@ -169,7 +177,7 @@ export default function PagamentoCostureirasPage() {
       }
       launched++;
     }
-    setServicoItens([{ descricao: "", valor: "" }]);
+    setServicoItens([{ qtd: "", descricao: "", valor: "" }]);
     setServicoDueDate("");
     setSavingServico(false);
     await loadPendentesEHistorico(counterpartyId);
@@ -283,6 +291,20 @@ export default function PagamentoCostureirasPage() {
                   {servicoItens.map((item, i) => (
                     <div key={i} className="flex flex-wrap items-end gap-3">
                       <div className="flex flex-col gap-1">
+                        <label className="text-xs font-medium text-muted">Qtd</label>
+                        <input
+                          type="number"
+                          step="1"
+                          min={1}
+                          value={item.qtd}
+                          onChange={(e) =>
+                            setServicoItens((list) => list.map((x, j) => (j === i ? { ...x, qtd: e.target.value } : x)))
+                          }
+                          placeholder="10"
+                          className="w-20 rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1">
                         <label className="text-xs font-medium text-muted">
                           {servicoItens.length > 1 ? `Item ${i + 1} — descrição` : "Descrição (opcional)"}
                         </label>
@@ -291,7 +313,7 @@ export default function PagamentoCostureirasPage() {
                           onChange={(e) =>
                             setServicoItens((list) => list.map((x, j) => (j === i ? { ...x, descricao: e.target.value } : x)))
                           }
-                          placeholder="Ex.: 10 saias"
+                          placeholder="Ex.: saias"
                           className="w-56 rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
                         />
                       </div>
@@ -322,7 +344,7 @@ export default function PagamentoCostureirasPage() {
                   ))}
                   <button
                     type="button"
-                    onClick={() => setServicoItens((list) => [...list, { descricao: "", valor: "" }])}
+                    onClick={() => setServicoItens((list) => [...list, { qtd: "", descricao: "", valor: "" }])}
                     className="self-start text-xs font-medium text-gold hover:text-gold-soft hover:underline"
                   >
                     + Adicionar outro item nesta data
@@ -420,6 +442,7 @@ export default function PagamentoCostureirasPage() {
                         <tr className="border-b border-border text-muted">
                           <th className="py-2 font-medium">Data</th>
                           <th className="py-2 font-medium">Descrição</th>
+                          <th className="py-2 font-medium">Qtd</th>
                           <th className="py-2 font-medium">Valor</th>
                           <th className="py-2 font-medium"></th>
                         </tr>
@@ -436,6 +459,7 @@ export default function PagamentoCostureirasPage() {
                                 <td className="py-2 text-muted">
                                   {unico ? unico.description || "—" : `${grupo.length} itens`}
                                 </td>
+                                <td className="py-2 text-muted">{qtdGrupo(grupo)}</td>
                                 <td className="py-2">{formatBRL(totalGrupo)}</td>
                                 <td className="py-2 text-right">
                                   {unico ? (
@@ -458,11 +482,12 @@ export default function PagamentoCostureirasPage() {
                               </tr>
                               {expanded && (
                                 <tr className="border-b border-border/50">
-                                  <td colSpan={4} className="pb-3">
+                                  <td colSpan={5} className="pb-3">
                                     <table className="mt-1 w-full text-left text-sm">
                                       <thead>
                                         <tr className="border-b border-border text-muted">
                                           <th className="py-1 font-medium">Descrição</th>
+                                          <th className="py-1 font-medium">Qtd</th>
                                           <th className="py-1 font-medium">Valor</th>
                                           <th className="py-1 font-medium"></th>
                                         </tr>
@@ -471,6 +496,7 @@ export default function PagamentoCostureirasPage() {
                                         {grupo.map((s) => (
                                           <tr key={s.id} className="border-b border-border/50">
                                             <td className="py-1 text-muted">{s.description || "—"}</td>
+                                            <td className="py-1 text-muted">{s.quantity ?? "—"}</td>
                                             <td className="py-1">{formatBRL(s.amount)}</td>
                                             <td className="py-1 text-right">
                                               <button
@@ -582,6 +608,7 @@ export default function PagamentoCostureirasPage() {
                                       <tr className="border-b border-border text-muted">
                                         <th className="py-1 font-medium">Data do serviço</th>
                                         <th className="py-1 font-medium">Descrição</th>
+                                        <th className="py-1 font-medium">Qtd</th>
                                         <th className="py-1 font-medium">Valor</th>
                                       </tr>
                                     </thead>
@@ -590,6 +617,7 @@ export default function PagamentoCostureirasPage() {
                                         <tr key={s.id} className="border-b border-border/50">
                                           <td className="py-1">{formatDate(s.date)}</td>
                                           <td className="py-1 text-muted">{s.description || "—"}</td>
+                                          <td className="py-1 text-muted">{s.quantity ?? "—"}</td>
                                           <td className="py-1">{formatBRL(s.amount)}</td>
                                         </tr>
                                       ))}

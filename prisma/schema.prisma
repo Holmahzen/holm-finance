@@ -217,6 +217,8 @@ model CostureiraServico {
   date           DateTime
   amount         Decimal      @db.Decimal(14, 2)
   description    String?
+  // Peças do serviço (ex.: 10 saias); opcional, só pra conferir o lote.
+  quantity       Int?
   entryId        String?
   entry          Entry?       @relation(fields: [entryId], references: [id])
   createdAt      DateTime     @default(now())

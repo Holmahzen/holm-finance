@@ -5,6 +5,7 @@ export const createCostureiraServicoSchema = z.object({
   date: z.coerce.date(),
   amount: z.union([z.string(), z.number()]),
   description: z.string().optional(),
+  quantity: z.coerce.number().int().positive().optional(),
   // Só é exigido quando é o 1º serviço depois do último fechamento — é o que
   // cria o Entry PENDENTE que vira a previsão no Fluxo de Caixa.
   dueDate: z.coerce.date().optional(),
