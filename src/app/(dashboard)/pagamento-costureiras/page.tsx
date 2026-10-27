@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useState, type FormEvent } from "react";
 import { formatBRL } from "@/lib/format";
 
-type Counterparty = { id: string; name: string; isCostureira: boolean };
+type Counterparty = { id: string; name: string; isCostureira: boolean; document?: string | null };
 type Account = { id: string; name: string };
 
 type Servico = {
@@ -30,6 +30,116 @@ type Entry = {
   paidAmount: string | null;
   paidAt: string | null;
 };
+
+const COMPANY_NAME = "Holm Confecções — Regimar Souza Silva Ltda";
+const COMPANY_CNPJ = "49.046.940/0001-00";
+
+type PrintSheet = {
+  kind: "pendente" | "pago";
+  costureira: string;
+  documento: string;
+  categoria: string;
+  /** vencimento previsto (pendente) ou data do pagamento (pago), em ISO */
+  quando: string;
+  total: number;
+  rows: { date: string; descricao: string | null; qtd: number | null; valor: number }[];
+};
+
+function formatDocumento(value?: string | null) {
+  const d = (value ?? "").replace(/\D/g, "");
+  if (d.length === 14) return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+  if (d.length === 11) return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4");
+  return value ?? "";
+}
+
+function PrintSheetView({ sheet }: { sheet: PrintSheet }) {
+  const pendente = sheet.kind === "pendente";
+  const totalQtd = sheet.rows.reduce((sum, r) => sum + (r.qtd ?? 0), 0);
+  return (
+    <div className="hidden text-foreground print:block">
+      <div className="border-b border-border pb-3 text-center">
+        <p className="text-lg font-bold uppercase">{COMPANY_NAME}</p>
+        <p className="text-sm">CNPJ {COMPANY_CNPJ}</p>
+      </div>
+      <h1 className="mt-5 text-center text-xl font-bold">
+        {pendente ? "Fechamento de serviços de costura" : "Recibo de pagamento — serviços de costura"}
+      </h1>
+      <div className="mt-4 flex flex-col gap-1 text-sm">
+        <p>
+          <strong>Costureira:</strong> {sheet.costureira}
+          {sheet.documento ? " — CPF/CNPJ " + sheet.documento : ""}
+        </p>
+        {sheet.categoria !== "Costura" && (
+          <p>
+            <strong>Serviço:</strong> {sheet.categoria}
+          </p>
+        )}
+        <p>
+          <strong>{pendente ? "Vencimento previsto:" : "Data do pagamento:"}</strong>{" "}
+          {sheet.quando ? formatDate(sheet.quando) : "—"}
+        </p>
+        <p>
+          <strong>Emitido em:</strong> {new Date().toLocaleDateString("pt-BR")}
+        </p>
+      </div>
+      <table className="mt-4 w-full border-collapse text-sm">
+        <thead>
+          <tr className="border-b border-t border-border">
+            <th className="py-2 text-left font-semibold">Data</th>
+            <th className="py-2 text-left font-semibold">Descrição</th>
+            <th className="py-2 text-right font-semibold">Qtd</th>
+            <th className="py-2 text-right font-semibold">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sheet.rows.length === 0 ? (
+            <tr className="border-b border-border">
+              <td className="py-2" colSpan={3}>
+                Pagamento de serviços de costura (sem detalhamento por item)
+              </td>
+              <td className="py-2 text-right">{formatBRL(sheet.total)}</td>
+            </tr>
+          ) : (
+            sheet.rows.map((r, i) => (
+              <tr key={i} className="border-b border-border">
+                <td className="py-1.5">{formatDate(r.date)}</td>
+                <td className="py-1.5">{r.descricao || "—"}</td>
+                <td className="py-1.5 text-right">{r.qtd ?? "—"}</td>
+                <td className="py-1.5 text-right">{formatBRL(r.valor)}</td>
+              </tr>
+            ))
+          )}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td className="pt-3 font-bold" colSpan={2}>
+              {pendente ? "Total a pagar" : "Total pago"}
+            </td>
+            <td className="pt-3 text-right font-bold">{totalQtd > 0 ? totalQtd : ""}</td>
+            <td className="pt-3 text-right text-base font-bold">{formatBRL(sheet.total)}</td>
+          </tr>
+        </tfoot>
+      </table>
+      {pendente ? (
+        <div className="mt-16 grid grid-cols-2 gap-10 text-center text-sm">
+          <div className="border-t border-foreground pt-1">Conferido por (Holm Confecções)</div>
+          <div className="border-t border-foreground pt-1">{sheet.costureira}</div>
+        </div>
+      ) : (
+        <>
+          <p className="mt-8 text-sm leading-relaxed">
+            Recebi de {COMPANY_NAME} (CNPJ {COMPANY_CNPJ}) a quantia de <strong>{formatBRL(sheet.total)}</strong>, referente
+            aos serviços de costura acima, dando plena quitação.
+          </p>
+          <div className="mt-16 grid grid-cols-2 gap-10 text-center text-sm">
+            <div className="border-t border-foreground pt-1">Data: ____/____/________</div>
+            <div className="border-t border-foreground pt-1">{sheet.costureira}</div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 function todayLocalDateString() {
   const d = new Date();
@@ -81,6 +191,7 @@ export default function PagamentoCostureirasPage() {
   const [servicosPorPagamento, setServicosPorPagamento] = useState<Record<string, Servico[]>>({});
   const [expandedPagamentoId, setExpandedPagamentoId] = useState<string | null>(null);
   const [expandedPendenteDate, setExpandedPendenteDate] = useState<string | null>(null);
+  const [printSheet, setPrintSheet] = useState<PrintSheet | null>(null);
 
   const costureiras = useMemo(() => counterparties.filter((c) => c.isCostureira), [counterparties]);
   const selectedCostureira = costureiras.find((c) => c.id === counterpartyId);
@@ -146,6 +257,51 @@ export default function PagamentoCostureirasPage() {
     loadPendentesEHistorico(counterpartyId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [counterpartyId]);
+
+  // Abre a janela de impressão assim que a folha está na tela; limpa depois de imprimir/cancelar.
+  useEffect(() => {
+    if (!printSheet) return;
+    const onAfterPrint = () => setPrintSheet(null);
+    window.addEventListener("afterprint", onAfterPrint);
+    const timer = setTimeout(() => window.print(), 100);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("afterprint", onAfterPrint);
+    };
+  }, [printSheet]);
+
+  function toPrintRows(list: Servico[]): PrintSheet["rows"] {
+    return list
+      .slice()
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((s) => ({ date: s.date, descricao: s.description, qtd: s.quantity ?? null, valor: Number(s.amount) }));
+  }
+
+  function imprimirFechamento() {
+    if (!pendencia || !selectedCostureira || pendencia.servicos.length === 0) return;
+    setPrintSheet({
+      kind: "pendente",
+      costureira: selectedCostureira.name,
+      documento: formatDocumento(selectedCostureira.document),
+      categoria: pendencia.categoryName,
+      quando: pendencia.dueDate ?? "",
+      total: totalPendente,
+      rows: toPrintRows(pendencia.servicos),
+    });
+  }
+
+  function imprimirRecibo(h: Entry) {
+    if (!selectedCostureira) return;
+    setPrintSheet({
+      kind: "pago",
+      costureira: selectedCostureira.name,
+      documento: formatDocumento(selectedCostureira.document),
+      categoria: pendencia?.categoryName ?? "Costura",
+      quando: h.paidAt ?? "",
+      total: Number(h.paidAmount ?? h.amount),
+      rows: toPrintRows(servicosPorPagamento[h.id] ?? []),
+    });
+  }
 
   async function handleAddServico(e: FormEvent) {
     e.preventDefault();
@@ -230,7 +386,8 @@ export default function PagamentoCostureirasPage() {
   if (loading) return <p className="text-sm text-muted">Carregando...</p>;
 
   return (
-    <div className="flex flex-col gap-6">
+    <>
+    <div className="flex flex-col gap-6 print:hidden">
       <div>
         <h1 className="font-serif text-3xl text-foreground">Pagamento de Costureiras</h1>
         <p className="max-w-prose text-sm text-muted">
@@ -388,7 +545,18 @@ export default function PagamentoCostureirasPage() {
                         </span>
                       )}
                     </h2>
-                    <p className="text-2xl font-serif text-gold">{formatBRL(totalPendente)}</p>
+                    <div className="flex flex-wrap items-center gap-4">
+                      <p className="text-2xl font-serif text-gold">{formatBRL(totalPendente)}</p>
+                      {pendencia && pendencia.servicos.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={imprimirFechamento}
+                          className="rounded border border-gold px-3 py-1 text-xs font-medium text-gold transition hover:bg-gold/10"
+                        >
+                          Imprimir fechamento
+                        </button>
+                      )}
+                    </div>
                     {pendencia?.dueDate && (
                       <p className="mt-1 text-xs text-muted">
                         {editingDueDate ? (
@@ -590,15 +758,24 @@ export default function PagamentoCostureirasPage() {
                                   : "sem detalhe"}
                               </td>
                               <td className="py-2 text-right">
-                                {servicos.length > 0 && (
+                                <span className="inline-flex items-center gap-3">
+                                  {servicos.length > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setExpandedPagamentoId(expanded ? null : h.id)}
+                                      className="text-xs font-medium text-gold hover:text-gold-soft hover:underline"
+                                    >
+                                      {expanded ? "Ocultar serviços" : "Ver serviços"}
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
-                                    onClick={() => setExpandedPagamentoId(expanded ? null : h.id)}
+                                    onClick={() => imprimirRecibo(h)}
                                     className="text-xs font-medium text-gold hover:text-gold-soft hover:underline"
                                   >
-                                    {expanded ? "Ocultar serviços" : "Ver serviços"}
+                                    Imprimir recibo
                                   </button>
-                                )}
+                                </span>
                               </td>
                             </tr>
                             {expanded && (
@@ -639,5 +816,7 @@ export default function PagamentoCostureirasPage() {
         </>
       )}
     </div>
+    {printSheet && <PrintSheetView sheet={printSheet} />}
+    </>
   );
 }
