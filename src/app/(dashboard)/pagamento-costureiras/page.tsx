@@ -52,8 +52,7 @@ export default function PagamentoCostureirasPage() {
 
   // lançar serviço
   const [servicoData, setServicoData] = useState(todayLocalDateString());
-  const [servicoValor, setServicoValor] = useState("");
-  const [servicoDescricao, setServicoDescricao] = useState("");
+  const [servicoItens, setServicoItens] = useState<{ descricao: string; valor: string }[]>([{ descricao: "", valor: "" }]);
   const [servicoDueDate, setServicoDueDate] = useState("");
   const [savingServico, setSavingServico] = useState(false);
   const [servicoError, setServicoError] = useState<string | null>(null);
@@ -74,9 +73,18 @@ export default function PagamentoCostureirasPage() {
   const [loadingPendentes, setLoadingPendentes] = useState(false);
   const [servicosPorPagamento, setServicosPorPagamento] = useState<Record<string, Servico[]>>({});
   const [expandedPagamentoId, setExpandedPagamentoId] = useState<string | null>(null);
+  const [expandedPendenteDate, setExpandedPendenteDate] = useState<string | null>(null);
 
   const costureiras = useMemo(() => counterparties.filter((c) => c.isCostureira), [counterparties]);
   const selectedCostureira = costureiras.find((c) => c.id === counterpartyId);
+  const gruposPendentes = useMemo(() => {
+    const map = new Map<string, Servico[]>();
+    for (const s of pendencia?.servicos ?? []) {
+      const key = s.date.slice(0, 10);
+      map.set(key, [...(map.get(key) ?? []), s]);
+    }
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [pendencia]);
   const totalPendente = useMemo(
     () => (pendencia?.servicos ?? []).reduce((sum, s) => sum + Number(s.amount), 0),
     [pendencia],
@@ -136,25 +144,32 @@ export default function PagamentoCostureirasPage() {
     e.preventDefault();
     setSavingServico(true);
     setServicoError(null);
-    const res = await fetch("/api/costureira-servicos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        counterpartyId,
-        date: servicoData,
-        amount: servicoValor,
-        description: servicoDescricao || undefined,
-        dueDate: !pendencia?.entryId ? servicoDueDate : undefined,
-      }),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      setServicoError(typeof body.error === "string" ? body.error : "Não foi possível lançar o serviço.");
-      setSavingServico(false);
-      return;
+    // Um lançamento por item, todos na mesma data. O primeiro cria a previsão (com o vencimento);
+    // os seguintes só somam nela.
+    let launched = 0;
+    for (const [i, item] of servicoItens.entries()) {
+      const res = await fetch("/api/costureira-servicos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          counterpartyId,
+          date: servicoData,
+          amount: item.valor,
+          description: item.descricao.trim() || undefined,
+          dueDate: i === 0 && !pendencia?.entryId ? servicoDueDate : undefined,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const msg = typeof body.error === "string" ? body.error : "Não foi possível lançar o serviço.";
+        setServicoError(launched > 0 ? `${msg} Os ${launched} primeiro(s) item(ns) já foram lançados.` : msg);
+        setSavingServico(false);
+        if (launched > 0) await loadPendentesEHistorico(counterpartyId);
+        return;
+      }
+      launched++;
     }
-    setServicoValor("");
-    setServicoDescricao("");
+    setServicoItens([{ descricao: "", valor: "" }]);
     setServicoDueDate("");
     setSavingServico(false);
     await loadPendentesEHistorico(counterpartyId);
@@ -264,26 +279,54 @@ export default function PagamentoCostureirasPage() {
                     className="rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
                   />
                 </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-muted">Valor (R$)</label>
-                  <input
-                    required
-                    type="number"
-                    step="0.01"
-                    min={0}
-                    value={servicoValor}
-                    onChange={(e) => setServicoValor(e.target.value)}
-                    className="w-32 rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-muted">Descrição (opcional)</label>
-                  <input
-                    value={servicoDescricao}
-                    onChange={(e) => setServicoDescricao(e.target.value)}
-                    placeholder="Ex.: lote de 40 camisetas"
-                    className="w-56 rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
-                  />
+                <div className="flex flex-col gap-2">
+                  {servicoItens.map((item, i) => (
+                    <div key={i} className="flex flex-wrap items-end gap-3">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-medium text-muted">
+                          {servicoItens.length > 1 ? `Item ${i + 1} — descrição` : "Descrição (opcional)"}
+                        </label>
+                        <input
+                          value={item.descricao}
+                          onChange={(e) =>
+                            setServicoItens((list) => list.map((x, j) => (j === i ? { ...x, descricao: e.target.value } : x)))
+                          }
+                          placeholder="Ex.: 10 saias"
+                          className="w-56 rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-medium text-muted">Valor (R$)</label>
+                        <input
+                          required
+                          type="number"
+                          step="0.01"
+                          min={0}
+                          value={item.valor}
+                          onChange={(e) =>
+                            setServicoItens((list) => list.map((x, j) => (j === i ? { ...x, valor: e.target.value } : x)))
+                          }
+                          className="w-32 rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-gold focus:outline-none"
+                        />
+                      </div>
+                      {servicoItens.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setServicoItens((list) => list.filter((_, j) => j !== i))}
+                          className="pb-1.5 text-xs font-medium text-red-400 hover:underline"
+                        >
+                          Remover
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setServicoItens((list) => [...list, { descricao: "", valor: "" }])}
+                    className="self-start text-xs font-medium text-gold hover:text-gold-soft hover:underline"
+                  >
+                    + Adicionar outro item nesta data
+                  </button>
                 </div>
                 {pendencia && !pendencia.entryId && (
                   <div className="flex flex-col gap-1">
@@ -307,7 +350,7 @@ export default function PagamentoCostureirasPage() {
                   disabled={savingServico}
                   className="rounded bg-gold px-4 py-1.5 text-sm font-medium text-black transition hover:bg-gold-soft disabled:opacity-50"
                 >
-                  {savingServico ? "Lançando..." : "Lançar serviço"}
+                  {savingServico ? "Lançando..." : servicoItens.length > 1 ? "Lançar serviços" : "Lançar serviço"}
                 </button>
                 {servicoError && <p className="w-full text-sm text-red-400">{servicoError}</p>}
               </form>
@@ -382,21 +425,71 @@ export default function PagamentoCostureirasPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {pendencia.servicos.map((s) => (
-                          <tr key={s.id} className="border-b border-border/50">
-                            <td className="py-2">{formatDate(s.date)}</td>
-                            <td className="py-2 text-muted">{s.description || "—"}</td>
-                            <td className="py-2">{formatBRL(s.amount)}</td>
-                            <td className="py-2 text-right">
-                              <button
-                                onClick={() => handleRemoveServico(s.id)}
-                                className="text-xs font-medium text-red-400 hover:underline"
-                              >
-                                Excluir
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
+                        {gruposPendentes.map(([dateKey, grupo]) => {
+                          const unico = grupo.length === 1 ? grupo[0] : null;
+                          const expanded = expandedPendenteDate === dateKey;
+                          const totalGrupo = grupo.reduce((sum, s) => sum + Number(s.amount), 0);
+                          return (
+                            <Fragment key={dateKey}>
+                              <tr className="border-b border-border/50">
+                                <td className="py-2">{formatDate(grupo[0].date)}</td>
+                                <td className="py-2 text-muted">
+                                  {unico ? unico.description || "—" : `${grupo.length} itens`}
+                                </td>
+                                <td className="py-2">{formatBRL(totalGrupo)}</td>
+                                <td className="py-2 text-right">
+                                  {unico ? (
+                                    <button
+                                      onClick={() => handleRemoveServico(unico.id)}
+                                      className="text-xs font-medium text-red-400 hover:underline"
+                                    >
+                                      Excluir
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setExpandedPendenteDate(expanded ? null : dateKey)}
+                                      className="text-xs font-medium text-gold hover:text-gold-soft hover:underline"
+                                    >
+                                      {expanded ? "Ocultar itens" : "Ver itens"}
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                              {expanded && (
+                                <tr className="border-b border-border/50">
+                                  <td colSpan={4} className="pb-3">
+                                    <table className="mt-1 w-full text-left text-sm">
+                                      <thead>
+                                        <tr className="border-b border-border text-muted">
+                                          <th className="py-1 font-medium">Descrição</th>
+                                          <th className="py-1 font-medium">Valor</th>
+                                          <th className="py-1 font-medium"></th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {grupo.map((s) => (
+                                          <tr key={s.id} className="border-b border-border/50">
+                                            <td className="py-1 text-muted">{s.description || "—"}</td>
+                                            <td className="py-1">{formatBRL(s.amount)}</td>
+                                            <td className="py-1 text-right">
+                                              <button
+                                                onClick={() => handleRemoveServico(s.id)}
+                                                className="text-xs font-medium text-red-400 hover:underline"
+                                              >
+                                                Excluir
+                                              </button>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          );
+                        })}
                       </tbody>
                     </table>
 
