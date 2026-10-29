@@ -115,8 +115,8 @@ function WeeklyBreakdown({ buckets }: { buckets: WeeklyBucket[] }) {
     <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4">
       <h2 className="font-serif text-lg text-foreground">Visão semanal</h2>
       <p className="text-xs text-muted">
-        Cada linha é um bloco de dias corridos a partir de hoje — o saldo já é o mesmo calculado na
-        curva acima, só agrupado. A estimativa de venda é o ritmo real dos últimos 30 dias
+        Cada linha é um bloco de dias corridos a partir de hoje, com o saldo no fim do bloco.
+        A estimativa de venda é o ritmo real dos últimos 30 dias
         (vendas ainda não registradas como lançamento) e nunca é somada ao saldo garantido.
       </p>
       <div className="overflow-x-auto">
@@ -165,59 +165,136 @@ function formatDateLong(iso: string) {
   });
 }
 
-function BalanceChart({ days }: { days: CashFlowDay[] }) {
-  const width = 760;
-  const height = 180;
-  const padTop = 16;
-  const padBottom = 24;
-  const padX = 8;
+function shortDate(iso: string) {
+  return new Date(iso).toLocaleDateString("pt-BR", { timeZone: "UTC", day: "2-digit", month: "2-digit" });
+}
 
-  const values = days.map((d) => d.runningBalance);
-  const min = Math.min(0, ...values);
-  const max = Math.max(0, ...values);
-  const range = max - min || 1;
+/** Eixo do gráfico: "R$ 12 mil" em vez de "R$ 12.345,00". */
+function compactBRL(value: number) {
+  if (value >= 1_000_000) return "R$ " + (value / 1_000_000).toFixed(1).replace(".", ",") + " mi";
+  if (value >= 1_000) return "R$ " + Math.round(value / 1_000) + " mil";
+  return "R$ " + Math.round(value);
+}
 
-  const n = values.length;
-  const x = (i: number) => padX + (i / (n - 1 || 1)) * (width - padX * 2);
-  const y = (v: number) => padTop + (1 - (v - min) / range) * (height - padTop - padBottom);
-  const zeroY = y(0);
+type BarGroup = { label: string; title: string; inflow: number; outflow: number };
 
-  const linePath = values.map((v, i) => `${i === 0 ? "M" : "L"} ${x(i)} ${y(v)}`).join(" ");
-  const hasNegative = values.some((v) => v < 0);
+/** Entradas (verde) contra saídas (vermelho), por semana ou por dia — mostra de
+ * onde vem o aperto do caixa, o que a linha de saldo sozinha não mostrava. */
+function CashFlowBars({ days }: { days: CashFlowDay[] }) {
+  const [mode, setMode] = useState<"week" | "day">("week");
+
+  const totalIn = days.reduce((sum, d) => sum + d.inflow, 0);
+  const totalOut = days.reduce((sum, d) => sum + d.outflow, 0);
+  const net = totalIn - totalOut;
+
+  const groups: BarGroup[] = [];
+  if (mode === "day") {
+    for (const d of days) {
+      groups.push({ label: shortDate(d.date), title: formatDate(d.date), inflow: d.inflow, outflow: d.outflow });
+    }
+  } else {
+    for (let i = 0; i < days.length; i += 7) {
+      const chunk = days.slice(i, i + 7);
+      groups.push({
+        label: shortDate(chunk[0].date),
+        title: formatDate(chunk[0].date) + " a " + formatDate(chunk[chunk.length - 1].date),
+        inflow: chunk.reduce((sum, d) => sum + d.inflow, 0),
+        outflow: chunk.reduce((sum, d) => sum + d.outflow, 0),
+      });
+    }
+  }
+
+  const max = Math.max(1, ...groups.flatMap((g) => [g.inflow, g.outflow]));
+  const ticks = [max, max / 2, 0];
+  const labelStep = Math.max(1, Math.ceil(groups.length / 8));
+  const bar = (value: number) => (value > 0 ? "max(" + ((value / max) * 100).toFixed(2) + "%, 3px)" : "0");
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full" preserveAspectRatio="none">
-        {min < 0 && max > 0 && (
-          <line
-            x1={padX}
-            y1={zeroY}
-            x2={width - padX}
-            y2={zeroY}
-            stroke="#3a3a38"
-            strokeWidth={1}
-            strokeDasharray="4 4"
-          />
-        )}
-        <path
-          d={linePath}
-          fill="none"
-          stroke={hasNegative ? "#f87171" : "#D4AF37"}
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        {values.map((v, i) => (
-          <circle key={i} cx={x(i)} cy={y(v)} r={v < 0 ? 3 : 2} fill={v < 0 ? "#f87171" : "#D4AF37"}>
-            <title>
-              {formatDate(days[i].date)}: {formatBRL(v)}
-            </title>
-          </circle>
-        ))}
-      </svg>
-      <div className="mt-1 flex justify-between text-xs text-muted">
-        <span>{formatDate(days[0].date)}</span>
-        <span>{formatDate(days[days.length - 1].date)}</span>
+    <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-serif text-lg text-foreground">Entradas e saídas previstas</h2>
+          <p className="text-xs text-muted">
+            {formatDate(days[0].date)} a {formatDate(days[days.length - 1].date)}
+          </p>
+        </div>
+        <div className="no-print inline-flex overflow-hidden rounded border border-border text-xs">
+          {(["week", "day"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              className={
+                mode === m
+                  ? "bg-gold/15 px-3 py-1 font-medium text-gold"
+                  : "px-3 py-1 text-muted transition hover:text-foreground"
+              }
+            >
+              {m === "week" ? "Semana" : "Dia"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <div>
+          <p className="text-xs text-muted">Entradas</p>
+          <p className="font-serif text-xl text-emerald-400">{formatBRL(totalIn)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted">Saídas</p>
+          <p className="font-serif text-xl text-red-400">{formatBRL(totalOut)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted">Saldo do período</p>
+          <p className={"font-serif text-xl " + (net >= 0 ? "text-emerald-400" : "text-red-400")}>{formatBRL(net)}</p>
+        </div>
+      </div>
+
+      {totalIn + totalOut === 0 ? (
+        <p className="py-6 text-center text-sm text-muted">Nenhum movimento previsto nesse período.</p>
+      ) : (
+      <div className="flex gap-2">
+        <div className="flex h-44 w-16 shrink-0 flex-col justify-between text-right text-[10px] leading-none text-muted">
+          {ticks.map((t, i) => (
+            <span key={i}>{compactBRL(t)}</span>
+          ))}
+        </div>
+        <div className="relative flex-1">
+          <div className="pointer-events-none absolute inset-0 flex flex-col justify-between">
+            {ticks.map((_, i) => (
+              <div key={i} className="border-t border-border/60" />
+            ))}
+          </div>
+          <div className={"relative flex h-44 items-end " + (mode === "day" ? "gap-[3px]" : "gap-3")}>
+            {groups.map((g, i) => (
+              <div
+                key={i}
+                className="flex h-full min-w-0 flex-1 items-end justify-center gap-[2px]"
+                title={g.title + "\nEntradas: " + formatBRL(g.inflow) + "\nSaídas: " + formatBRL(g.outflow)}
+              >
+                <div className="w-full max-w-5 rounded-t-sm bg-emerald-400/80" style={{ height: bar(g.inflow) }} />
+                <div className="w-full max-w-5 rounded-t-sm bg-red-400/80" style={{ height: bar(g.outflow) }} />
+              </div>
+            ))}
+          </div>
+          <div className={"mt-1 flex text-[10px] text-muted " + (mode === "day" ? "gap-[3px]" : "gap-3")}>
+            {groups.map((g, i) => (
+              <span key={i} className="min-w-0 flex-1 text-center">
+                {i % labelStep === 0 ? g.label : ""}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+      )}
+      <div className="flex gap-4 text-xs text-muted">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block h-2 w-2 rounded-sm bg-emerald-400/80" /> Entradas
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block h-2 w-2 rounded-sm bg-red-400/80" /> Saídas
+        </span>
       </div>
     </div>
   );
@@ -947,7 +1024,7 @@ export default function CashFlowPage() {
             titulo="Saldo atual, por conta"
           />
 
-          <BalanceChart days={activeDays!} />
+          <CashFlowBars days={activeDays!} />
 
           <WeeklyBreakdown buckets={report.weeklyBreakdown} />
 
