@@ -15,11 +15,58 @@ import { computeCogsBySku, computeMaterialSpendSplit } from "@/domain/cogs";
 import { plannedPurchaseMovements, suggestPurchase } from "@/domain/plannedPurchase";
 import { payBeforeWeekend } from "@/domain/businessDays";
 import { estimateFlexInvoices } from "@/domain/flexEstimate";
+import { estimateDasPayments } from "@/domain/dasEstimate";
+import { pgdasRepository } from "@/repositories/pgdasRepository";
+import { fiscalNoteRepository } from "@/repositories/fiscalNoteRepository";
+import { summarizeMonths } from "@/domain/fiscalNotes";
 import { FLEX_COST_PER_COUNTED_PACKAGE } from "@/domain/breakEven";
 import { todayUTCInBrazil } from "@/lib/today";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const MATERIAL_SPLIT_MIN_COVERAGE_PERCENT = 80;
+
+const DAS_DUE_DAY = 20;
+
+function monthKeyUTC(date: Date): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/**
+ * DAS dos meses que ainda vão vencer no período, antes de existir o lançamento
+ * real (que só nasce quando o extrato do PGDAS-D é importado). Base: notas de
+ * saída do mês de referência, descontadas as devoluções, × alíquota efetiva (14,4%).
+ */
+async function estimateDas(todayUTC: Date, windowEnd: Date) {
+  const curStart = new Date(Date.UTC(todayUTC.getUTCFullYear(), todayUTC.getUTCMonth(), 1));
+  const prevStart = new Date(Date.UTC(todayUTC.getUTCFullYear(), todayUTC.getUTCMonth() - 1, 1));
+
+  const [apuracaoRows, dasEntryRows, noteRows] = await Promise.all([
+    pgdasRepository.findApuracoes(monthKeyUTC(prevStart)),
+    entryRepository.findMany({
+      category: { name: "DAS" },
+      dueDate: { gte: new Date(todayUTC.getTime() - 40 * MS_PER_DAY) },
+    }),
+    fiscalNoteRepository.findRowsSince(monthKeyUTC(prevStart)),
+  ]);
+
+  const apuracoes: Record<string, { total: number; dueDate: Date | null }> = {};
+  for (const a of apuracaoRows) {
+    apuracoes[a.period] = { total: a.taxes.total, dueDate: a.dasDueDate ? new Date(`${a.dasDueDate}T00:00:00.000Z`) : null };
+  }
+  const monthSummaries = summarizeMonths(noteRows);
+  const salesByMonth = Object.fromEntries(monthSummaries.map((s) => [s.month, s.netSales]));
+  const grossSalesByMonth = Object.fromEntries(monthSummaries.map((s) => [s.month, s.grossSales]));
+
+  return estimateDasPayments({
+    today: todayUTC,
+    windowEnd,
+    dueDay: DAS_DUE_DAY,
+    dasEntryDates: dasEntryRows.filter((e) => e.description.includes("Referente")).map((e) => e.dueDate),
+    salesByMonth,
+    grossSalesByMonth,
+    apuracoes,
+  });
+}
 
 export const cashFlowService = {
   async getProjection(range: number | "month" = 30) {
@@ -116,6 +163,8 @@ export const cashFlowService = {
         flexEntries: flexEntryRows.map((e) => ({ date: e.dueDate, amount: Number(e.amount) })),
       }),
     );
+
+    movements.push(...(await estimateDas(todayUTC, windowEnd)));
 
     const projection = computeCashFlowProjection(startingBalance, movements, todayUTC, days);
     const firstNegativeDay = findFirstNegativeDay(projection);
