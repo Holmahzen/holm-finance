@@ -66,6 +66,8 @@ export default function ReconciliationPage() {
   const [accountFilter, setAccountFilter] = useState("");
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [rules, setRules] = useState<CategoryRule[]>([]);
+  // A lista de regras passa de 100 itens e ocupa a tela inteira: começa recolhida.
+  const [showRules, setShowRules] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<Record<string, string>>({});
   // Mês "AAAA-MM" a que o lançamento pertence quando difere do mês do pagamento.
   const [selectedCompetence, setSelectedCompetence] = useState<Record<string, string>>({});
@@ -423,6 +425,15 @@ export default function ReconciliationPage() {
               </button>
             </form>
             {rules.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowRules((v) => !v)}
+                className="self-start text-xs text-muted transition hover:text-foreground"
+              >
+                {showRules ? "▾ Ocultar" : "▸ Ver"} regras salvas ({rules.length})
+              </button>
+            )}
+            {rules.length > 0 && showRules && (
               <div className="flex flex-wrap gap-2">
                 {rules.map((r) => (
                   <span
