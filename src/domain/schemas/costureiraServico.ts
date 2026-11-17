@@ -11,6 +11,18 @@ export const createCostureiraServicoSchema = z.object({
   dueDate: z.coerce.date().optional(),
 });
 
+// Edição de um serviço já lançado (ainda não pago). `description`/`quantity`
+// vazios (""/null) limpam o campo.
+export const updateCostureiraServicoSchema = z.object({
+  date: z.coerce.date(),
+  amount: z.union([z.string(), z.number()]),
+  description: z.string().nullish(),
+  quantity: z.preprocess(
+    (v) => (v === "" || v === undefined ? null : v),
+    z.coerce.number().int().positive().nullable(),
+  ),
+});
+
 export const pagarCostureiraSchema = z.object({
   counterpartyId: z.string().min(1, "Costureira é obrigatória"),
   bankAccountId: z.string().min(1, "Conta é obrigatória"),
@@ -22,5 +34,6 @@ export const updateCostureiraDueDateSchema = z.object({
 });
 
 export type CreateCostureiraServicoInput = z.infer<typeof createCostureiraServicoSchema>;
+export type UpdateCostureiraServicoInput = z.infer<typeof updateCostureiraServicoSchema>;
 export type PagarCostureiraInput = z.infer<typeof pagarCostureiraSchema>;
 export type UpdateCostureiraDueDateInput = z.infer<typeof updateCostureiraDueDateSchema>;

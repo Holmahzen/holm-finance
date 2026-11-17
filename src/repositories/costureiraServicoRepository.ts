@@ -30,6 +30,10 @@ export const costureiraServicoRepository = {
     return prisma.costureiraServico.create({ data });
   },
 
+  update(id: string, data: Prisma.CostureiraServicoUncheckedUpdateInput) {
+    return prisma.costureiraServico.update({ where: { id }, data });
+  },
+
   delete(id: string) {
     return prisma.costureiraServico.delete({ where: { id } });
   },

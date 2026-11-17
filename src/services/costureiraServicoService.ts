@@ -7,6 +7,7 @@ import type {
   CreateCostureiraServicoInput,
   PagarCostureiraInput,
   UpdateCostureiraDueDateInput,
+  UpdateCostureiraServicoInput,
 } from "@/domain/schemas/costureiraServico";
 
 const COSTURA_CATEGORY_NAME = "Costura";
@@ -116,6 +117,38 @@ export const costureiraServicoService = {
       quantity: input.quantity,
       entryId: entry.id,
     });
+  },
+
+  async update(id: string, input: UpdateCostureiraServicoInput) {
+    const servico = await costureiraServicoRepository.findById(id);
+    if (!servico) throw new NotFoundError("Serviço de costura", id);
+
+    const amount = Number(input.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new DomainError("Informe um valor maior que zero.");
+    }
+
+    if (servico.entryId) {
+      const entry = await entryService.get(servico.entryId);
+      if (entry.status === "PAID") {
+        throw new DomainError("Este serviço já foi pago — não dá pra editar.");
+      }
+    }
+
+    const updated = await costureiraServicoRepository.update(id, {
+      date: input.date,
+      amount,
+      description: input.description?.trim() || null,
+      quantity: input.quantity,
+    });
+
+    // O total da previsão no Fluxo de Caixa é a soma dos serviços — recalcula.
+    if (servico.entryId) {
+      const counterparty = await counterpartyRepository.findById(servico.counterpartyId);
+      const category = counterparty ? await resolveCategoryFor(counterparty) : null;
+      await syncEntryTotal(servico.entryId, category?.name ?? COSTURA_CATEGORY_NAME, counterparty?.name ?? "");
+    }
+    return updated;
   },
 
   async remove(id: string) {

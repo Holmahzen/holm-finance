@@ -146,6 +146,9 @@ function todayLocalDateString() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+const editInputClass =
+  "rounded border border-border bg-background px-2 py-1 text-sm text-foreground focus:border-gold focus:outline-none";
+
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString("pt-BR", { timeZone: "UTC" });
 }
@@ -180,6 +183,12 @@ export default function PagamentoCostureirasPage() {
   const [pagando, setPagando] = useState(false);
   const [pagamentoError, setPagamentoError] = useState<string | null>(null);
   const [pagamentoSuccess, setPagamentoSuccess] = useState<string | null>(null);
+
+  // editar serviço lançado
+  const [editingServicoId, setEditingServicoId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ date: "", descricao: "", qtd: "", valor: "" });
+  const [savingEditServico, setSavingEditServico] = useState(false);
+  const [editServicoError, setEditServicoError] = useState<string | null>(null);
 
   // editar vencimento
   const [editingDueDate, setEditingDueDate] = useState(false);
@@ -344,6 +353,65 @@ export default function PagamentoCostureirasPage() {
     await fetch(`/api/costureira-servicos/${id}`, { method: "DELETE" });
     await loadPendentesEHistorico(counterpartyId);
   }
+
+  function startEditServico(s: Servico) {
+    setEditForm({
+      date: s.date.slice(0, 10),
+      descricao: s.description ?? "",
+      qtd: s.quantity ? String(s.quantity) : "",
+      valor: String(Number(s.amount)),
+    });
+    setEditServicoError(null);
+    setEditingServicoId(s.id);
+  }
+
+  function cancelEditServico() {
+    setEditingServicoId(null);
+    setEditServicoError(null);
+  }
+
+  async function saveEditServico() {
+    if (!editingServicoId) return;
+    setSavingEditServico(true);
+    setEditServicoError(null);
+    const res = await fetch(`/api/costureira-servicos/${editingServicoId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date: editForm.date,
+        amount: editForm.valor,
+        description: editForm.descricao,
+        quantity: editForm.qtd,
+      }),
+    });
+    setSavingEditServico(false);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setEditServicoError(typeof body.error === "string" ? body.error : "Não foi possível salvar.");
+      return;
+    }
+    setEditingServicoId(null);
+    await loadPendentesEHistorico(counterpartyId);
+  }
+
+  const editActions = (
+    <span className="inline-flex flex-col items-end gap-1">
+      <span className="inline-flex gap-3">
+        <button
+          type="button"
+          onClick={saveEditServico}
+          disabled={savingEditServico}
+          className="text-xs font-medium text-gold hover:text-gold-soft hover:underline disabled:opacity-50"
+        >
+          {savingEditServico ? "Salvando..." : "Salvar"}
+        </button>
+        <button type="button" onClick={cancelEditServico} className="text-xs font-medium text-muted hover:underline">
+          Cancelar
+        </button>
+      </span>
+      {editServicoError && <span className="text-xs text-red-400">{editServicoError}</span>}
+    </span>
+  );
 
   function startEditDueDate() {
     setEditDueDateValue(pendencia?.dueDate?.slice(0, 10) ?? "");
@@ -624,6 +692,51 @@ export default function PagamentoCostureirasPage() {
                           return (
                             <Fragment key={dateKey}>
                               <tr className="border-b border-border/50">
+                                {unico && editingServicoId === unico.id ? (
+                                  <>
+                                    <td className="py-2 pr-2">
+                                      <input
+                                        type="date"
+                                        aria-label="Data"
+                                        value={editForm.date}
+                                        onChange={(e) => setEditForm((f) => ({ ...f, date: e.target.value }))}
+                                        className={editInputClass}
+                                      />
+                                    </td>
+                                    <td className="py-2 pr-2">
+                                      <input
+                                        aria-label="Descrição"
+                                        value={editForm.descricao}
+                                        onChange={(e) => setEditForm((f) => ({ ...f, descricao: e.target.value }))}
+                                        className={`${editInputClass} w-full`}
+                                      />
+                                    </td>
+                                    <td className="py-2 pr-2">
+                                      <input
+                                        type="number"
+                                        step="1"
+                                        min={1}
+                                        aria-label="Quantidade"
+                                        value={editForm.qtd}
+                                        onChange={(e) => setEditForm((f) => ({ ...f, qtd: e.target.value }))}
+                                        className={`${editInputClass} w-20`}
+                                      />
+                                    </td>
+                                    <td className="py-2 pr-2">
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        min={0}
+                                        aria-label="Valor"
+                                        value={editForm.valor}
+                                        onChange={(e) => setEditForm((f) => ({ ...f, valor: e.target.value }))}
+                                        className={`${editInputClass} w-28`}
+                                      />
+                                    </td>
+                                    <td className="py-2 text-right">{editActions}</td>
+                                  </>
+                                ) : (
+                                  <>
                                 <td className="py-2">{formatDate(grupo[0].date)}</td>
                                 <td className="py-2 text-muted">
                                   {unico ? unico.description || "—" : `${grupo.length} itens`}
@@ -632,12 +745,21 @@ export default function PagamentoCostureirasPage() {
                                 <td className="py-2">{formatBRL(totalGrupo)}</td>
                                 <td className="py-2 text-right">
                                   {unico ? (
-                                    <button
-                                      onClick={() => handleRemoveServico(unico.id)}
-                                      className="text-xs font-medium text-red-400 hover:underline"
-                                    >
-                                      Excluir
-                                    </button>
+                                    <span className="inline-flex gap-3">
+                                      <button
+                                        type="button"
+                                        onClick={() => startEditServico(unico)}
+                                        className="text-xs font-medium text-gold hover:text-gold-soft hover:underline"
+                                      >
+                                        Editar
+                                      </button>
+                                      <button
+                                        onClick={() => handleRemoveServico(unico.id)}
+                                        className="text-xs font-medium text-red-400 hover:underline"
+                                      >
+                                        Excluir
+                                      </button>
+                                    </span>
                                   ) : (
                                     <button
                                       type="button"
@@ -648,6 +770,8 @@ export default function PagamentoCostureirasPage() {
                                     </button>
                                   )}
                                 </td>
+                                  </>
+                                )}
                               </tr>
                               {expanded && (
                                 <tr className="border-b border-border/50">
@@ -664,17 +788,64 @@ export default function PagamentoCostureirasPage() {
                                       <tbody>
                                         {grupo.map((s) => (
                                           <tr key={s.id} className="border-b border-border/50">
-                                            <td className="py-1 text-muted">{s.description || "—"}</td>
-                                            <td className="py-1 text-muted">{s.quantity ?? "—"}</td>
-                                            <td className="py-1">{formatBRL(s.amount)}</td>
-                                            <td className="py-1 text-right">
-                                              <button
-                                                onClick={() => handleRemoveServico(s.id)}
-                                                className="text-xs font-medium text-red-400 hover:underline"
-                                              >
-                                                Excluir
-                                              </button>
-                                            </td>
+                                            {editingServicoId === s.id ? (
+                                              <>
+                                                <td className="py-1 pr-2">
+                                                  <input
+                                                    aria-label="Descrição"
+                                                    value={editForm.descricao}
+                                                    onChange={(e) => setEditForm((f) => ({ ...f, descricao: e.target.value }))}
+                                                    className={`${editInputClass} w-full`}
+                                                  />
+                                                </td>
+                                                <td className="py-1 pr-2">
+                                                  <input
+                                                    type="number"
+                                                    step="1"
+                                                    min={1}
+                                                    aria-label="Quantidade"
+                                                    value={editForm.qtd}
+                                                    onChange={(e) => setEditForm((f) => ({ ...f, qtd: e.target.value }))}
+                                                    className={`${editInputClass} w-20`}
+                                                  />
+                                                </td>
+                                                <td className="py-1 pr-2">
+                                                  <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    min={0}
+                                                    aria-label="Valor"
+                                                    value={editForm.valor}
+                                                    onChange={(e) => setEditForm((f) => ({ ...f, valor: e.target.value }))}
+                                                    className={`${editInputClass} w-28`}
+                                                  />
+                                                </td>
+                                                <td className="py-1 text-right">{editActions}</td>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <td className="py-1 text-muted">{s.description || "—"}</td>
+                                                <td className="py-1 text-muted">{s.quantity ?? "—"}</td>
+                                                <td className="py-1">{formatBRL(s.amount)}</td>
+                                                <td className="py-1 text-right">
+                                                  <span className="inline-flex gap-3">
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => startEditServico(s)}
+                                                      className="text-xs font-medium text-gold hover:text-gold-soft hover:underline"
+                                                    >
+                                                      Editar
+                                                    </button>
+                                                    <button
+                                                      onClick={() => handleRemoveServico(s.id)}
+                                                      className="text-xs font-medium text-red-400 hover:underline"
+                                                    >
+                                                      Excluir
+                                                    </button>
+                                                  </span>
+                                                </td>
+                                              </>
+                                            )}
                                           </tr>
                                         ))}
                                       </tbody>
