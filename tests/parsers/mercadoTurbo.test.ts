@@ -99,6 +99,19 @@ describe("parseMercadoTurboWorkbook", () => {
     expect(result.rows[0].orderId).toBe("123");
   });
 
+  it("accepts header names regardless of letter case", () => {
+    // Em 17/11/2026 o Mercado Turbo passou a exportar "ID da Venda" (V maiúsculo).
+    const { "ID da venda": id, ...rest } = makeRow() as Record<string, unknown>;
+    const headers = BASE_HEADERS.map((h) => (h === "ID da venda" ? "ID da Venda" : h));
+    const sheet = XLSX.utils.json_to_sheet([{ "ID da Venda": id, ...rest }], { header: headers });
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "table-pedidos1");
+    const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
+    const result = parseMercadoTurboWorkbook(buffer);
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0].orderId).toBe("2000017286284120");
+  });
+
   it("skips rows missing order id, sku or date", () => {
     const buffer = buildWorkbookBuffer([
       makeRow({ "ID da venda": "" }),

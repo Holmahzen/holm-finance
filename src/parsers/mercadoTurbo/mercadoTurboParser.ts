@@ -56,11 +56,35 @@ function cellString(row: Record<string, unknown>, header: string): string {
 export function parseMercadoTurboWorkbook(buffer: Buffer): MercadoTurboParseResult {
   const workbook = readWorkbook(buffer);
   const sheet = pickSheet(workbook);
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null });
+  const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null });
 
-  if (rows.length === 0) {
+  if (rawRows.length === 0) {
     throw new Error("A planilha não contém linhas de dados.");
   }
+
+  // O Mercado Turbo já trocou a caixa de títulos sem aviso ("ID da venda" →
+  // "ID da Venda", 17/11/2026). Normaliza pro nome canônico, ignorando
+  // maiúsculas/minúsculas e espaços nas pontas, pra não quebrar a importação.
+  const canonical = new Map<string, string>();
+  for (const name of [
+    ...REQUIRED_HEADERS,
+    "Frete",
+    "Qtd.",
+    "Custo (-)",
+    "Nome do Comprador",
+    "Código",
+    "ID do Carrinho",
+  ]) {
+    canonical.set(name.toLowerCase(), name);
+  }
+  const rows = rawRows.map((raw) => {
+    const normalized: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(raw)) {
+      const name = canonical.get(key.trim().toLowerCase()) ?? key;
+      if (normalized[name] == null || normalized[name] === "") normalized[name] = value;
+    }
+    return normalized;
+  });
 
   const headers = Object.keys(rows[0]);
   const missing = REQUIRED_HEADERS.filter((h) => !headers.includes(h));
